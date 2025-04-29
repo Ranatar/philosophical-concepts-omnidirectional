@@ -1,0 +1,104 @@
+flowchart TD
+    %% Основные узлы
+    Concept["Концепция
+    concept_id
+    name"] --> |INCLUDES| Category1
+    Concept --> |INCLUDES| Category2
+    
+    %% Категории
+    Category1["Категория
+    category_id
+    name
+    definition"] --> |RELATED_TO| Category2["Категория
+    category_id
+    name
+    definition"]
+    
+    %% Свойства категорий
+    Category1 --> CategoryProps1["Свойства категории
+    centrality
+    certainty
+    historical_significance
+    traditions (array)
+    philosophers (array)"]
+    
+    %% Свойства связей
+    Category1 --> |has properties| RelProps["Свойства связи
+    type
+    direction
+    strength
+    certainty
+    source
+    traditions (array)
+    philosophers (array)"]
+    Category2 --> |has properties| RelProps
+    
+    %% Тезисы и их взаимодействие с категориями
+    Thesis["Тезисы
+    thesis_id
+    type
+    content
+    style
+    related_categories (array)"]:::new
+    Category1 --> |referenced_in| Thesis
+    Category2 --> |referenced_in| Thesis
+    
+    %% Название концепции - используем однонаправленные связи в обе стороны
+    ConceptName["Название
+    name_id
+    name
+    analysis"]:::new
+    Concept --> |HAS_NAME| ConceptName
+    ConceptName --> |BELONGS_TO| Concept
+    
+    %% Происхождение концепции - используем однонаправленные связи в обе стороны
+    ConceptOrigin["Происхождение концепции
+    origin_id
+    parent_concepts (array)
+    influence_weights (array)"]:::new
+    Concept --> |HAS_ORIGIN| ConceptOrigin
+    ConceptOrigin --> |DESCRIBES| Concept
+    
+    %% Трансформации - разделим связи для большей ясности
+    ThesisToGraph["Трансформация
+    тезисы → граф"]:::new
+    GraphToThesis["Трансформация
+    граф → тезисы"]:::new
+    
+    %% Связи для ThesisToGraph (преобразование тезисов в граф)
+    Thesis --> |SOURCE_FOR| ThesisToGraph
+    ThesisToGraph --> |CREATES| Category1
+    ThesisToGraph --> |CREATES| Category2
+    
+    %% Связи для GraphToThesis (преобразование графа в тезисы)
+    Category1 --> |SOURCE_FOR| GraphToThesis
+    Category2 --> |SOURCE_FOR| GraphToThesis
+    GraphToThesis --> |GENERATES| Thesis
+    
+    %% Эволюция концепции - используем однонаправленные связи в обе стороны
+    ConceptEvolution["Эволюция концепции
+    evolution_id
+    concept_id
+    suggested_changes"]:::new
+    Concept --> |EVOLVES_TO| ConceptEvolution
+    ConceptEvolution --> |DERIVED_FROM| Concept
+    
+    %% Анализ названия - используем однонаправленные связи в обе стороны
+    NameAnalysis["Анализ названия
+    analysis_id
+    name
+    alternative_names (array)"]:::new
+    ConceptName --> |HAS_ANALYSIS| NameAnalysis
+    NameAnalysis --> |ANALYZES| ConceptName
+    
+    %% Обозначение новых элементов
+    classDef new fill:#f8d7da,stroke:#dc3545,stroke-width:2px
+    classDef default fill:#f8f9fa,stroke:#495057
+    
+    %% Используем отдельные стили для особых связей вместо linkStyle
+    style ThesisToGraph stroke:#dc3545,stroke-width:2px
+    style GraphToThesis stroke:#dc3545,stroke-width:2px
+    style ConceptName stroke:#dc3545,stroke-width:2px
+    style ConceptOrigin stroke:#dc3545,stroke-width:2px
+    style NameAnalysis stroke:#dc3545,stroke-width:2px
+    style ConceptEvolution stroke:#dc3545,stroke-width:2px
