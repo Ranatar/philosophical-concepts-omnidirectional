@@ -277,6 +277,97 @@ services:
       - /app/node_modules
     command: npm run dev  
 
+   prometheus:
+      image: prom/prometheus:latest
+      ports:
+        - "9090:9090"
+      volumes:
+        - ./monitoring/prometheus:/etc/prometheus
+        - prometheus_data:/prometheus
+      command:
+        - '--config.file=/etc/prometheus/prometheus.yml'
+        - '--storage.tsdb.path=/prometheus'
+        - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+        - '--web.console.templates=/usr/share/prometheus/consoles'
+      depends_on:
+        - api-gateway
+        - user-service
+        - concept-service
+        - graph-service
+        - thesis-service
+        - synthesis-service
+        - claude-service
+      healthcheck:
+        test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
+        interval: 30s
+        timeout: 10s
+        retries: 3
+
+    grafana:
+      image: grafana/grafana:latest
+      ports:
+        - "3001:3000"
+      volumes:
+        - ./monitoring/grafana:/etc/grafana/provisioning
+        - grafana_data:/var/lib/grafana
+      environment:
+        - GF_SECURITY_ADMIN_USER=admin
+        - GF_SECURITY_ADMIN_PASSWORD=admin
+      depends_on:
+        - prometheus
+      healthcheck:
+        test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/health"]
+        interval: 30s
+        timeout: 10s
+        retries: 3
+
+    elasticsearch:
+      image: docker.elastic.co/elasticsearch/elasticsearch:7.14.0
+      ports:
+        - "9200:9200"
+        - "9300:9300"
+      environment:
+        - discovery.type=single-node
+        - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      volumes:
+        - elasticsearch_data:/usr/share/elasticsearch/data
+      healthcheck:
+        test: ["CMD", "curl", "-f", "http://localhost:9200"]
+        interval: 30s
+        timeout: 10s
+        retries: 3
+
+    logstash:
+      image: docker.elastic.co/logstash/logstash:7.14.0
+      ports:
+        - "5044:5044"
+        - "9600:9600"
+      volumes:
+        - ./monitoring/logstash/pipeline:/usr/share/logstash/pipeline
+        - ./monitoring/logstash/config:/usr/share/logstash/config
+      depends_on:
+        - elasticsearch
+      healthcheck:
+        test: ["CMD", "curl", "-f", "http://localhost:9600"]
+        interval: 30s
+        timeout: 10s
+        retries: 3
+
+    kibana:
+      image: docker.elastic.co/kibana/kibana:7.14.0
+      ports:
+        - "5601:5601"
+      environment:
+        ELASTICSEARCH_URL: http://elasticsearch:9200
+        ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+      depends_on:
+        - elasticsearch
+      healthcheck:
+        test: ["CMD", "curl", "-f", "http://localhost:5601/api/status"]
+        interval: 30s
+        timeout: 10s
+        retries: 3
+
 volumes:
   postgres_data:
   neo4j_data:
@@ -284,3 +375,31 @@ volumes:
   mongo_data:
   redis_data:
   rabbitmq_data:
+  prometheus_data:
+  grafana_data:
+  elasticsearch_data:
+
+  origin-detection-service:
+    build:
+      context: ./origin-detection-service
+      dockerfile: Dockerfile.dev
+    ports:
+      - "4008:4008"
+    environment:
+      PORT: 4008
+      NODE_ENV: development
+      CONCEPT_SERVICE_URL: http://concept-service:4002
+      GRAPH_SERVICE_URL: http://graph-service:4003
+      THESIS_SERVICE_URL: http://thesis-service:4004
+      CLAUDE_SERVICE_URL: http://claude-service:4006
+      MONGO_URL: mongodb://philos:password@mongodb:27017/philos_concepts
+    depends_on:
+      - concept-service
+      - graph-service
+      - thesis-service
+      - claude-service
+      - mongodb
+    volumes:
+      - ./origin-detection-service:/app
+      - /app/node_modules
+    command: npm run dev

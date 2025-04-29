@@ -7,6 +7,8 @@ const ClaudeInterface = ({ conceptId, interactionType = 'freeform', prefilledTem
   const [messages, setMessages] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState('');
+  const [asyncTasks, setAsyncTasks] = useState({});
+  const [isAsyncProcessing, setIsAsyncProcessing] = useState(false);
   const [templates, setTemplates] = useState([
     { id: 'validate-graph', name: 'Валидация графа', template: 'Проанализируй следующий граф категорий философской концепции [ДАННЫЕ ГРАФА]. Выяви возможные логические противоречия, пропущенные важные категории или связи, необычные отношения между категориями. Предложи возможные улучшения.' },
     { id: 'enrich-category', name: 'Обогащение категории', template: 'Для следующей категории [НАЗВАНИЕ] с определением [ОПРЕДЕЛЕНИЕ] в контексте философской концепции [НАЗВАНИЕ КОНЦЕПЦИИ], предложи расширенное описание, возможные альтернативные трактовки, исторические аналоги и связанные концепты.' },
@@ -16,6 +18,11 @@ const ClaudeInterface = ({ conceptId, interactionType = 'freeform', prefilledTem
     { id: 'analyze-concept-origin', name: 'Анализ происхождения концепции', template: 'Проанализируй следующие философские тезисы [СПИСОК ТЕЗИСОВ] или граф концепции [ДАННЫЕ ГРАФА]. Определи, является ли данная концепция синтезом существующих философских традиций.' },
     { id: 'analyze-concept-name', name: 'Анализ названия концепции', template: 'Проанализируй название философской концепции [НАЗВАНИЕ КОНЦЕПЦИИ] в контексте её содержания [ДАННЫЕ КОНЦЕПЦИИ]. Насколько точно название отражает суть концепции?' },
     { id: 'concept-evolution', name: 'Эволюция концепции', template: 'Предложи возможные направления эволюции философской концепции [КОНЦЕПЦИЯ] под названием [НАЗВАНИЕ КОНЦЕПЦИИ] в свете современных научных открытий, социальных изменений и философских тенденций.' },
+    { id: 'dialog-concepts', name: 'Диалог между концепциями', template: 'Создай философский диалог между представителями концепций [КОНЦЕПЦИЯ 1] под названием [НАЗВАНИЕ КОНЦЕПЦИИ 1] и [КОНЦЕПЦИЯ 2] под названием [НАЗВАНИЕ КОНЦЕПЦИИ 2] по вопросу [ФИЛОСОФСКИЙ ВОПРОС]. Диалог должен отражать ключевые тезисы каждой концепции, логику аргументации и возможные точки соприкосновения или непреодолимых разногласий.' },
+    { id: 'historical-context', name: 'Историческая контекстуализация', template: 'Помести философскую концепцию [КОНЦЕПЦИЯ] под названием [НАЗВАНИЕ КОНЦЕПЦИИ] в исторический контекст. Определи её возможные источники влияния, современников со схожими или противоположными идеями, а также потенциальное влияние на последующие философские направления.' },
+    { id: 'practical-application', name: 'Практическое применение', template: 'Предложи возможные практические применения философской концепции [КОНЦЕПЦИЯ] под названием [НАЗВАНИЕ КОНЦЕПЦИИ] в следующих областях: образование, этика, политика, личностное развитие, социальные институты. Для каждой области укажи, какие именно тезисы или категории концепции наиболее релевантны и как они могут быть операционализированы.' },
+    { id: 'concept-compatibility', name: 'Анализ совместимости концепций', template: 'Проанализируй графы следующих философских концепций: [КОНЦЕПЦИЯ 1] и [КОНЦЕПЦИЯ 2]. Выяви: 1) полностью совместимые элементы, 2) потенциально совместимые при реинтерпретации, 3) принципиально несовместимые элементы. Предложи возможные стратегии синтеза, учитывая выявленные особенности.' },
+    { id: 'synthesis-critique', name: 'Критический анализ синтеза', template: 'Проведи критический анализ синтезированной концепции [СИНТЕЗИРОВАННАЯ КОНЦЕПЦИЯ]. Оцени: 1) внутреннюю согласованность, 2) философскую новизну, 3) сохранение ценных аспектов исходных концепций, 4) разрешение противоречий между ними, 5) потенциальные проблемы и слабые места.' },
   ]);
   const messagesEndRef = useRef(null);
   
@@ -52,6 +59,103 @@ const ClaudeInterface = ({ conceptId, interactionType = 'freeform', prefilledTem
     }
   };
   
+  const sendAsyncMessage = async () => {
+    if (!input.trim()) return;
+    
+    // Добавить сообщение пользователя
+    const userMessage = { id: Date.now(), role: 'user', content: input };
+    setMessages(prev => [...prev, userMessage]);
+    
+    // Генерируем ID задачи
+    const taskId = `task-${Date.now()}`;
+    
+    // Добавляем уведомление о задаче в очереди
+    const taskMessage = { 
+      id: Date.now() + 1, 
+      role: 'system', 
+      content: `Ваш запрос поставлен в очередь (ID: ${taskId}). Обработка может занять некоторое время. Вы получите уведомление, когда результат будет готов.` 
+    };
+    
+    setMessages(prev => [...prev, taskMessage]);
+    setInput('');
+    setIsAsyncProcessing(true);
+    
+    try {
+      // Здесь был бы асинхронный API запрос
+      // const response = await api.queueClaudeQuery(input, conceptId);
+      // const taskId = response.taskId;
+      
+      console.log('Async task created with ID:', taskId);
+      
+      // Обновляем состояние асинхронных задач
+      setAsyncTasks(prev => ({
+        ...prev,
+        [taskId]: {
+          status: 'queued',
+          query: input,
+          createdAt: new Date().toISOString()
+        }
+      }));
+      
+      // Имитация проверки статуса задачи
+      setTimeout(() => {
+        // Обновляем статус задачи
+        setAsyncTasks(prev => ({
+          ...prev,
+          [taskId]: {
+            ...prev[taskId],
+            status: 'processing'
+          }
+        }));
+        
+        // Имитация завершения задачи
+        setTimeout(() => {
+          // Добавление ответа Claude
+          const claudeResponse = { 
+            id: Date.now() + 2, 
+            role: 'assistant', 
+            content: `Результат обработки вашего асинхронного запроса (ID: ${taskId}):\n\n[Здесь будет развёрнутый ответ от Claude на запрос: "${input}"]` 
+          };
+          
+          setMessages(prev => [...prev, claudeResponse]);
+          
+          // Обновляем статус задачи
+          setAsyncTasks(prev => ({
+            ...prev,
+            [taskId]: {
+              ...prev[taskId],
+              status: 'completed',
+              completedAt: new Date().toISOString()
+            }
+          }));
+          
+          setIsAsyncProcessing(false);
+        }, 5000);
+      }, 2000);
+      
+    } catch (error) {
+      console.error('Error sending async message to Claude:', error);
+      
+      // Добавление сообщения об ошибке
+      setMessages(prev => [...prev, { 
+        id: Date.now() + 2, 
+        role: 'system', 
+        content: `Произошла ошибка при обработке асинхронного запроса (ID: ${taskId}). Пожалуйста, попробуйте еще раз.` 
+      }]);
+      
+      setAsyncTasks(prev => ({
+        ...prev,
+        [taskId]: {
+          ...prev[taskId],
+          status: 'error',
+          errorAt: new Date().toISOString()
+        }
+      }));
+      
+      setIsAsyncProcessing(false);
+    }
+  };
+
   // Отправка запроса к Claude
   const sendMessage = async () => {
     if (!input.trim()) return;
@@ -219,6 +323,77 @@ const ClaudeInterface = ({ conceptId, interactionType = 'freeform', prefilledTem
               <Send size={24} />
             )}
           </button>
+
+      <div className="flex items-center">
+        <textarea
+          className="flex-1 border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 resize-none"
+          rows={3}
+          placeholder="Введите свой запрос к Claude..."
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          disabled={isProcessing || isAsyncProcessing}
+        />
+        
+        <div className="ml-4 flex flex-col space-y-2">
+          <button
+            className={`p-2 rounded-full ${
+              isProcessing || isAsyncProcessing || !input.trim()
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
+            onClick={sendMessage}
+            disabled={isProcessing || isAsyncProcessing || !input.trim()}
+            title="Отправить синхронный запрос"
+          >
+            {isProcessing ? (
+              <LoaderCircle className="animate-spin" size={24} />
+            ) : (
+              <Send size={24} />
+            )}
+          </button>
+          
+          <button
+            className={`p-2 rounded-full ${
+              isProcessing || isAsyncProcessing || !input.trim()
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-green-600 text-white hover:bg-green-700'
+            }`}
+            onClick={sendAsyncMessage}
+            disabled={isProcessing || isAsyncProcessing || !input.trim()}
+            title="Отправить асинхронный запрос (для длительных операций)"
+          >
+            <Clock size={24} />
+          </button>
+        </div>
+      </div>
+
+          {Object.keys(asyncTasks).length > 0 && (
+            <div className="mt-4 border-t pt-2">
+              <div className="text-sm font-medium">Асинхронные задачи:</div>
+              <div className="mt-1 text-xs">
+                {Object.entries(asyncTasks).map(([taskId, task]) => (
+                  <div key={taskId} className="flex items-center mb-1">
+                    <div className={`w-2 h-2 rounded-full mr-2 ${
+                      task.status === 'queued' ? 'bg-yellow-500' :
+                      task.status === 'processing' ? 'bg-blue-500 animate-pulse' :
+                      task.status === 'completed' ? 'bg-green-500' : 'bg-red-500'
+                    }`}></div>
+                    <div className="flex-1">
+                      {taskId} - {
+                        task.status === 'queued' ? 'В очереди' :
+                        task.status === 'processing' ? 'Обрабатывается' :
+                        task.status === 'completed' ? 'Завершена' : 'Ошибка'
+                      }
+                    </div>
+                    <div className="text-gray-500">
+                      {new Date(task.createdAt).toLocaleTimeString()}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+      
         </div>
         
         <div className="mt-2 text-sm text-gray-500">

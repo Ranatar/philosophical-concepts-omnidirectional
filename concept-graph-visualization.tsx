@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ZoomIn, ZoomOut, Save, Edit, Plus, Trash, Link } from 'lucide-react';
+import { ZoomIn, ZoomOut, Save, Edit, Plus, Trash, Link, FileText, GitMerge, CheckCircle } from 'lucide-react';
 
 // Компонент визуализации графа концепции
 const ConceptGraphVisualization = ({ conceptId, readOnly = false }) => {
@@ -10,6 +10,80 @@ const ConceptGraphVisualization = ({ conceptId, readOnly = false }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const svgRef = useRef(null);
+  const [validationResult, setValidationResult] = useState(null);
+  const [enrichmentResult, setEnrichmentResult] = useState(null);
+
+  const requestGraphValidation = async () => {
+    try {
+      // Показать индикатор загрузки
+      setLoading(true);
+      
+      // Здесь был бы реальный API запрос к сервису Claude
+      // const response = await api.validateGraph(conceptId, graph);
+      
+      // Имитация запроса к API
+      setTimeout(() => {
+        const mockValidation = {
+          contradictions: [
+            { source: 1, target: 2, description: "Противоречие между категориями 'Субъективная реальность' и 'Интерсубъективность'" }
+          ],
+          missingCategories: [
+            { name: "Эпистемологические границы", description: "Категория для описания пределов познания" }
+          ],
+          missingRelationships: [
+            { source: "Субъективная реальность", target: "Объективная реальность", type: "опосредованная" }
+          ],
+          recommendations: [
+            "Добавить категорию 'Медиатор' как связующее звено между субъективным и интерсубъективным",
+            "Уточнить характер диалектической связи между субъективным и интерсубъективным"
+          ]
+        };
+        
+        setValidationResult(mockValidation);
+        setLoading(false);
+      }, 2000);
+    } catch (error) {
+      setError("Ошибка при валидации графа");
+      setLoading(false);
+    }
+  };
+
+  const requestCategoryEnrichment = async (categoryId) => {
+    try {
+      const category = graph.nodes.find(node => node.id === categoryId);
+      if (!category) return;
+      
+      // Показать индикатор загрузки
+      setLoading(true);
+      
+      // Здесь был бы реальный API запрос к сервису Claude
+      // const response = await api.enrichCategory(conceptId, categoryId);
+      
+      // Имитация запроса к API
+      setTimeout(() => {
+        const mockEnrichment = {
+          detailedDescription: `Категория "${category.name}" представляет собой фундаментальное понятие, описывающее... [подробное описание]`,
+          alternativeInterpretations: [
+            "В феноменологической традиции эта категория понимается как...",
+            "С точки зрения аналитической философии данная категория может быть рассмотрена..."
+          ],
+          historicalAnalogues: [
+            { philosopher: "Кант", concept: "Вещь в себе", description: "..." },
+            { philosopher: "Гуссерль", concept: "Интенциональность", description: "..." }
+          ],
+          relatedConcepts: [
+            "Сознание", "Восприятие", "Интерсубъективность"
+          ]
+        };
+        
+        setEnrichmentResult(mockEnrichment);
+        setLoading(false);
+      }, 2000);
+    } catch (error) {
+      setError(`Ошибка при обогащении категории ${categoryId}`);
+      setLoading(false);
+    }
+  };
   
   // Загрузка данных графа
   useEffect(() => {
@@ -231,6 +305,13 @@ const ConceptGraphVisualization = ({ conceptId, readOnly = false }) => {
           >
             <ZoomIn size={20} />
           </button>
+          <button 
+            onClick={requestGraphValidation}
+            className="p-2 rounded hover:bg-gray-100"
+            aria-label="Валидировать граф через Claude"
+          >
+            <CheckCircle size={20} />
+          </button>
           
           {!readOnly && (
             <>
@@ -275,11 +356,14 @@ const ConceptGraphVisualization = ({ conceptId, readOnly = false }) => {
               </div>
               <div className="mt-2 text-sm">
                 <div>Центральность: {selectedNode.centrality.toFixed(2)}</div>
-                <div className="mt-2">
-                  <button className="text-blue-600 hover:underline text-sm">
-                    Сгенерировать обогащенное описание
-                  </button>
-                </div>
+                  <div className="mt-2">
+                    <button 
+                      className="text-blue-600 hover:underline text-sm"
+                      onClick={() => requestCategoryEnrichment(selectedNode.id)}
+                    >
+                      Сгенерировать обогащенное описание
+                    </button>
+                  </div>
               </div>
             </div>
           )}
@@ -323,6 +407,66 @@ const ConceptGraphVisualization = ({ conceptId, readOnly = false }) => {
           )}
         </div>
       )}
+
+      {validationResult && (
+        <div className="border-t p-4 bg-white">
+          <h3 className="font-medium">Результаты валидации графа</h3>
+          <div className="mt-2 text-sm">
+            {validationResult.contradictions.length > 0 && (
+              <div className="mb-2">
+                <div className="font-medium">Обнаруженные противоречия:</div>
+                <ul className="list-disc pl-5">
+                  {validationResult.contradictions.map((item, index) => (
+                    <li key={`contradiction-${index}`}>{item.description}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {validationResult.recommendations.length > 0 && (
+              <div>
+                <div className="font-medium">Рекомендации:</div>
+                <ul className="list-disc pl-5">
+                  {validationResult.recommendations.map((item, index) => (
+                    <li key={`recommendation-${index}`}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {enrichmentResult && selectedNode && (
+        <div className="border-t p-4 bg-white">
+          <h3 className="font-medium">Обогащенное описание категории "{selectedNode.name}"</h3>
+          <div className="mt-2 text-sm">
+            <p className="mb-2">{enrichmentResult.detailedDescription}</p>
+            
+            {enrichmentResult.alternativeInterpretations.length > 0 && (
+              <div className="mb-2">
+                <div className="font-medium">Альтернативные интерпретации:</div>
+                <ul className="list-disc pl-5">
+                  {enrichmentResult.alternativeInterpretations.map((item, index) => (
+                    <li key={`interp-${index}`}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            
+            {enrichmentResult.relatedConcepts.length > 0 && (
+              <div>
+                <div className="font-medium">Связанные концепты:</div>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {enrichmentResult.relatedConcepts.map((concept, index) => (
+                    <span key={`concept-${index}`} className="px-2 py-1 bg-blue-100 rounded text-blue-800">{concept}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      
       <button className="p-2 rounded hover:bg-gray-100" aria-label="Сгенерировать тезисы">
         <FileText size={20} />
       </button>
