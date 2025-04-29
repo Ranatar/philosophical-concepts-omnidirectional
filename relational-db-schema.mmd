@@ -1,0 +1,85 @@
+erDiagram
+    Users ||--o{ Concepts : creates
+    Users ||--o{ UserActivity : performs
+    Users ||--o{ ClaudeInteractions : initiates
+    Concepts ||--o{ ClaudeInteractions : involves
+    Concepts ||--o{ ConceptPhilosophers : has
+    Concepts ||--o{ ConceptTraditions : belongs_to
+    Philosophers ||--o{ ConceptPhilosophers : mentioned_in
+    Traditions ||--o{ ConceptTraditions : includes
+    
+    Users {
+        uuid user_id PK
+        string username
+        string email
+        string password_hash
+        datetime created_at
+        datetime last_login
+        json user_settings
+    }
+    
+    Concepts {
+        uuid concept_id PK
+        uuid creator_id FK
+        string name
+        text description
+        datetime creation_date
+        datetime last_modified
+        boolean is_synthesis
+        json parent_concepts
+        string synthesis_method
+        string focus
+        int innovation_degree
+        string historical_context
+    }
+    
+    Philosophers {
+        uuid philosopher_id PK
+        string name
+        int birth_year
+        int death_year
+        text description
+        json traditions
+    }
+    
+    Traditions {
+        uuid tradition_id PK
+        string name
+        string time_period
+        text description
+        json key_figures
+    }
+    
+    ConceptPhilosophers {
+        uuid id PK
+        uuid concept_id FK
+        uuid philosopher_id FK
+        string relationship_type
+    }
+    
+    ConceptTraditions {
+        uuid id PK
+        uuid concept_id FK
+        uuid tradition_id FK
+        float relationship_strength
+    }
+    
+    UserActivity {
+        uuid activity_id PK
+        uuid user_id FK
+        string activity_type
+        uuid target_id
+        datetime activity_date
+        json details
+    }
+    
+    ClaudeInteractions {
+        uuid interaction_id PK
+        uuid user_id FK
+        uuid concept_id FK
+        string query_type
+        text query_content
+        text response_content
+        datetime interaction_date
+        float processing_time
+    }

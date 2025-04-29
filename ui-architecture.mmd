@@ -1,0 +1,66 @@
+flowchart TB
+    subgraph "Главные модули UI"
+        HOME[Домашняя страница]
+        CONCEPT_LIST[Список концепций]
+        CONCEPT_EDITOR[Редактор концепций]
+        SYNTHESIS[Инструмент синтеза]
+        USER_PROFILE[Профиль пользователя]
+    end
+    
+    subgraph "Редактор концепций"
+        GRAPH_EDITOR[Редактор графа]
+        THESIS_EDITOR[Редактор тезисов]
+        CLAUDE_INTERFACE[Интерфейс взаимодействия с Claude]
+        META_EDITOR[Редактор метаданных]
+    end
+    
+    subgraph "Компоненты редактора графа"
+        CATEGORY_MANAGER[Менеджер категорий]
+        RELATIONSHIP_MANAGER[Менеджер связей]
+        VISUALIZATION[Визуализация графа]
+        QUANT_EDITOR[Редактор количественных характеристик]
+    end
+    
+    subgraph "Компоненты редактора тезисов"
+        THESIS_LIST[Список тезисов]
+        THESIS_GENERATOR[Генератор тезисов]
+        THESIS_DETAILS[Детали тезиса]
+        THESIS_VALIDATOR[Валидатор тезисов]
+    end
+    
+    subgraph "Компоненты синтеза"
+        CONCEPT_SELECTOR[Селектор концепций]
+        SYNTHESIS_PARAMS[Параметры синтеза]
+        SYNTHESIS_PREVIEW[Предпросмотр синтеза]
+        SYNTHESIS_HISTORY[История синтезов]
+    end
+    
+    HOME --> CONCEPT_LIST
+    CONCEPT_LIST --> CONCEPT_EDITOR
+    CONCEPT_LIST --> SYNTHESIS
+    HOME --> USER_PROFILE
+    
+    CONCEPT_EDITOR --> GRAPH_EDITOR
+    CONCEPT_EDITOR --> THESIS_EDITOR
+    CONCEPT_EDITOR --> CLAUDE_INTERFACE
+    CONCEPT_EDITOR --> META_EDITOR
+    
+    GRAPH_EDITOR --> CATEGORY_MANAGER
+    GRAPH_EDITOR --> RELATIONSHIP_MANAGER
+    GRAPH_EDITOR --> VISUALIZATION
+    GRAPH_EDITOR --> QUANT_EDITOR
+    
+    THESIS_EDITOR --> THESIS_LIST
+    THESIS_EDITOR --> THESIS_GENERATOR
+    THESIS_EDITOR --> THESIS_DETAILS
+    THESIS_EDITOR --> THESIS_VALIDATOR
+    
+    SYNTHESIS --> CONCEPT_SELECTOR
+    SYNTHESIS --> SYNTHESIS_PARAMS
+    SYNTHESIS --> SYNTHESIS_PREVIEW
+    SYNTHESIS --> SYNTHESIS_HISTORY
+    
+    CLAUDE_INTERFACE -.-> CATEGORY_MANAGER
+    CLAUDE_INTERFACE -.-> RELATIONSHIP_MANAGER
+    CLAUDE_INTERFACE -.-> THESIS_GENERATOR
+    CLAUDE_INTERFACE -.-> SYNTHESIS_PREVIEW

@@ -1,0 +1,98 @@
+{
+  "collections": {
+    "Theses": {
+      "schema": {
+        "thesis_id": "ObjectId",
+        "concept_id": "UUID (связь с Concepts в PostgreSQL)",
+        "type": "Строка (онтологический, эпистемологический и т.д.)",
+        "content": "Текст",
+        "related_categories": ["Array of category_ids (связь с Category в Neo4j)"],
+        "style": "Строка (академический, популярный, афористичный)",
+        "generation_parameters": {
+          "level_detail": "Число",
+          "focus": "Строка",
+          "quantity": "Число"
+        },
+        "created_at": "Дата",
+        "parent_theses": ["Array of thesis_ids (если это синтезированный тезис)"]
+      },
+      "indexes": ["concept_id", "type", "created_at"]
+    },
+    
+    "CategoryDescriptions": {
+      "schema": {
+        "description_id": "ObjectId",
+        "category_id": "UUID (связь с Category в Neo4j)",
+        "detailed_description": "Текст",
+        "alternative_interpretations": ["Array of текстов"],
+        "historical_analogues": [{
+          "analogue_name": "Строка",
+          "philosopher": "Строка",
+          "tradition": "Строка",
+          "description": "Текст"
+        }],
+        "related_concepts": [{
+          "concept_id": "UUID",
+          "relationship_type": "Строка",
+          "description": "Текст"
+        }],
+        "claude_generation_id": "UUID (связь с ClaudeInteraction в PostgreSQL)",
+        "created_at": "Дата",
+        "last_modified": "Дата"
+      },
+      "indexes": ["category_id", "created_at"]
+    },
+    
+    "RelationshipDescriptions": {
+      "schema": {
+        "description_id": "ObjectId",
+        "relationship_id": "UUID (связь со связью в Neo4j)",
+        "philosophical_foundation": "Текст",
+        "counterarguments": ["Array of текстов"],
+        "analogues": [{
+          "tradition": "Строка",
+          "philosopher": "Строка",
+          "description": "Текст"
+        }],
+        "claude_generation_id": "UUID (связь с ClaudeInteraction в PostgreSQL)",
+        "created_at": "Дата",
+        "last_modified": "Дата"
+      },
+      "indexes": ["relationship_id", "created_at"]
+    },
+    
+    "ConceptAnalyses": {
+      "schema": {
+        "analysis_id": "ObjectId",
+        "concept_id": "UUID (связь с Concepts в PostgreSQL)",
+        "analysis_type": "Строка (критический, исторический, практический...)",
+        "content": "Текст",
+        "generation_parameters": {
+          "depth": "Число",
+          "focus": "Строка",
+          "context": "Строка"
+        },
+        "claude_generation_id": "UUID (связь с ClaudeInteraction в PostgreSQL)",
+        "created_at": "Дата"
+      },
+      "indexes": ["concept_id", "analysis_type", "created_at"]
+    },
+    
+    "Dialogues": {
+      "schema": {
+        "dialogue_id": "ObjectId",
+        "concept_ids": ["Array of concept_ids (связь с Concepts в PostgreSQL)"],
+        "topic": "Строка",
+        "content": "Текст",
+        "claude_generation_id": "UUID (связь с ClaudeInteraction в PostgreSQL)",
+        "generated_at": "Дата",
+        "parameters": {
+          "style": "Строка",
+          "format": "Строка",
+          "focus": "Строка"
+        }
+      },
+      "indexes": ["concept_ids", "topic", "generated_at"]
+    }
+  }
+}

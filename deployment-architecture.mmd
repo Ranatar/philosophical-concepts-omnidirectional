@@ -1,0 +1,81 @@
+flowchart TB
+    subgraph "Инфраструктура"
+        subgraph "Kubernetes Cluster"
+            subgraph "Frontend"
+                UI[UI Service]
+                UI_HPA[HPA]
+            end
+            
+            subgraph "API Gateway"
+                GATEWAY[Gateway Service]
+                GATEWAY_HPA[HPA]
+            end
+            
+            subgraph "Services"
+                USER_SVC[Users]
+                CONCEPT_SVC[Concepts]
+                GRAPH_SVC[Graphs]
+                THESIS_SVC[Theses]
+                SYNTHESIS_SVC[Synthesis]
+                CLAUDE_SVC[Claude]
+            end
+            
+            subgraph "Databases"
+                PSQL[(PostgreSQL)]
+                NEO4J[(Neo4j)]
+                MONGO[(MongoDB)]
+            end
+            
+            subgraph "Cache & Message Queue"
+                REDIS[(Redis)]
+                RABBITMQ[RabbitMQ]
+            end
+            
+            subgraph "Monitoring & Logging"
+                PROM[Prometheus]
+                GRAFANA[Grafana]
+                ELK[ELK Stack]
+            end
+        end
+        
+        CDN[CDN]
+        DNS[DNS]
+        CLAUDE_API[Claude API]
+    end
+    
+    subgraph "Development Environment"
+        DEV_ENV[Docker Compose]
+        DEV_DB[(Local DB)]
+        DEV_CACHE[(Local Cache)]
+    end
+    
+    subgraph "CI/CD Pipeline"
+        GIT[Git Repository]
+        CI[CI Server]
+        REGISTRY[Docker Registry]
+        CD[CD Pipeline]
+    end
+    
+    UI --> GATEWAY
+    GATEWAY --> USER_SVC & CONCEPT_SVC & GRAPH_SVC & THESIS_SVC & SYNTHESIS_SVC & CLAUDE_SVC
+    
+    USER_SVC --> PSQL
+    CONCEPT_SVC --> PSQL
+    GRAPH_SVC --> NEO4J
+    THESIS_SVC --> MONGO
+    SYNTHESIS_SVC --> NEO4J & MONGO
+    
+    CLAUDE_SVC --> RABBITMQ
+    CLAUDE_SVC --> CLAUDE_API
+    
+    USER_SVC & CONCEPT_SVC & GRAPH_SVC & THESIS_SVC --> REDIS
+    
+    UI --> CDN
+    GATEWAY --> DNS
+    
+    GIT --> CI
+    CI --> REGISTRY
+    REGISTRY --> CD
+    CD --> GATEWAY & UI & USER_SVC & CONCEPT_SVC & GRAPH_SVC & THESIS_SVC & SYNTHESIS_SVC & CLAUDE_SVC
+    
+    DEV_ENV -.-> GIT

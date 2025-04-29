@@ -1,0 +1,67 @@
+flowchart TB
+    subgraph "Клиентская часть"
+        UI[Пользовательский интерфейс]
+        VIS[Визуализация графов]
+        FORMS[Формы и валидация]
+    end
+
+    subgraph "API Gateway"
+        GATEWAY[API Gateway]
+        AUTH[Аутентификация]
+    end
+
+    subgraph "Микросервисы"
+        USER_SERVICE[Сервис пользователей]
+        CONCEPT_SERVICE[Сервис концепций]
+        GRAPH_SERVICE[Сервис графов]
+        THESIS_SERVICE[Сервис тезисов]
+        SYNTHESIS_SERVICE[Сервис синтеза]
+        CLAUDE_SERVICE[Сервис Claude]
+    end
+
+    subgraph "Базы данных"
+        RELATIONAL_DB[(Реляционная БД\nPostgreSQL)]
+        GRAPH_DB[(Графовая БД\nNeo4j)]
+        DOCUMENT_DB[(Документная БД\nMongoDB)]
+    end
+
+    subgraph "Инфраструктура"
+        CACHE[(Кэш\nRedis)]
+        MQ[Очередь сообщений\nRabbitMQ]
+    end
+
+    subgraph "Внешние сервисы"
+        CLAUDE_API[Claude API]
+    end
+
+    UI --> GATEWAY
+    VIS --> GATEWAY
+    FORMS --> GATEWAY
+
+    GATEWAY --> AUTH
+    GATEWAY --> USER_SERVICE
+    GATEWAY --> CONCEPT_SERVICE
+    GATEWAY --> GRAPH_SERVICE
+    GATEWAY --> THESIS_SERVICE
+    GATEWAY --> SYNTHESIS_SERVICE
+
+    USER_SERVICE --> RELATIONAL_DB
+    CONCEPT_SERVICE --> RELATIONAL_DB
+    CONCEPT_SERVICE --> GRAPH_SERVICE
+    CONCEPT_SERVICE --> THESIS_SERVICE
+
+    GRAPH_SERVICE --> GRAPH_DB
+    THESIS_SERVICE --> DOCUMENT_DB
+    SYNTHESIS_SERVICE --> GRAPH_SERVICE
+    SYNTHESIS_SERVICE --> THESIS_SERVICE
+    SYNTHESIS_SERVICE --> CLAUDE_SERVICE
+
+    USER_SERVICE -.-> CACHE
+    CONCEPT_SERVICE -.-> CACHE
+    GRAPH_SERVICE -.-> CACHE
+    THESIS_SERVICE -.-> CACHE
+
+    CLAUDE_SERVICE --> MQ
+    CLAUDE_SERVICE --> CLAUDE_API
+    CLAUDE_SERVICE --> DOCUMENT_DB
+    CLAUDE_SERVICE --> RELATIONAL_DB

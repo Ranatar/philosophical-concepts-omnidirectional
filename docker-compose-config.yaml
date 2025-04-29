@@ -1,0 +1,263 @@
+version: '3.8'
+
+services:
+  # Базы данных
+  postgres:
+    image: postgres:14
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: philos
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: philos_concepts
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init/postgres:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U philos"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  neo4j:
+    image: neo4j:4.4
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      NEO4J_AUTH: neo4j/password
+      NEO4J_dbms_memory_heap_max__size: 1G
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7474"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongodb:
+    image: mongo:5
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: philos
+      MONGO_INITDB_ROOT_PASSWORD: password
+      MONGO_INITDB_DATABASE: philos_concepts
+    volumes:
+      - mongo_data:/data/db
+      - ./init/mongo:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongo localhost:27017/philos_concepts --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Кэш и очередь сообщений
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: philos
+      RABBITMQ_DEFAULT_PASS: password
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # API сервисы
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile.dev
+    ports:
+      - "4000:4000"
+    environment:
+      PORT: 4000
+      NODE_ENV: development
+      JWT_SECRET: your_jwt_secret_here
+      REDIS_URL: redis://redis:6379
+      USER_SERVICE_URL: http://user-service:4001
+      CONCEPT_SERVICE_URL: http://concept-service:4002
+      GRAPH_SERVICE_URL: http://graph-service:4003
+      THESIS_SERVICE_URL: http://thesis-service:4004
+      SYNTHESIS_SERVICE_URL: http://synthesis-service:4005
+      CLAUDE_SERVICE_URL: http://claude-service:4006
+    depends_on:
+      - redis
+      - user-service
+      - concept-service
+      - graph-service
+      - thesis-service
+      - synthesis-service
+      - claude-service
+    volumes:
+      - ./api-gateway:/app
+      - /app/node_modules
+    command: npm run dev
+
+  user-service:
+    build:
+      context: ./user-service
+      dockerfile: Dockerfile.dev
+    ports:
+      - "4001:4001"
+    environment:
+      PORT: 4001
+      NODE_ENV: development
+      DB_URL: postgres://philos:password@postgres:5432/philos_concepts
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./user-service:/app
+      - /app/node_modules
+    command: npm run dev
+
+  concept-service:
+    build:
+      context: ./concept-service
+      dockerfile: Dockerfile.dev
+    ports:
+      - "4002:4002"
+    environment:
+      PORT: 4002
+      NODE_ENV: development
+      DB_URL: postgres://philos:password@postgres:5432/philos_concepts
+      REDIS_URL: redis://redis:6379
+      GRAPH_SERVICE_URL: http://graph-service:4003
+      THESIS_SERVICE_URL: http://thesis-service:4004
+    depends_on:
+      - postgres
+      - redis
+      - graph-service
+      - thesis-service
+    volumes:
+      - ./concept-service:/app
+      - /app/node_modules
+    command: npm run dev
+
+  graph-service:
+    build:
+      context: ./graph-service
+      dockerfile: Dockerfile.dev
+    ports:
+      - "4003:4003"
+    environment:
+      PORT: 4003
+      NODE_ENV: development
+      NEO4J_URL: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: password
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - neo4j
+      - redis
+    volumes:
+      - ./graph-service:/app
+      - /app/node_modules
+    command: npm run dev
+
+  thesis-service:
+    build:
+      context: ./thesis-service
+      dockerfile: Dockerfile.dev
+    ports:
+      - "4004:4004"
+    environment:
+      PORT: 4004
+      NODE_ENV: development
+      MONGO_URL: mongodb://philos:password@mongodb:27017/philos_concepts
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - mongodb
+      - redis
+    volumes:
+      - ./thesis-service:/app
+      - /app/node_modules
+    command: npm run dev
+
+  synthesis-service:
+    build:
+      context: ./synthesis-service
+      dockerfile: Dockerfile.dev
+    ports:
+      - "4005:4005"
+    environment:
+      PORT: 4005
+      NODE_ENV: development
+      NEO4J_URL: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: password
+      MONGO_URL: mongodb://philos:password@mongodb:27017/philos_concepts
+      CLAUDE_SERVICE_URL: http://claude-service:4006
+    depends_on:
+      - neo4j
+      - mongodb
+      - claude-service
+    volumes:
+      - ./synthesis-service:/app
+      - /app/node_modules
+    command: npm run dev
+
+  claude-service:
+    build:
+      context: ./claude-service
+      dockerfile: Dockerfile.dev
+    ports:
+      - "4006:4006"
+    environment:
+      PORT: 4006
+      NODE_ENV: development
+      DB_URL: postgres://philos:password@postgres:5432/philos_concepts
+      RABBITMQ_URL: amqp://philos:password@rabbitmq:5672
+      CLAUDE_API_KEY: your_claude_api_key_here
+    depends_on:
+      - postgres
+      - rabbitmq
+    volumes:
+      - ./claude-service:/app
+      - /app/node_modules
+    command: npm run dev
+
+  # Фронтенд
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      REACT_APP_API_URL: http://localhost:4000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm start
+
+volumes:
+  postgres_data:
+  neo4j_data:
+  neo4j_logs:
+  mongo_data:
+  redis_data:
+  rabbitmq_data:
