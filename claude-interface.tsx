@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, LoaderCircle, Save, Copy, Download } from 'lucide-react';
+import { Send, LoaderCircle, Save, Copy, Download, Clock } from 'lucide-react';
 
 // Компонент интерфейса взаимодействия с Claude
 const ClaudeInterface = ({ conceptId, interactionType = 'freeform', prefilledTemplate = null }) => {
@@ -305,96 +305,68 @@ const ClaudeInterface = ({ conceptId, interactionType = 'freeform', prefilledTem
             placeholder="Введите свой запрос к Claude..."
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            disabled={isProcessing}
+            disabled={isProcessing || isAsyncProcessing}
           />
           
-          <button
-            className={`ml-4 p-2 rounded-full ${
-              isProcessing || !input.trim()
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
-            }`}
-            onClick={sendMessage}
-            disabled={isProcessing || !input.trim()}
-          >
-            {isProcessing ? (
-              <LoaderCircle className="animate-spin" size={24} />
-            ) : (
-              <Send size={24} />
-            )}
-          </button>
-
-      <div className="flex items-center">
-        <textarea
-          className="flex-1 border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 resize-none"
-          rows={3}
-          placeholder="Введите свой запрос к Claude..."
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          disabled={isProcessing || isAsyncProcessing}
-        />
+          <div className="ml-4 flex flex-col space-y-2">
+            <button
+              className={`p-2 rounded-full ${
+                isProcessing || isAsyncProcessing || !input.trim()
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-blue-600 text-white hover:bg-blue-700'
+              }`}
+              onClick={sendMessage}
+              disabled={isProcessing || isAsyncProcessing || !input.trim()}
+              title="Отправить синхронный запрос"
+            >
+              {isProcessing ? (
+                <LoaderCircle className="animate-spin" size={24} />
+              ) : (
+                <Send size={24} />
+              )}
+            </button>
+            
+            <button
+              className={`p-2 rounded-full ${
+                isProcessing || isAsyncProcessing || !input.trim()
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-green-600 text-white hover:bg-green-700'
+              }`}
+              onClick={sendAsyncMessage}
+              disabled={isProcessing || isAsyncProcessing || !input.trim()}
+              title="Отправить асинхронный запрос (для длительных операций)"
+            >
+              <Clock size={24} />
+            </button>
+          </div>
+        </div>
         
-        <div className="ml-4 flex flex-col space-y-2">
-          <button
-            className={`p-2 rounded-full ${
-              isProcessing || isAsyncProcessing || !input.trim()
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
-            }`}
-            onClick={sendMessage}
-            disabled={isProcessing || isAsyncProcessing || !input.trim()}
-            title="Отправить синхронный запрос"
-          >
-            {isProcessing ? (
-              <LoaderCircle className="animate-spin" size={24} />
-            ) : (
-              <Send size={24} />
-            )}
-          </button>
-          
-          <button
-            className={`p-2 rounded-full ${
-              isProcessing || isAsyncProcessing || !input.trim()
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'bg-green-600 text-white hover:bg-green-700'
-            }`}
-            onClick={sendAsyncMessage}
-            disabled={isProcessing || isAsyncProcessing || !input.trim()}
-            title="Отправить асинхронный запрос (для длительных операций)"
-          >
-            <Clock size={24} />
-          </button>
-        </div>
-      </div>
-
-          {Object.keys(asyncTasks).length > 0 && (
-            <div className="mt-4 border-t pt-2">
-              <div className="text-sm font-medium">Асинхронные задачи:</div>
-              <div className="mt-1 text-xs">
-                {Object.entries(asyncTasks).map(([taskId, task]) => (
-                  <div key={taskId} className="flex items-center mb-1">
-                    <div className={`w-2 h-2 rounded-full mr-2 ${
-                      task.status === 'queued' ? 'bg-yellow-500' :
-                      task.status === 'processing' ? 'bg-blue-500 animate-pulse' :
-                      task.status === 'completed' ? 'bg-green-500' : 'bg-red-500'
-                    }`}></div>
-                    <div className="flex-1">
-                      {taskId} - {
-                        task.status === 'queued' ? 'В очереди' :
-                        task.status === 'processing' ? 'Обрабатывается' :
-                        task.status === 'completed' ? 'Завершена' : 'Ошибка'
-                      }
-                    </div>
-                    <div className="text-gray-500">
-                      {new Date(task.createdAt).toLocaleTimeString()}
-                    </div>
+        {Object.keys(asyncTasks).length > 0 && (
+          <div className="mt-4 border-t pt-2">
+            <div className="text-sm font-medium">Асинхронные задачи:</div>
+            <div className="mt-1 text-xs">
+              {Object.entries(asyncTasks).map(([taskId, task]) => (
+                <div key={taskId} className="flex items-center mb-1">
+                  <div className={`w-2 h-2 rounded-full mr-2 ${
+                    task.status === 'queued' ? 'bg-yellow-500' :
+                    task.status === 'processing' ? 'bg-blue-500 animate-pulse' :
+                    task.status === 'completed' ? 'bg-green-500' : 'bg-red-500'
+                  }`}></div>
+                  <div className="flex-1">
+                    {taskId} - {
+                      task.status === 'queued' ? 'В очереди' :
+                      task.status === 'processing' ? 'Обрабатывается' :
+                      task.status === 'completed' ? 'Завершена' : 'Ошибка'
+                    }
                   </div>
-                ))}
-              </div>
+                  <div className="text-gray-500">
+                    {new Date(task.createdAt).toLocaleTimeString()}
+                  </div>
+                </div>
+              ))}
             </div>
-          )}
-      
-        </div>
+          </div>
+        )}
         
         <div className="mt-2 text-sm text-gray-500">
           Нажмите Enter для отправки запроса. Claude проанализирует ваш запрос и предоставит ответ.
