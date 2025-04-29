@@ -337,74 +337,233 @@ const ConceptGraphVisualization = ({ conceptId, readOnly = false }) => {
       </div>
       
       {/* Панель деталей */}
-      {(selectedNode || selectedEdge) && (
-        <div className="border-t p-4 bg-white">
-          {selectedNode && (
-            <div>
-              <div className="flex justify-between items-center">
-                <h3 className="font-medium">Категория: {selectedNode.name}</h3>
-                {!readOnly && (
-                  <div className="flex space-x-2">
-                    <button className="text-blue-600 hover:text-blue-800">
-                      <Edit size={16} />
-                    </button>
-                    <button className="text-red-600 hover:text-red-800">
-                      <Trash size={16} />
-                    </button>
-                  </div>
-                )}
+      {selectedNode && (
+        <div>
+          <div className="flex justify-between items-center">
+            <h3 className="font-medium">Категория: {selectedNode.name}</h3>
+            {!readOnly && (
+              <div className="flex space-x-2">
+                <button className="text-blue-600 hover:text-blue-800">
+                  <Edit size={16} />
+                </button>
+                <button className="text-red-600 hover:text-red-800">
+                  <Trash size={16} />
+                </button>
               </div>
-              <div className="mt-2 text-sm">
-                <div>Центральность: {selectedNode.centrality.toFixed(2)}</div>
-                  <div className="mt-2">
-                    <button 
-                      className="text-blue-600 hover:underline text-sm"
-                      onClick={() => requestCategoryEnrichment(selectedNode.id)}
-                    >
-                      Сгенерировать обогащенное описание
-                    </button>
-                  </div>
-              </div>
-            </div>
-          )}
-          
-          {selectedEdge && (
-            <div>
-              <div className="flex justify-between items-center">
-                <h3 className="font-medium">Связь: {selectedEdge.type}</h3>
-                {!readOnly && (
-                  <div className="flex space-x-2">
-                    <button className="text-blue-600 hover:text-blue-800">
-                      <Edit size={16} />
-                    </button>
-                    <button className="text-red-600 hover:text-red-800">
-                      <Trash size={16} />
-                    </button>
-                  </div>
-                )}
-              </div>
-              <div className="mt-2 text-sm">
+            )}
+          </div>
+          <div className="mt-2 text-sm">
+            {/* Раздел количественных характеристик */}
+            <div className="mb-3 border-b pb-2">
+              <div className="font-medium mb-1">Количественные характеристики:</div>
+              
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  Между категориями: {
-                    graph.nodes.find(n => n.id === selectedEdge.source)?.name
-                  } и {
-                    graph.nodes.find(n => n.id === selectedEdge.target)?.name
-                  }
+                  <label className="block text-xs text-gray-600">Центральность:</label>
+                  <div className="flex items-center">
+                    <input 
+                      type="range" 
+                      min="0" 
+                      max="1" 
+                      step="0.1" 
+                      value={selectedNode.centrality} 
+                      onChange={(e) => {
+                        // Здесь должна быть логика обновления центральности
+                        console.log("Центральность изменена:", e.target.value);
+                      }}
+                      disabled={readOnly}
+                      className="w-28 mr-2" 
+                    />
+                    <span>{selectedNode.centrality.toFixed(2)}</span>
+                    <button 
+                      className="ml-2 p-1 text-gray-500 hover:text-blue-700 text-xs"
+                      onClick={() => {
+                        // Здесь должен быть запрос метаданных для характеристики
+                        console.log("Запрос метаданных для центральности");
+                      }}
+                      title="Получить философское обоснование"
+                    >
+                      <FileText size={12} />
+                    </button>
+                  </div>
                 </div>
-                <div>Сила связи: {selectedEdge.strength.toFixed(2)}</div>
-                <div>Направленность: {
-                  selectedEdge.direction === 'bidirectional' ? 'Двунаправленная' : 
-                  selectedEdge.direction === 'directed' ? 'Однонаправленная' : 
-                  'Не указана'
-                }</div>
-                <div className="mt-2">
-                  <button className="text-blue-600 hover:underline text-sm">
-                    Сгенерировать философское обоснование
-                  </button>
+                
+                <div>
+                  <label className="block text-xs text-gray-600">Определённость:</label>
+                  <div className="flex items-center">
+                    <input 
+                      type="range" 
+                      min="0" 
+                      max="1" 
+                      step="0.1" 
+                      value={selectedNode.certainty || 0.5} 
+                      onChange={(e) => {
+                        // Здесь должна быть логика обновления определённости
+                        console.log("Определённость изменена:", e.target.value);
+                      }}
+                      disabled={readOnly}
+                      className="w-28 mr-2" 
+                    />
+                    <span>{(selectedNode.certainty || 0.5).toFixed(2)}</span>
+                    <button 
+                      className="ml-2 p-1 text-gray-500 hover:text-blue-700 text-xs"
+                      onClick={() => {
+                        // Здесь должен быть запрос метаданных для характеристики
+                        console.log("Запрос метаданных для определённости");
+                      }}
+                      title="Получить философское обоснование"
+                    >
+                      <FileText size={12} />
+                    </button>
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-xs text-gray-600">Историческая значимость:</label>
+                  <div className="flex items-center">
+                    <input 
+                      type="range" 
+                      min="0" 
+                      max="1" 
+                      step="0.1" 
+                      value={selectedNode.historicalSignificance || 0.5} 
+                      onChange={(e) => {
+                        // Здесь должна быть логика обновления исторической значимости
+                        console.log("Историческая значимость изменена:", e.target.value);
+                      }}
+                      disabled={readOnly}
+                      className="w-28 mr-2" 
+                    />
+                    <span>{(selectedNode.historicalSignificance || 0.5).toFixed(2)}</span>
+                    <button 
+                      className="ml-2 p-1 text-gray-500 hover:text-blue-700 text-xs"
+                      onClick={() => {
+                        // Здесь должен быть запрос метаданных для характеристики
+                        console.log("Запрос метаданных для исторической значимости");
+                      }}
+                      title="Получить философское обоснование"
+                    >
+                      <FileText size={12} />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-          )}
+            
+            <div className="mt-2">
+              <button 
+                className="text-blue-600 hover:underline text-sm"
+                onClick={() => requestCategoryEnrichment(selectedNode.id)}
+              >
+                Сгенерировать обогащенное описание
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+          
+      {selectedEdge && (
+        <div>
+          <div className="flex justify-between items-center">
+            <h3 className="font-medium">Связь: {selectedEdge.type}</h3>
+            {!readOnly && (
+              <div className="flex space-x-2">
+                <button className="text-blue-600 hover:text-blue-800">
+                  <Edit size={16} />
+                </button>
+                <button className="text-red-600 hover:text-red-800">
+                  <Trash size={16} />
+                </button>
+              </div>
+            )}
+          </div>
+          <div className="mt-2 text-sm">
+            <div>
+              Между категориями: {
+                graph.nodes.find(n => n.id === selectedEdge.source)?.name
+              } и {
+                graph.nodes.find(n => n.id === selectedEdge.target)?.name
+              }
+            </div>
+            
+            {/* Раздел количественных характеристик */}
+            <div className="my-3 border-b pb-2">
+              <div className="font-medium mb-1">Количественные характеристики:</div>
+              
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs text-gray-600">Сила связи:</label>
+                  <div className="flex items-center">
+                    <input 
+                      type="range" 
+                      min="0" 
+                      max="1" 
+                      step="0.1" 
+                      value={selectedEdge.strength} 
+                      onChange={(e) => {
+                        // Здесь должна быть логика обновления силы связи
+                        console.log("Сила связи изменена:", e.target.value);
+                      }}
+                      disabled={readOnly}
+                      className="w-28 mr-2" 
+                    />
+                    <span>{selectedEdge.strength.toFixed(2)}</span>
+                    <button 
+                      className="ml-2 p-1 text-gray-500 hover:text-blue-700 text-xs"
+                      onClick={() => {
+                        // Здесь должен быть запрос метаданных для характеристики
+                        console.log("Запрос метаданных для силы связи");
+                      }}
+                      title="Получить философское обоснование"
+                    >
+                      <FileText size={12} />
+                    </button>
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-xs text-gray-600">Очевидность/спорность:</label>
+                  <div className="flex items-center">
+                    <input 
+                      type="range" 
+                      min="0" 
+                      max="1" 
+                      step="0.1" 
+                      value={selectedEdge.certainty || 0.5} 
+                      onChange={(e) => {
+                        // Здесь должна быть логика обновления очевидности/спорности
+                        console.log("Очевидность/спорность изменена:", e.target.value);
+                      }}
+                      disabled={readOnly}
+                      className="w-28 mr-2" 
+                    />
+                    <span>{(selectedEdge.certainty || 0.5).toFixed(2)}</span>
+                    <button 
+                      className="ml-2 p-1 text-gray-500 hover:text-blue-700 text-xs"
+                      onClick={() => {
+                        // Здесь должен быть запрос метаданных для характеристики
+                        console.log("Запрос метаданных для очевидности/спорности");
+                      }}
+                      title="Получить философское обоснование"
+                    >
+                      <FileText size={12} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div>Направленность: {
+              selectedEdge.direction === 'bidirectional' ? 'Двунаправленная' : 
+              selectedEdge.direction === 'directed' ? 'Однонаправленная' : 
+              'Не указана'
+            }</div>
+            <div className="mt-2">
+              <button className="text-blue-600 hover:underline text-sm">
+                Сгенерировать философское обоснование
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

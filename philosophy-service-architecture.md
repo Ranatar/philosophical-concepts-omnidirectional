@@ -286,6 +286,11 @@
 - `POST /graphs/concepts/{concept_id}/enrich` - обогащение графа
 - `POST /graphs/from-theses` - создание графа на основе тезисов
 - `GET /graphs/analyze-origin` - анализ происхождения графа
+- `GET /graphs/concepts/{concept_id}/characteristics` - получение количественных характеристик графа концепции
+- `POST /graphs/categories/{id}/characteristics` - обновление количественных характеристик категории
+- `POST /graphs/relationships/{id}/characteristics` - обновление количественных характеристик связи
+- `POST /graphs/categories/{id}/characteristics/metadata` - получение философского обоснования для характеристики категории
+- `POST /graphs/relationships/{id}/characteristics/metadata` - получение философского обоснования для характеристики связи
 
 ### 4.4 Сервис тезисов (Thesis Service)
 
@@ -310,6 +315,8 @@
 - `POST /theses/{id}/elaborate` - развитие и обоснование тезиса
 - `POST /theses/compare` - сравнение наборов тезисов
 - `POST /theses/analyze-origin` - анализ происхождения тезисов
+- `POST /theses/concepts/{concept_id}/generate-with-characteristics` - генерация тезисов с учётом количественных характеристик
+- `POST /theses/compare` - сравнение наборов тезисов с разным учётом характеристик
 
 ### 4.5 Сервис синтеза (Synthesis Service)
 
@@ -333,6 +340,8 @@
 - `GET /synthesis/history` - получение истории синтезов
 - `POST /synthesis/identify-concepts` - определение родительских концепций
 - `POST /synthesis/evolution` - эволюция концепции
+- `POST /synthesis/with-characteristics` - создание синтезированной концепции с учётом количественных характеристик
+- `POST /synthesis/recalculate-characteristics` - пересчёт количественных характеристик для синтезированной концепции
 
 ### 4.6 Сервис Claude (Claude Service)
 

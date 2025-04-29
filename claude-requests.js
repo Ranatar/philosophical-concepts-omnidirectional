@@ -61,6 +61,86 @@ class ClaudeRequestFormatter {
   }
 
   /**
+   * Форматирует запрос для генерации тезисов с учётом количественных характеристик
+   * @param {Object} graphData - Данные графа концепции с количественными характеристиками
+   * @param {Number} quantity - Количество тезисов
+   * @param {String} thesisType - Тип тезисов
+   * @param {Object} characteristicsConfig - Настройки учёта характеристик
+   * @returns {String} - Форматированный запрос
+   */
+  formatThesisGenerationWithCharacteristicsRequest(graphData, quantity, thesisType, characteristicsConfig) {
+    return `На основе следующего графа философской концепции ${JSON.stringify(graphData, null, 2)} 
+    сформулируй ${quantity} ключевых тезисов в области ${thesisType}. 
+    Обрати особое внимание на категории с высокой центральностью (> ${characteristicsConfig.centralityThreshold || 0.7}) 
+    и связи с высокой силой (> ${characteristicsConfig.strengthThreshold || 0.7}). 
+    Для категорий с низкой определённостью (< ${characteristicsConfig.certaintyThreshold || 0.4}) 
+    предложи альтернативные формулировки тезисов.
+    ${characteristicsConfig.additionalInstructions || ''}`;
+  }
+
+  /**
+   * Форматирует запрос для сравнения версий тезисов с разным учётом характеристик
+   * @param {Array} thesesWithoutCharacteristics - Тезисы без учёта характеристик
+   * @param {Array} thesesWithCharacteristics - Тезисы с учётом характеристик
+   * @param {Object} characteristicsConfig - Информация о применённых характеристиках
+   * @returns {String} - Форматированный запрос
+   */
+  formatThesisComparisonRequest(thesesWithoutCharacteristics, thesesWithCharacteristics, characteristicsConfig) {
+    return `Сравни два набора тезисов, сгенерированных на основе одного графа концепции, 
+    но с разным учётом количественных характеристик: 
+    [ТЕЗИСЫ БЕЗ УЧЁТА ХАРАКТЕРИСТИК]: ${JSON.stringify(thesesWithoutCharacteristics, null, 2)} и 
+    [ТЕЗИСЫ С УЧЁТОМ ХАРАКТЕРИСТИК]: ${JSON.stringify(thesesWithCharacteristics, null, 2)}. 
+    При генерации второго набора учитывались следующие характеристики:
+    - Порог центральности категорий: ${characteristicsConfig.centralityThreshold || 0.7}
+    - Порог силы связей: ${characteristicsConfig.strengthThreshold || 0.7}
+    - Порог определённости категорий: ${characteristicsConfig.certaintyThreshold || 0.4}
+    
+    Выяви ключевые различия, их причины и оцени, какой набор лучше отражает суть концепции и почему.`;
+  }
+
+  /**
+   * Форматирует запрос для синтеза концепций с учётом количественных характеристик
+   * @param {Object} concept1 - Первая концепция с количественными характеристиками
+   * @param {Object} concept2 - Вторая концепция с количественными характеристиками
+   * @param {String} method - Метод синтеза
+   * @param {String} focus - Фокус синтеза
+   * @param {String} innovationDegree - Степень инновационности
+   * @param {Object} characteristicsConfig - Настройки трансформации характеристик
+   * @returns {String} - Форматированный запрос
+   */
+  formatConceptSynthesisWithCharacteristicsRequest(concept1, concept2, method, focus, innovationDegree, characteristicsConfig) {
+    return `Синтезируй новую философскую концепцию на основе концепций 
+    ${JSON.stringify(concept1, null, 2)} и ${JSON.stringify(concept2, null, 2)}. 
+    Используй метод синтеза: ${method}. 
+    Фокус синтеза: ${focus}. 
+    Степень инновационности: ${innovationDegree}.
+    
+    Учитывай количественные характеристики элементов исходных концепций следующим образом:
+    1) при конфликте приоритет отдавать элементам с более высокой центральностью,
+    2) сохранять силу связей пропорционально их значимости в исходных концепциях,
+    3) переоценивать определённость категорий с учётом их новых отношений.
+    
+    Дополнительные инструкции по трансформации характеристик:
+    ${characteristicsConfig.transformationRules || 'Нет дополнительных инструкций'}
+    
+    Для каждого элемента нового графа укажи его происхождение и обоснование включения, 
+    а также расчёт его количественных характеристик.`;
+  }
+
+  /**
+   * Форматирует запрос для генерации метаданных для количественных характеристик
+   * @param {String} category - Название категории
+   * @param {String} characteristic - Название характеристики
+   * @param {Number} value - Значение характеристики
+   * @returns {String} - Форматированный запрос
+   */
+  formatQuantitativeCharacteristicsMetadataRequest(category, characteristic, value) {
+    return `Я определил для категории "${category}" следующую характеристику: ${characteristic} = ${value}. 
+    Предложи философские и методологические основания для такой оценки, её возможные 
+    ограничения и альтернативные подходы к оценке.`;
+  }
+
+  /**
    * Форматирует запрос для синтеза концепций
    * @param {Object} concept1 - Первая концепция
    * @param {Object} concept2 - Вторая концепция
