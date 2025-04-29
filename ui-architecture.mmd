@@ -19,6 +19,7 @@ flowchart TB
         RELATIONSHIP_MANAGER[Менеджер связей]
         VISUALIZATION[Визуализация графа]
         QUANT_EDITOR[Редактор количественных характеристик]
+        GRAPH_FROM_THESIS[Генератор графа из тезисов]
     end
     
     subgraph "Компоненты редактора тезисов"
@@ -26,6 +27,7 @@ flowchart TB
         THESIS_GENERATOR[Генератор тезисов]
         THESIS_DETAILS[Детали тезиса]
         THESIS_VALIDATOR[Валидатор тезисов]
+        THESIS_ORIGIN[Анализатор происхождения тезисов]
     end
     
     subgraph "Компоненты синтеза"
@@ -33,6 +35,14 @@ flowchart TB
         SYNTHESIS_PARAMS[Параметры синтеза]
         SYNTHESIS_PREVIEW[Предпросмотр синтеза]
         SYNTHESIS_HISTORY[История синтезов]
+        CONCEPT_ORIGIN[Определитель родительских концепций]
+        CONCEPT_EVOLUTION[Инструмент эволюции концепции]
+    end
+    
+    subgraph "Компоненты анализа названий"
+        NAME_ANALYZER[Анализатор названий]
+        NAME_GENERATOR[Генератор названий]
+        NAME_ALTERNATIVES[Альтернативные названия]
     end
     
     HOME --> CONCEPT_LIST
@@ -44,23 +54,36 @@ flowchart TB
     CONCEPT_EDITOR --> THESIS_EDITOR
     CONCEPT_EDITOR --> CLAUDE_INTERFACE
     CONCEPT_EDITOR --> META_EDITOR
+    CONCEPT_EDITOR --> NAME_ANALYZER
     
     GRAPH_EDITOR --> CATEGORY_MANAGER
     GRAPH_EDITOR --> RELATIONSHIP_MANAGER
     GRAPH_EDITOR --> VISUALIZATION
     GRAPH_EDITOR --> QUANT_EDITOR
+    GRAPH_EDITOR --> GRAPH_FROM_THESIS
     
     THESIS_EDITOR --> THESIS_LIST
     THESIS_EDITOR --> THESIS_GENERATOR
     THESIS_EDITOR --> THESIS_DETAILS
     THESIS_EDITOR --> THESIS_VALIDATOR
+    THESIS_EDITOR --> THESIS_ORIGIN
     
     SYNTHESIS --> CONCEPT_SELECTOR
     SYNTHESIS --> SYNTHESIS_PARAMS
     SYNTHESIS --> SYNTHESIS_PREVIEW
     SYNTHESIS --> SYNTHESIS_HISTORY
+    SYNTHESIS --> CONCEPT_ORIGIN
+    SYNTHESIS --> CONCEPT_EVOLUTION
+    
+    GRAPH_EDITOR <--> THESIS_EDITOR
+    NAME_ANALYZER <--> CONCEPT_EDITOR
+    THESIS_ORIGIN <--> CONCEPT_ORIGIN
     
     CLAUDE_INTERFACE -.-> CATEGORY_MANAGER
     CLAUDE_INTERFACE -.-> RELATIONSHIP_MANAGER
     CLAUDE_INTERFACE -.-> THESIS_GENERATOR
     CLAUDE_INTERFACE -.-> SYNTHESIS_PREVIEW
+    CLAUDE_INTERFACE -.-> GRAPH_FROM_THESIS
+    CLAUDE_INTERFACE -.-> NAME_ANALYZER
+    CLAUDE_INTERFACE -.-> CONCEPT_ORIGIN
+    CLAUDE_INTERFACE -.-> CONCEPT_EVOLUTION

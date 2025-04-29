@@ -254,6 +254,29 @@ services:
       - /app/node_modules
     command: npm start
 
+  name-analysis-service:
+    build:
+      context: ./name-analysis-service
+      dockerfile: Dockerfile.dev
+    ports:
+      - "4007:4007"
+    environment:
+      PORT: 4007
+      NODE_ENV: development
+      CONCEPT_SERVICE_URL: http://concept-service:4002
+      GRAPH_SERVICE_URL: http://graph-service:4003
+      THESIS_SERVICE_URL: http://thesis-service:4004
+      CLAUDE_SERVICE_URL: http://claude-service:4006
+    depends_on:
+      - concept-service
+      - graph-service
+      - thesis-service
+      - claude-service
+    volumes:
+      - ./name-analysis-service:/app
+      - /app/node_modules
+    command: npm run dev  
+
 volumes:
   postgres_data:
   neo4j_data:

@@ -3,6 +3,7 @@ flowchart TB
         UI[Пользовательский интерфейс]
         VIS[Визуализация графов]
         FORMS[Формы и валидация]
+        BIDIR[Компоненты двунаправленного преобразования]
     end
 
     subgraph "API Gateway"
@@ -17,12 +18,15 @@ flowchart TB
         THESIS_SERVICE[Сервис тезисов]
         SYNTHESIS_SERVICE[Сервис синтеза]
         CLAUDE_SERVICE[Сервис Claude]
+        NAME_SERVICE[Сервис анализа названий]
+        ORIGIN_SERVICE[Сервис определения происхождения]
     end
 
     subgraph "Базы данных"
         RELATIONAL_DB[(Реляционная БД\nPostgreSQL)]
         GRAPH_DB[(Графовая БД\nNeo4j)]
         DOCUMENT_DB[(Документная БД\nMongoDB)]
+        TRANSFORMATION_DB[(Хранилище истории\nпреобразований)]
     end
 
     subgraph "Инфраструктура"
@@ -37,6 +41,7 @@ flowchart TB
     UI --> GATEWAY
     VIS --> GATEWAY
     FORMS --> GATEWAY
+    BIDIR --> GATEWAY
 
     GATEWAY --> AUTH
     GATEWAY --> USER_SERVICE
@@ -44,17 +49,25 @@ flowchart TB
     GATEWAY --> GRAPH_SERVICE
     GATEWAY --> THESIS_SERVICE
     GATEWAY --> SYNTHESIS_SERVICE
+    GATEWAY --> NAME_SERVICE
+    GATEWAY --> ORIGIN_SERVICE
 
     USER_SERVICE --> RELATIONAL_DB
     CONCEPT_SERVICE --> RELATIONAL_DB
     CONCEPT_SERVICE --> GRAPH_SERVICE
     CONCEPT_SERVICE --> THESIS_SERVICE
+    CONCEPT_SERVICE <--> NAME_SERVICE
 
     GRAPH_SERVICE --> GRAPH_DB
+    GRAPH_SERVICE <--> THESIS_SERVICE
+    
     THESIS_SERVICE --> DOCUMENT_DB
+    THESIS_SERVICE <--> ORIGIN_SERVICE
+    
     SYNTHESIS_SERVICE --> GRAPH_SERVICE
     SYNTHESIS_SERVICE --> THESIS_SERVICE
     SYNTHESIS_SERVICE --> CLAUDE_SERVICE
+    SYNTHESIS_SERVICE <--> ORIGIN_SERVICE
 
     USER_SERVICE -.-> CACHE
     CONCEPT_SERVICE -.-> CACHE
@@ -65,3 +78,7 @@ flowchart TB
     CLAUDE_SERVICE --> CLAUDE_API
     CLAUDE_SERVICE --> DOCUMENT_DB
     CLAUDE_SERVICE --> RELATIONAL_DB
+    CLAUDE_SERVICE --> TRANSFORMATION_DB
+    
+    NAME_SERVICE --> TRANSFORMATION_DB
+    ORIGIN_SERVICE --> TRANSFORMATION_DB

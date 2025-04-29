@@ -5,6 +5,9 @@ erDiagram
     Concepts ||--o{ ClaudeInteractions : involves
     Concepts ||--o{ ConceptPhilosophers : has
     Concepts ||--o{ ConceptTraditions : belongs_to
+    Concepts ||--o{ ConceptNames : has
+    Concepts ||--o{ ConceptOrigins : has
+    Concepts ||--o{ ConceptEvolutions : evolves_to
     Philosophers ||--o{ ConceptPhilosophers : mentioned_in
     Traditions ||--o{ ConceptTraditions : includes
     
@@ -82,4 +85,45 @@ erDiagram
         text response_content
         datetime interaction_date
         float processing_time
+    }
+    
+    ConceptNames {
+        uuid name_id PK
+        uuid concept_id FK
+        string name
+        text analysis
+        json alternative_names
+        datetime analyzed_at
+        uuid interaction_id FK
+    }
+    
+    ConceptOrigins {
+        uuid origin_id PK
+        uuid concept_id FK
+        json parent_concepts
+        json influence_weights
+        text analysis
+        datetime detected_at
+        uuid interaction_id FK
+    }
+    
+    Transformations {
+        uuid transformation_id PK
+        uuid source_id FK
+        string source_type
+        uuid target_id FK
+        string target_type
+        datetime created_at
+        uuid interaction_id FK
+        text transformation_details
+    }
+    
+    ConceptEvolutions {
+        uuid evolution_id PK
+        uuid concept_id FK
+        uuid target_concept_id FK
+        text evolution_context
+        json suggested_changes
+        datetime created_at
+        uuid interaction_id FK
     }

@@ -323,6 +323,14 @@ const ConceptGraphVisualization = ({ conceptId, readOnly = false }) => {
           )}
         </div>
       )}
+      <button className="p-2 rounded hover:bg-gray-100" aria-label="Сгенерировать тезисы">
+        <FileText size={20} />
+      </button>
+
+      {/* Кнопка для генерации графа из тезисов */}
+      <button className="p-2 rounded hover:bg-gray-100" aria-label="Создать граф из тезисов" style={{color: '#d63384'}}>
+        <GitMerge size={20} />
+      </button>
     </div>
   );
 };

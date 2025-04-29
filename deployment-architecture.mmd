@@ -18,12 +18,15 @@ flowchart TB
                 THESIS_SVC[Theses]
                 SYNTHESIS_SVC[Synthesis]
                 CLAUDE_SVC[Claude]
+                NAME_SVC[Name Analysis]
+                ORIGIN_SVC[Origin Detection]
             end
             
             subgraph "Databases"
                 PSQL[(PostgreSQL)]
                 NEO4J[(Neo4j)]
                 MONGO[(MongoDB)]
+                TRANSFORM_DB[(Transformations DB)]
             end
             
             subgraph "Cache & Message Queue"
@@ -57,13 +60,15 @@ flowchart TB
     end
     
     UI --> GATEWAY
-    GATEWAY --> USER_SVC & CONCEPT_SVC & GRAPH_SVC & THESIS_SVC & SYNTHESIS_SVC & CLAUDE_SVC
+    GATEWAY --> USER_SVC & CONCEPT_SVC & GRAPH_SVC & THESIS_SVC & SYNTHESIS_SVC & CLAUDE_SVC & NAME_SVC & ORIGIN_SVC
     
     USER_SVC --> PSQL
     CONCEPT_SVC --> PSQL
     GRAPH_SVC --> NEO4J
     THESIS_SVC --> MONGO
     SYNTHESIS_SVC --> NEO4J & MONGO
+    NAME_SVC --> PSQL & TRANSFORM_DB
+    ORIGIN_SVC --> TRANSFORM_DB & MONGO
     
     CLAUDE_SVC --> RABBITMQ
     CLAUDE_SVC --> CLAUDE_API
@@ -76,6 +81,6 @@ flowchart TB
     GIT --> CI
     CI --> REGISTRY
     REGISTRY --> CD
-    CD --> GATEWAY & UI & USER_SVC & CONCEPT_SVC & GRAPH_SVC & THESIS_SVC & SYNTHESIS_SVC & CLAUDE_SVC
+    CD --> GATEWAY & UI & USER_SVC & CONCEPT_SVC & GRAPH_SVC & THESIS_SVC & SYNTHESIS_SVC & CLAUDE_SVC & NAME_SVC & ORIGIN_SVC
     
     DEV_ENV -.-> GIT
