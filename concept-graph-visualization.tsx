@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ZoomIn, ZoomOut, Save, Edit, Plus, Trash, Link, FileText, GitMerge, CheckCircle } from 'lucide-react';
+import { ZoomIn, ZoomOut, Save, Edit, Plus, Trash, Link, FileText, GitMerge, CheckCircle, BookOpen, Briefcase, MessageSquare, GitBranch } from 'lucide-react';
 
 // Компонент визуализации графа концепции
 const ConceptGraphVisualization = ({ conceptId, readOnly = false }) => {
@@ -12,6 +12,12 @@ const ConceptGraphVisualization = ({ conceptId, readOnly = false }) => {
   const svgRef = useRef(null);
   const [validationResult, setValidationResult] = useState(null);
   const [enrichmentResult, setEnrichmentResult] = useState(null);
+  const [historicalContextResult, setHistoricalContextResult] = useState(null);
+  const [practicalApplicationResult, setPracticalApplicationResult] = useState(null);
+  const [dialogueResult, setDialogueResult] = useState(null);
+  const [evolutionResult, setEvolutionResult] = useState(null);
+  const [evolutionMode, setEvolutionMode] = useState(false);
+  const [evolutionSuggestions, setEvolutionSuggestions] = useState(null);
 
   const requestGraphValidation = async () => {
     try {
@@ -84,6 +90,192 @@ const ConceptGraphVisualization = ({ conceptId, readOnly = false }) => {
       setLoading(false);
     }
   };
+
+  const requestHistoricalContext = async () => {
+    try {
+      setLoading(true);
+      
+      // Здесь был бы реальный API запрос к сервису исторической контекстуализации
+      // const response = await api.getHistoricalContext(conceptId);
+      
+      // Имитация запроса к API
+      setTimeout(() => {
+        const mockHistoricalContext = {
+          timeContext: "Развитие в контексте постмодернистской философии XX века",
+          influences: [
+            { source: "Феноменология", description: "Идея интерсубъективности заимствована из феноменологической традиции" },
+            { source: "Экзистенциализм", description: "Трактовка субъективности имеет параллели с экзистенциалистским пониманием" }
+          ],
+          contemporaries: [
+            { name: "Структурализм", relationship: "противоположная", description: "Противопоставление концепции субъекта структуралистскому анти-субъективизму" },
+            { name: "Герменевтика", relationship: "схожая", description: "Схожее понимание диалектики субъективного и интерсубъективного" }
+          ],
+          nameAnalysis: "Название концепции адекватно отражает её историческое положение в дискурсе о субъективности"
+        };
+        
+        setHistoricalContextResult(mockHistoricalContext);
+        setLoading(false);
+      }, 2000);
+    } catch (error) {
+      setError("Ошибка при получении исторического контекста");
+      setLoading(false);
+    }
+  };
+
+  const requestPracticalApplication = async () => {
+    try {
+      setLoading(true);
+      
+      // Здесь был бы реальный API запрос к сервису практического применения
+      // const response = await api.getPracticalApplications(conceptId);
+      
+      // Имитация запроса к API
+      setTimeout(() => {
+        const mockPracticalApplication = {
+          domains: [
+            { 
+              name: "Образование", 
+              description: "Применение в педагогических практиках", 
+              relevantCategories: ["Субъективная реальность", "Интерсубъективность"],
+              methods: ["Диалогическое обучение", "Рефлексивные практики"]
+            },
+            { 
+              name: "Психотерапия", 
+              description: "Основа для терапевтического взаимодействия", 
+              relevantCategories: ["Интерсубъективность", "Субъективная реальность"],
+              methods: ["Феноменологическая терапия", "Диалогические практики"]
+            }
+          ]
+        };
+        
+        setPracticalApplicationResult(mockPracticalApplication);
+        setLoading(false);
+      }, 2000);
+    } catch (error) {
+      setError("Ошибка при получении анализа практического применения");
+      setLoading(false);
+    }
+  };
+
+  const requestDialogueGeneration = async () => {
+    try {
+      setLoading(true);
+      
+      // В реальном приложении здесь был бы запрос к другой концепции для сравнения
+      // или выбор из списка концепций
+      const otherConceptId = "mock-concept-2";
+      const philosophicalQuestion = "Природа объективной реальности";
+      
+      // Здесь был бы реальный API запрос к сервису диалогической интерпретации
+      // const response = await api.generateDialogue(conceptId, otherConceptId, philosophicalQuestion);
+      
+      // Имитация запроса к API
+      setTimeout(() => {
+        const mockDialogue = {
+          question: "Природа объективной реальности",
+          otherConcept: "Натуралистический реализм",
+          content: "Представитель субъективного идеализма: Объективная реальность не может существовать независимо от воспринимающего субъекта...\n\nПредставитель натуралистического реализма: Объективная реальность существует независимо от наших представлений о ней...",
+          convergencePoints: ["Признание множественности перспектив", "Важность эмпирического опыта"],
+          irreconcilableDifferences: ["Вопрос о независимом существовании реальности", "Статус научного знания"]
+        };
+        
+        setDialogueResult(mockDialogue);
+        setLoading(false);
+      }, 2000);
+    } catch (error) {
+      setError("Ошибка при генерации диалога");
+      setLoading(false);
+    }
+  };
+
+  const requestEvolutionAnalysis = async () => {
+    try {
+      setLoading(true);
+      
+      // Здесь был бы реальный API запрос к сервису эволюции концепций
+      // const response = await api.getEvolutionAnalysis(conceptId);
+      
+      // Имитация запроса к API
+      setTimeout(() => {
+        const mockEvolution = {
+          directions: [
+            { name: "Цифровая субъективность", description: "Развитие концепции в контексте цифровой реальности и виртуальных идентичностей" },
+            { name: "Нейрофеноменология", description: "Интеграция с современными нейронаучными данными о сознании и интерсубъективности" }
+          ],
+          suggestedChanges: [
+            { 
+              type: "new_category", 
+              name: "Цифровая идентичность", 
+              definition: "Проявление субъективности в цифровом пространстве",
+              relationTo: "Субъективная реальность",
+              relationType: "Extension"
+            },
+            { 
+              type: "modified_relationship", 
+              source: "Субъективная реальность",
+              target: "Интерсубъективность",
+              newType: "Эмерджентное взаимодействие",
+              description: "Переосмысление отношений с учетом новых данных когнитивной науки"
+            }
+          ],
+          nameEvolution: {
+            keepCurrent: true,
+            alternatives: ["Диалектика субъективности и интерсубъективности", "Феноменология интерактивного сознания"]
+          }
+        };
+        
+        setEvolutionResult(mockEvolution);
+        setLoading(false);
+      }, 2000);
+    } catch (error) {
+      setError("Ошибка при анализе эволюции концепции");
+      setLoading(false);
+    }
+  };
+
+  const enterEvolutionMode = () => {
+    if (evolutionResult) {
+      setEvolutionMode(true);
+      
+      // Преобразуем предложения по эволюции в формат для визуализации
+      const suggestions = {
+        newCategories: evolutionResult.suggestedChanges.filter(change => change.type === "new_category"),
+        modifiedRelationships: evolutionResult.suggestedChanges.filter(change => change.type === "modified_relationship"),
+        deletedElements: evolutionResult.suggestedChanges.filter(change => change.type === "delete")
+      };
+      
+      setEvolutionSuggestions(suggestions);
+    }
+  };
+
+  const exitEvolutionMode = () => {
+    setEvolutionMode(false);
+    setEvolutionSuggestions(null);
+  };
+
+  const applyEvolutionSuggestion = (suggestion) => {
+    // Здесь была бы логика применения конкретного предложения по эволюции
+    console.log("Applying evolution suggestion:", suggestion);
+    
+    // Для демонстрации просто удаляем предложение из списка
+    if (evolutionSuggestions) {
+      const updatedSuggestions = {...evolutionSuggestions};
+      
+      if (suggestion.type === "new_category") {
+        updatedSuggestions.newCategories = updatedSuggestions.newCategories.filter(s => s.name !== suggestion.name);
+      } else if (suggestion.type === "modified_relationship") {
+        updatedSuggestions.modifiedRelationships = updatedSuggestions.modifiedRelationships.filter(
+          s => !(s.source === suggestion.source && s.target === suggestion.target)
+        );
+      } else if (suggestion.type === "delete") {
+        updatedSuggestions.deletedElements = updatedSuggestions.deletedElements.filter(
+          s => s.id !== suggestion.id
+        );
+      }
+      
+      setEvolutionSuggestions(updatedSuggestions);
+    }
+  };
   
   // Загрузка данных графа
   useEffect(() => {
@@ -153,6 +345,89 @@ const ConceptGraphVisualization = ({ conceptId, readOnly = false }) => {
       const angle = (index / graph.nodes.length) * 2 * Math.PI;
       const x = centerX + radius * Math.cos(angle);
       const y = centerY + radius * Math.sin(angle);
+      
+      if (evolutionMode && evolutionSuggestions) {
+        // Модифицируем узлы для отображения предложенных изменений
+        nodes.forEach(node => {
+          // Проверяем, есть ли предложение удалить этот узел
+          const deleteProposal = evolutionSuggestions.deletedElements.find(
+            del => del.type === "category" && del.name === node.name
+          );
+          
+          if (deleteProposal) {
+            node.deleteProposed = true;
+          }
+          
+          // Проверяем, есть ли предложение изменить связи этого узла
+          const relModProposals = evolutionSuggestions.modifiedRelationships.filter(
+            mod => mod.source === node.name || mod.target === node.name
+          );
+          
+          if (relModProposals.length > 0) {
+            node.relModProposed = true;
+          }
+        });
+        
+        // Модифицируем связи для отображения предложенных изменений
+        edges.forEach(edge => {
+          const sourceNode = nodes.find(n => n.id === edge.source);
+          const targetNode = nodes.find(n => n.id === edge.target);
+          
+          if (sourceNode && targetNode) {
+            const modProposal = evolutionSuggestions.modifiedRelationships.find(
+              mod => mod.source === sourceNode.name && mod.target === targetNode.name
+            );
+            
+            if (modProposal) {
+              edge.modProposed = true;
+              edge.newType = modProposal.newType;
+            }
+          }
+        });
+        
+        // Добавим предложенные новые категории
+        const newCategoriesNodes = evolutionSuggestions.newCategories.map((newCat, index) => {
+          // Разместим новые категории в отдельной области
+          const angle = Math.PI / 2 + (index / evolutionSuggestions.newCategories.length) * Math.PI;
+          const radius = Math.min(width, height) / 2 - nodeRadius * 2;
+          const x = centerX + radius * 1.3 * Math.cos(angle);
+          const y = centerY + radius * 1.3 * Math.sin(angle);
+          
+          return {
+            ...newCat,
+            id: `new-${index}`,
+            x,
+            y,
+            newProposed: true
+          };
+        });
+        
+        // Объединяем с существующими узлами
+        nodes = [...nodes, ...newCategoriesNodes];
+        
+        // Добавим предложенные новые связи
+        const newCategoryEdges = evolutionSuggestions.newCategories.map((newCat, index) => {
+          const targetNode = nodes.find(n => n.name === newCat.relationTo);
+          
+          if (targetNode) {
+            return {
+              id: `new-edge-${index}`,
+              source: `new-${index}`,
+              target: targetNode.id,
+              sourceX: newCategoriesNodes[index].x,
+              sourceY: newCategoriesNodes[index].y,
+              targetX: targetNode.x,
+              targetY: targetNode.y,
+              type: newCat.relationType,
+              newProposed: true
+            };
+          }
+          return null;
+        }).filter(edge => edge !== null);
+        
+        // Объединяем с существующими связями
+        edges = [...edges, ...newCategoryEdges];
+      }
       
       return {
         ...node,
@@ -235,8 +510,13 @@ const ConceptGraphVisualization = ({ conceptId, readOnly = false }) => {
                 y1={edge.sourceY}
                 x2={edge.targetX}
                 y2={edge.targetY}
-                strokeWidth={2 + edge.strength * 3}
-                stroke={selectedEdge && selectedEdge.id === edge.id ? "#3182CE" : "#A0AEC0"}
+                strokeWidth={2 + (edge.strength || 1) * 3}
+                stroke={
+                  edge.newProposed ? "#10B981" :
+                  edge.modProposed ? "#F59E0B" :
+                  selectedEdge && selectedEdge.id === edge.id ? "#3182CE" : "#A0AEC0"
+                }
+                strokeDasharray={edge.modProposed ? "5,5" : "none"}
                 className="cursor-pointer"
                 markerEnd={isDirected ? "url(#arrowhead)" : null}
                 markerStart={isBidirectional ? "url(#arrowhead-start)" : null}
@@ -265,10 +545,24 @@ const ConceptGraphVisualization = ({ conceptId, readOnly = false }) => {
             className="cursor-pointer"
           >
             <circle
-              r={nodeRadius * (0.8 + node.centrality * 0.4)}
-              fill={selectedNode && selectedNode.id === node.id ? "#EBF8FF" : "#F7FAFC"}
-              stroke={selectedNode && selectedNode.id === node.id ? "#3182CE" : "#E2E8F0"}
-              strokeWidth={selectedNode && selectedNode.id === node.id ? 3 : 1}
+              r={nodeRadius * (0.8 + (node.centrality || 0.5) * 0.4)}
+              fill={
+                node.newProposed ? "#D1FAE5" :
+                node.deleteProposed ? "#FEE2E2" :
+                node.relModProposed ? "#FEF3C7" :
+                selectedNode && selectedNode.id === node.id ? "#EBF8FF" : "#F7FAFC"
+              }
+              stroke={
+                node.newProposed ? "#10B981" :
+                node.deleteProposed ? "#EF4444" :
+                node.relModProposed ? "#F59E0B" :
+                selectedNode && selectedNode.id === node.id ? "#3182CE" : "#E2E8F0"
+              }
+              strokeWidth={
+                (node.newProposed || node.deleteProposed || node.relModProposed) ? 2 :
+                selectedNode && selectedNode.id === node.id ? 3 : 1
+              }
+              strokeDasharray={node.deleteProposed ? "5,5" : "none"}
             />
             
             <text
@@ -311,6 +605,42 @@ const ConceptGraphVisualization = ({ conceptId, readOnly = false }) => {
             aria-label="Валидировать граф через Claude"
           >
             <CheckCircle size={20} />
+          </button>
+
+          <button 
+            onClick={requestHistoricalContext}
+            className="p-2 rounded hover:bg-gray-100"
+            aria-label="Историческая контекстуализация"
+            title="Историческая контекстуализация"
+          >
+            <BookOpen size={20} />
+          </button>
+
+          <button 
+            onClick={requestPracticalApplication}
+            className="p-2 rounded hover:bg-gray-100"
+            aria-label="Практическое применение"
+            title="Практическое применение"
+          >
+            <Briefcase size={20} />
+          </button>
+
+          <button 
+            onClick={requestDialogueGeneration}
+            className="p-2 rounded hover:bg-gray-100"
+            aria-label="Диалогическая интерпретация"
+            title="Диалогическая интерпретация"
+          >
+            <MessageSquare size={20} />
+          </button>
+
+          <button 
+            onClick={requestEvolutionAnalysis}
+            className={`p-2 rounded hover:bg-gray-100 ${evolutionMode ? 'bg-blue-100' : ''}`}
+            aria-label="Эволюция концепции"
+            title="Эволюция концепции"
+          >
+            <GitBranch size={20} />
           </button>
           
           {!readOnly && (
@@ -634,6 +964,249 @@ const ConceptGraphVisualization = ({ conceptId, readOnly = false }) => {
       <button className="p-2 rounded hover:bg-gray-100" aria-label="Создать граф из тезисов" style={{color: '#d63384'}}>
         <GitMerge size={20} />
       </button>
+
+        {historicalContextResult && (
+          <div className="border-t p-4 bg-white">
+            <h3 className="font-medium">Историческая контекстуализация</h3>
+            <div className="mt-2 text-sm">
+              <p className="mb-2">{historicalContextResult.timeContext}</p>
+              
+              {historicalContextResult.influences.length > 0 && (
+                <div className="mb-2">
+                  <div className="font-medium">Источники влияния:</div>
+                  <ul className="list-disc pl-5">
+                    {historicalContextResult.influences.map((item, index) => (
+                      <li key={`influence-${index}`}>
+                        <span className="font-medium">{item.source}</span>: {item.description}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              
+              {historicalContextResult.contemporaries.length > 0 && (
+                <div className="mb-2">
+                  <div className="font-medium">Современники:</div>
+                  <ul className="list-disc pl-5">
+                    {historicalContextResult.contemporaries.map((item, index) => (
+                      <li key={`contemporary-${index}`}>
+                        <span className="font-medium">{item.name}</span> (отношение: {item.relationship}): {item.description}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              
+              <div className="mt-2">
+                <div className="font-medium">Анализ названия в историческом контексте:</div>
+                <p>{historicalContextResult.nameAnalysis}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {practicalApplicationResult && (
+          <div className="border-t p-4 bg-white">
+            <h3 className="font-medium">Практическое применение</h3>
+            <div className="mt-2 text-sm">
+              {practicalApplicationResult.domains.map((domain, index) => (
+                <div key={`domain-${index}`} className="mb-3 pb-2 border-b border-gray-100">
+                  <h4 className="font-medium text-base">{domain.name}</h4>
+                  <p className="mb-1">{domain.description}</p>
+                  
+                  <div className="mt-2">
+                    <span className="font-medium">Релевантные категории:</span>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {domain.relevantCategories.map((category, idx) => (
+                        <span key={`category-${idx}`} className="px-2 py-1 bg-blue-100 rounded text-blue-800">
+                          {category}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div className="mt-2">
+                    <span className="font-medium">Методы применения:</span>
+                    <ul className="list-disc pl-5 mt-1">
+                      {domain.methods.map((method, idx) => (
+                        <li key={`method-${idx}`}>{method}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {dialogueResult && (
+          <div className="border-t p-4 bg-white">
+            <h3 className="font-medium">Диалогическая интерпретация</h3>
+            <div className="mt-2 text-sm">
+              <div className="mb-2">
+                <span className="font-medium">Философский вопрос:</span> {dialogueResult.question}
+              </div>
+              <div className="mb-2">
+                <span className="font-medium">Диалог с концепцией:</span> {dialogueResult.otherConcept}
+              </div>
+              
+              <div className="mb-3 mt-3 p-3 bg-gray-50 rounded whitespace-pre-line">
+                {dialogueResult.content}
+              </div>
+              
+              <div className="flex space-x-4">
+                <div className="flex-1">
+                  <div className="font-medium">Точки соприкосновения:</div>
+                  <ul className="list-disc pl-5">
+                    {dialogueResult.convergencePoints.map((point, idx) => (
+                      <li key={`convergence-${idx}`}>{point}</li>
+                    ))}
+                  </ul>
+                </div>
+                
+                <div className="flex-1">
+                  <div className="font-medium">Непреодолимые различия:</div>
+                  <ul className="list-disc pl-5">
+                    {dialogueResult.irreconcilableDifferences.map((diff, idx) => (
+                      <li key={`difference-${idx}`}>{diff}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {evolutionResult && (
+          <div className="border-t p-4 bg-white">
+            <h3 className="font-medium">Эволюция концепции</h3>
+            <div className="mt-2 text-sm">
+              <div className="mb-3">
+                <div className="font-medium">Возможные направления эволюции:</div>
+                <ul className="list-disc pl-5">
+                  {evolutionResult.directions.map((direction, idx) => (
+                    <li key={`direction-${idx}`}>
+                      <span className="font-medium">{direction.name}</span>: {direction.description}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              
+              <div className="mb-3">
+                <div className="font-medium">Название:</div>
+                <p>
+                  {evolutionResult.nameEvolution.keepCurrent 
+                    ? "Рекомендуется сохранить текущее название." 
+                    : "Рекомендуется изменить название."}
+                  {evolutionResult.nameEvolution.alternatives.length > 0 && (
+                    <>
+                      <span className="block mt-1">Альтернативные названия:</span>
+                      <ul className="list-disc pl-5">
+                        {evolutionResult.nameEvolution.alternatives.map((name, idx) => (
+                          <li key={`alt-name-${idx}`}>{name}</li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </p>
+              </div>
+              
+              <div className="mt-3 flex justify-between">
+                <button 
+                  onClick={enterEvolutionMode}
+                  className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+                  disabled={evolutionMode}
+                >
+                  Режим применения предложенных изменений
+                </button>
+                
+                {evolutionMode && (
+                  <button 
+                    onClick={exitEvolutionMode}
+                    className="px-3 py-1 bg-gray-500 text-white rounded hover:bg-gray-600"
+                  >
+                    Выйти из режима эволюции
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {evolutionMode && evolutionSuggestions && (
+          <div className="border-t p-4 bg-white">
+            <h3 className="font-medium">Предложенные изменения</h3>
+            <div className="mt-2 text-sm">
+              {evolutionSuggestions.newCategories.length > 0 && (
+                <div className="mb-3">
+                  <div className="font-medium">Новые категории:</div>
+                  <div className="mt-1 space-y-2">
+                    {evolutionSuggestions.newCategories.map((suggestion, idx) => (
+                      <div key={`new-cat-${idx}`} className="p-2 bg-green-50 border border-green-200 rounded flex justify-between items-center">
+                        <div>
+                          <span className="font-medium">{suggestion.name}</span>: {suggestion.definition}
+                          <div className="text-xs text-gray-600">Связь с категорией "{suggestion.relationTo}" (тип: {suggestion.relationType})</div>
+                        </div>
+                        <button 
+                          onClick={() => applyEvolutionSuggestion(suggestion)}
+                          className="px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-xs"
+                        >
+                          Применить
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {evolutionSuggestions.modifiedRelationships.length > 0 && (
+                <div className="mb-3">
+                  <div className="font-medium">Измененные связи:</div>
+                  <div className="mt-1 space-y-2">
+                    {evolutionSuggestions.modifiedRelationships.map((suggestion, idx) => (
+                      <div key={`mod-rel-${idx}`} className="p-2 bg-yellow-50 border border-yellow-200 rounded flex justify-between items-center">
+                        <div>
+                          <span className="font-medium">"{suggestion.source}" → "{suggestion.target}"</span>
+                          <div className="text-xs text-gray-600">Новый тип: {suggestion.newType}</div>
+                          <div className="text-xs">{suggestion.description}</div>
+                        </div>
+                        <button 
+                          onClick={() => applyEvolutionSuggestion(suggestion)}
+                          className="px-2 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 text-xs"
+                        >
+                          Применить
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {evolutionSuggestions.deletedElements.length > 0 && (
+                <div className="mb-3">
+                  <div className="font-medium">Элементы для удаления:</div>
+                  <div className="mt-1 space-y-2">
+                    {evolutionSuggestions.deletedElements.map((suggestion, idx) => (
+                      <div key={`del-el-${idx}`} className="p-2 bg-red-50 border border-red-200 rounded flex justify-between items-center">
+                        <div>
+                          <span className="font-medium">{suggestion.type === "category" ? "Категория" : "Связь"}: "{suggestion.name}"</span>
+                          <div className="text-xs text-gray-600">Причина: {suggestion.reason}</div>
+                        </div>
+                        <button 
+                          onClick={() => applyEvolutionSuggestion(suggestion)}
+                          className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-xs"
+                        >
+                          Применить
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
     </div>
   );
 };

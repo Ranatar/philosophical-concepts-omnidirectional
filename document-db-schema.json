@@ -90,9 +90,135 @@
           "style": "Строка",
           "format": "Строка",
           "focus": "Строка"
-        }
+        },
+        "discussion_points": [{
+          "topic": "Строка",
+          "description": "Текст",
+          "concept_positions": {
+            "concept_id": "Строка (позиция концепции)"
+          }
+        }],
+        "arguments": [{
+          "concept_id": "UUID",
+          "argument": "Строка",
+          "foundation": "Строка",
+          "counterarguments": [{
+            "concept_id": "UUID",
+            "counterargument": "Строка"
+          }]
+        }],
+        "convergence_points": [{
+          "description": "Строка",
+          "significance": "Число (0-1)"
+        }],
+        "irreconcilable_differences": [{
+          "description": "Строка",
+          "concepts": ["Array of UUID"],
+          "philosophical_root": "Строка"
+        }]
       },
       "indexes": ["concept_ids", "topic", "generated_at"]
+    },
+
+    "HistoricalContexts": {
+      "schema": {
+        "context_id": "ObjectId",
+        "concept_id": "UUID (связь с Concepts в PostgreSQL)",
+        "time_period": "Строка",
+        "historical_analysis": "Текст",
+        "influences": [{
+          "source": "Строка (философ, школа, традиция)",
+          "description": "Текст",
+          "strength": "Число (0-1)"
+        }],
+        "contemporaries": [{
+          "name": "Строка (концепция, школа, философ)",
+          "relationship": "Строка (схожая, противоположная, смешанная)",
+          "description": "Текст"
+        }],
+        "subsequent_influence": [{
+          "target": "Строка (направление)",
+          "description": "Текст",
+          "significance": "Число (0-1)"
+        }],
+        "name_context_analysis": "Текст",
+        "claude_generation_id": "UUID (связь с ClaudeInteraction в PostgreSQL)",
+        "created_at": "Дата",
+        "updated_at": "Дата"
+      },
+      "indexes": ["concept_id", "created_at"]
+    },
+
+    "PracticalApplications": {
+      "schema": {
+        "application_id": "ObjectId",
+        "concept_id": "UUID (связь с Concepts в PostgreSQL)",
+        "domains": [{
+          "name": "Строка",
+          "description": "Текст",
+          "relevance": "Число (0-1)"
+        }],
+        "application_analysis": "Текст",
+        "implementation_methods": [{
+          "domain": "Строка",
+          "method": "Строка",
+          "description": "Текст",
+          "requirements": ["Array of Строка"]
+        }],
+        "relevance_mappings": [{
+          "domain": "Строка",
+          "thesis_id": "ObjectId",
+          "category_id": "UUID",
+          "relevance": "Число (0-1)",
+          "application_note": "Текст"
+        }],
+        "challenges": [{
+          "domain": "Строка",
+          "description": "Текст",
+          "potential_solutions": ["Array of Строка"]
+        }],
+        "claude_generation_id": "UUID (связь с ClaudeInteraction в PostgreSQL)",
+        "created_at": "Дата",
+        "updated_at": "Дата"
+      },
+      "indexes": ["concept_id", "domains.name"]
+    },
+
+    "ConceptEvolutions": {
+      "schema": {
+        "evolution_id": "ObjectId",
+        "concept_id": "UUID (связь с Concepts в PostgreSQL)",
+        "directions": [{
+          "name": "Строка",
+          "description": "Текст",
+          "scientific_basis": "Текст",
+          "social_context": "Текст"
+        }],
+        "suggested_changes": [{
+          "type": "Строка (new_category, modified_relationship, delete)",
+          "element_id": "UUID или ObjectId",
+          "name": "Строка",
+          "definition": "Текст",
+          "relation_to": "Строка",
+          "relation_type": "Строка",
+          "source": "Строка",
+          "target": "Строка",
+          "reason": "Текст",
+          "description": "Текст"
+        }],
+        "name_evolution": {
+          "keep_current": "Boolean",
+          "alternatives": ["Array of Строка"],
+          "reasoning": "Текст"
+        },
+        "timeframe": "Строка (ближайшее будущее, среднесрочная перспектива, долгосрочная перспектива)",
+        "scientific_areas": ["Array of Строка"],
+        "social_contexts": ["Array of Строка"],
+        "claude_generation_id": "UUID (связь с ClaudeInteraction в PostgreSQL)",
+        "created_at": "Дата",
+        "updated_at": "Дата"
+      },
+      "indexes": ["concept_id", "created_at"]
     }
   }
 }

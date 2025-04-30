@@ -403,7 +403,7 @@ services:
       timeout: 10s
       retries: 3
 
-      historical-context-service:
+  historical-context-service:
     build:
       context: ./historical-context-service
       dockerfile: Dockerfile.dev

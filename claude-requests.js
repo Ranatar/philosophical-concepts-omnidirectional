@@ -255,74 +255,74 @@ class ClaudeRequestFormatter {
   }
 
   /**
- * Форматирует запрос для исторической контекстуализации с расширенными параметрами
- * @param {Object} conceptData - Данные концепции
- * @param {String} conceptName - Название концепции
- * @param {Array} traditions - Список традиций (опционально)
- * @param {Array} philosophers - Список философов (опционально)
- * @param {Object} timeContext - Временной контекст (опционально)
- * @returns {String} - Форматированный запрос
- */
-formatHistoricalContextRequest(conceptData, conceptName, traditions = [], philosophers = [], timeContext = null) {
-  let contextualizationScope = "";
-  
-  if (traditions && traditions.length > 0) {
-    contextualizationScope += `\nОсобое внимание обрати на связь с традициями: ${traditions.join(', ')}.`;
+   * Форматирует запрос для исторической контекстуализации с расширенными параметрами
+   * @param {Object} conceptData - Данные концепции
+   * @param {String} conceptName - Название концепции
+   * @param {Array} traditions - Список традиций (опционально)
+   * @param {Array} philosophers - Список философов (опционально)
+   * @param {Object} timeContext - Временной контекст (опционально)
+   * @returns {String} - Форматированный запрос
+   */
+  formatHistoricalContextRequest(conceptData, conceptName, traditions = [], philosophers = [], timeContext = null) {
+    let contextualizationScope = "";
+    
+    if (traditions && traditions.length > 0) {
+      contextualizationScope += `\nОсобое внимание обрати на связь с традициями: ${traditions.join(', ')}.`;
+    }
+    
+    if (philosophers && philosophers.length > 0) {
+      contextualizationScope += `\nРассмотри влияние следующих философов: ${philosophers.join(', ')}.`;
+    }
+    
+    if (timeContext) {
+      contextualizationScope += `\nПоместить в контекст периода: ${timeContext.start || "древность"} - ${timeContext.end || "современность"}.`;
+    }
+    
+    return `Помести философскую концепцию ${JSON.stringify(conceptData, null, 2)} 
+    под названием "${conceptName}" в исторический контекст. 
+    Определи её возможные источники влияния, современников со схожими 
+    или противоположными идеями, а также потенциальное влияние на последующие 
+    философские направления. Объясни, насколько название концепции соответствует 
+    её историческому контексту.${contextualizationScope}
+    
+    Представь результат в структурированном виде, включающем:
+    1. Общий исторический контекст
+    2. Ключевые источники влияния
+    3. Современные концепции (сходства и различия)
+    4. Потенциальное влияние на последующую философию
+    5. Соответствие названия историческому контексту`;
   }
-  
-  if (philosophers && philosophers.length > 0) {
-    contextualizationScope += `\nРассмотри влияние следующих философов: ${philosophers.join(', ')}.`;
-  }
-  
-  if (timeContext) {
-    contextualizationScope += `\nПоместить в контекст периода: ${timeContext.start || "древность"} - ${timeContext.end || "современность"}.`;
-  }
-  
-  return `Помести философскую концепцию ${JSON.stringify(conceptData, null, 2)} 
-  под названием "${conceptName}" в исторический контекст. 
-  Определи её возможные источники влияния, современников со схожими 
-  или противоположными идеями, а также потенциальное влияние на последующие 
-  философские направления. Объясни, насколько название концепции соответствует 
-  её историческому контексту.${contextualizationScope}
-  
-  Представь результат в структурированном виде, включающем:
-  1. Общий исторический контекст
-  2. Ключевые источники влияния
-  3. Современные концепции (сходства и различия)
-  4. Потенциальное влияние на последующую философию
-  5. Соответствие названия историческому контексту`;
-}
 
-/**
- * Форматирует запрос для анализа практического применения с расширенными параметрами
- * @param {Object} conceptData - Данные концепции
- * @param {String} conceptName - Название концепции
- * @param {Array} domains - Конкретные области применения (опционально)
- * @param {Boolean} detailed - Флаг подробного анализа
- * @returns {String} - Форматированный запрос
- */
-formatPracticalApplicationRequest(conceptData, conceptName, domains = null, detailed = false) {
-  let domainsStr = "образование, этика, политика, личностное развитие, социальные институты";
-  
-  if (domains && domains.length > 0) {
-    domainsStr = domains.join(', ');
+  /**
+   * Форматирует запрос для анализа практического применения с расширенными параметрами
+   * @param {Object} conceptData - Данные концепции
+   * @param {String} conceptName - Название концепции
+   * @param {Array} domains - Конкретные области применения (опционально)
+   * @param {Boolean} detailed - Флаг подробного анализа
+   * @returns {String} - Форматированный запрос
+   */
+  formatPracticalApplicationRequest(conceptData, conceptName, domains = null, detailed = false) {
+    let domainsStr = "образование, этика, политика, личностное развитие, социальные институты";
+    
+    if (domains && domains.length > 0) {
+      domainsStr = domains.join(', ');
+    }
+    
+    let detailLevel = detailed 
+      ? "Для каждой области предоставь подробный анализ способов операционализации с конкретными примерами и методиками внедрения."
+      : "Для каждой области укажи, какие именно тезисы или категории концепции наиболее релевантны и как они могут быть операционализированы.";
+    
+    return `Предложи возможные практические применения философской концепции ${JSON.stringify(conceptData, null, 2)} 
+    под названием "${conceptName}" в следующих областях: ${domainsStr}. 
+    ${detailLevel}
+    
+    Представь результат в структурированном виде для каждой области:
+    1. Краткое описание применимости концепции в данной области
+    2. Релевантные тезисы/категории концепции
+    3. Конкретные способы операционализации
+    4. Потенциальные трудности и ограничения
+    5. Критерии оценки эффективности применения`;
   }
-  
-  let detailLevel = detailed 
-    ? "Для каждой области предоставь подробный анализ способов операционализации с конкретными примерами и методиками внедрения."
-    : "Для каждой области укажи, какие именно тезисы или категории концепции наиболее релевантны и как они могут быть операционализированы.";
-  
-  return `Предложи возможные практические применения философской концепции ${JSON.stringify(conceptData, null, 2)} 
-  под названием "${conceptName}" в следующих областях: ${domainsStr}. 
-  ${detailLevel}
-  
-  Представь результат в структурированном виде для каждой области:
-  1. Краткое описание применимости концепции в данной области
-  2. Релевантные тезисы/категории концепции
-  3. Конкретные способы операционализации
-  4. Потенциальные трудности и ограничения
-  5. Критерии оценки эффективности применения`;
-}
 
   /**
    * Форматирует запрос для анализа совместимости концепций
@@ -349,76 +349,76 @@ formatPracticalApplicationRequest(conceptData, conceptName, domains = null, deta
     проблемы и слабые места.`;
   }
 
-/**
- * Форматирует запрос для создания диалога между концепциями с расширенными параметрами
- * @param {Object} concept1 - Первая концепция
- * @param {String} name1 - Название первой концепции
- * @param {Object} concept2 - Вторая концепция
- * @param {String} name2 - Название второй концепции
- * @param {String} topic - Тема диалога
- * @param {Object} options - Дополнительные параметры диалога
- * @returns {String} - Форматированный запрос
- */
-formatDialogueRequest(concept1, name1, concept2, name2, topic, options = {}) {
-  const { 
-    format = 'классический', 
-    length = 'средний', 
-    focusPoints = [], 
-    characterization = false 
-  } = options;
-  
-  let additionalInstructions = "";
-  
-  if (focusPoints && focusPoints.length > 0) {
-    additionalInstructions += `\nВ диалоге должны быть затронуты следующие аспекты: ${focusPoints.join(', ')}.`;
+  /**
+   * Форматирует запрос для создания диалога между концепциями с расширенными параметрами
+   * @param {Object} concept1 - Первая концепция
+   * @param {String} name1 - Название первой концепции
+   * @param {Object} concept2 - Вторая концепция
+   * @param {String} name2 - Название второй концепции
+   * @param {String} topic - Тема диалога
+   * @param {Object} options - Дополнительные параметры диалога
+   * @returns {String} - Форматированный запрос
+   */
+  formatDialogueRequest(concept1, name1, concept2, name2, topic, options = {}) {
+    const { 
+      format = 'классический', 
+      length = 'средний', 
+      focusPoints = [], 
+      characterization = false 
+    } = options;
+    
+    let additionalInstructions = "";
+    
+    if (focusPoints && focusPoints.length > 0) {
+      additionalInstructions += `\nВ диалоге должны быть затронуты следующие аспекты: ${focusPoints.join(', ')}.`;
+    }
+    
+    if (characterization) {
+      additionalInstructions += "\nПридай участникам диалога характерные черты в соответствии с их философскими позициями.";
+    }
+    
+    let formatInstruction = "";
+    switch (format) {
+      case 'платоновский':
+        formatInstruction = "Диалог должен быть оформлен в стиле платоновских диалогов.";
+        break;
+      case 'современный':
+        formatInstruction = "Диалог должен быть оформлен в стиле современной академической дискуссии.";
+        break;
+      case 'дебаты':
+        formatInstruction = "Диалог должен быть оформлен в стиле структурированных дебатов с аргументами и контраргументами.";
+        break;
+      default:
+        formatInstruction = "Диалог должен быть оформлен в классическом стиле философской беседы.";
+    }
+    
+    let lengthInstruction = "";
+    switch (length) {
+      case 'краткий':
+        lengthInstruction = "Диалог должен быть кратким, с фокусом на ключевых тезисах.";
+        break;
+      case 'развернутый':
+        lengthInstruction = "Диалог должен быть развернутым, с подробным обсуждением всех аспектов вопроса.";
+        break;
+      default:
+        lengthInstruction = "Диалог должен быть средней длины, охватывая основные аспекты вопроса.";
+    }
+    
+    return `Создай философский диалог между представителями концепций ${JSON.stringify(concept1, null, 2)} 
+    под названием "${name1}" и ${JSON.stringify(concept2, null, 2)} под названием "${name2}" 
+    по вопросу "${topic}". Диалог должен отражать ключевые тезисы каждой концепции, 
+    логику аргументации и возможные точки соприкосновения или непреодолимых разногласий.
+    ${formatInstruction}
+    ${lengthInstruction}
+    ${additionalInstructions}
+    
+    Структура диалога должна включать:
+    1. Краткое введение, представляющее участников и контекст
+    2. Изложение позиций сторон по обсуждаемому вопросу
+    3. Развитие дискуссии с аргументами и контраргументами
+    4. Выявление точек соприкосновения и принципиальных разногласий
+    5. Заключение, подводящее итоги диалога`;
   }
-  
-  if (characterization) {
-    additionalInstructions += "\nПридай участникам диалога характерные черты в соответствии с их философскими позициями.";
-  }
-  
-  let formatInstruction = "";
-  switch (format) {
-    case 'платоновский':
-      formatInstruction = "Диалог должен быть оформлен в стиле платоновских диалогов.";
-      break;
-    case 'современный':
-      formatInstruction = "Диалог должен быть оформлен в стиле современной академической дискуссии.";
-      break;
-    case 'дебаты':
-      formatInstruction = "Диалог должен быть оформлен в стиле структурированных дебатов с аргументами и контраргументами.";
-      break;
-    default:
-      formatInstruction = "Диалог должен быть оформлен в классическом стиле философской беседы.";
-  }
-  
-  let lengthInstruction = "";
-  switch (length) {
-    case 'краткий':
-      lengthInstruction = "Диалог должен быть кратким, с фокусом на ключевых тезисах.";
-      break;
-    case 'развернутый':
-      lengthInstruction = "Диалог должен быть развернутым, с подробным обсуждением всех аспектов вопроса.";
-      break;
-    default:
-      lengthInstruction = "Диалог должен быть средней длины, охватывая основные аспекты вопроса.";
-  }
-  
-  return `Создай философский диалог между представителями концепций ${JSON.stringify(concept1, null, 2)} 
-  под названием "${name1}" и ${JSON.stringify(concept2, null, 2)} под названием "${name2}" 
-  по вопросу "${topic}". Диалог должен отражать ключевые тезисы каждой концепции, 
-  логику аргументации и возможные точки соприкосновения или непреодолимых разногласий.
-  ${formatInstruction}
-  ${lengthInstruction}
-  ${additionalInstructions}
-  
-  Структура диалога должна включать:
-  1. Краткое введение, представляющее участников и контекст
-  2. Изложение позиций сторон по обсуждаемому вопросу
-  3. Развитие дискуссии с аргументами и контраргументами
-  4. Выявление точек соприкосновения и принципиальных разногласий
-  5. Заключение, подводящее итоги диалога`;
-}
   
 }
 
