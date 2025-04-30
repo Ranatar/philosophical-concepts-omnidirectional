@@ -8,8 +8,12 @@ erDiagram
     Concepts ||--o{ ConceptNames : has
     Concepts ||--o{ ConceptOrigins : has
     Concepts ||--o{ ConceptEvolutions : evolves_to
+    Concepts ||--o{ HistoricalContexts : has
+    Concepts ||--o{ PracticalApplications : has
+    Concepts ||--o{ DialogueParticipants : participates_in
     Philosophers ||--o{ ConceptPhilosophers : mentioned_in
     Traditions ||--o{ ConceptTraditions : includes
+    DialogueInterpretations ||--o{ DialogueParticipants : includes
     
     Users {
         uuid user_id PK
@@ -126,4 +130,45 @@ erDiagram
         json suggested_changes
         datetime created_at
         uuid interaction_id FK
+    }
+    
+    HistoricalContexts {
+        uuid context_id PK
+        uuid concept_id FK
+        string time_period
+        text historical_analysis
+        json influences
+        json contemporaries
+        json subsequent_influence
+        datetime created_at
+        uuid interaction_id FK
+    }
+    
+    PracticalApplications {
+        uuid application_id PK
+        uuid concept_id FK
+        json domains
+        text application_analysis
+        json implementation_methods
+        json relevance_mappings
+        datetime created_at
+        uuid interaction_id FK
+    }
+    
+    DialogueInterpretations {
+        uuid dialogue_id PK
+        string philosophical_question
+        text dialogue_content
+        json discussion_points
+        json arguments
+        datetime created_at
+        uuid interaction_id FK
+    }
+    
+    DialogueParticipants {
+        uuid participant_id PK
+        uuid dialogue_id FK
+        uuid concept_id FK
+        string role
+        json key_theses
     }
