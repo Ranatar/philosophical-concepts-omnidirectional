@@ -91,6 +91,38 @@ flowchart TD
     ConceptName --> |HAS_ANALYSIS| NameAnalysis
     NameAnalysis --> |ANALYZES| ConceptName
     
+    %% Историческая контекстуализация
+    HistoricalContext["Историческая контекстуализация
+    context_id
+    concept_id
+    time_period
+    influences (array)
+    contemporaries (array)
+    subsequent_influence (array)"]:::new
+    Concept --> |HAS_HISTORICAL_CONTEXT| HistoricalContext
+    HistoricalContext --> |CONTEXTUALIZES| Concept
+    
+    %% Практическое применение
+    PracticalApplication["Практическое применение
+    application_id
+    concept_id
+    domains (array)
+    implementation_methods (array)
+    relevance_mappings (array)"]:::new
+    Concept --> |HAS_APPLICATIONS| PracticalApplication
+    PracticalApplication --> |APPLIES| Concept
+    Thesis --> |APPLIES_IN| PracticalApplication
+    
+    %% Диалогическая интерпретация
+    DialogueInterpretation["Диалогическая интерпретация
+    dialogue_id
+    concept_ids (array)
+    philosophical_question
+    discussion_points (array)
+    arguments (array)"]:::new
+    Concept --> |PARTICIPATES_IN| DialogueInterpretation
+    DialogueInterpretation --> |INTERPRETS| Concept
+    
     %% Обозначение новых элементов
     classDef new fill:#f8d7da,stroke:#dc3545,stroke-width:2px
     classDef default fill:#f8f9fa,stroke:#495057
@@ -102,3 +134,6 @@ flowchart TD
     style ConceptOrigin stroke:#dc3545,stroke-width:2px
     style NameAnalysis stroke:#dc3545,stroke-width:2px
     style ConceptEvolution stroke:#dc3545,stroke-width:2px
+    style HistoricalContext stroke:#dc3545,stroke-width:2px
+    style PracticalApplication stroke:#dc3545,stroke-width:2px
+    style DialogueInterpretation stroke:#dc3545,stroke-width:2px
