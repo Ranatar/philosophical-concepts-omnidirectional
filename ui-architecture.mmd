@@ -45,6 +45,27 @@ flowchart TB
         NAME_ALTERNATIVES[Альтернативные названия]
     end
     
+    subgraph "Компоненты исторической контекстуализации"
+        HIST_ANALYZER[Анализатор исторического контекста]
+        INFLUENCE_VIEWER[Просмотр влияний]
+        TIMELINE_GENERATOR[Генератор временной шкалы]
+        TRADITION_MAPPER[Сопоставление с традициями]
+    end
+    
+    subgraph "Компоненты практического применения"
+        PRACT_ANALYZER[Анализатор практического применения]
+        DOMAIN_SELECTOR[Селектор областей применения]
+        IMPLEMENTATION_VIEWER[Просмотр реализаций]
+        OPERATIONALIZATION[Инструменты операционализации]
+    end
+    
+    subgraph "Компоненты диалогической интерпретации"
+        DIALOGUE_GENERATOR[Генератор диалогов]
+        PHIL_QUESTION[Редактор философских вопросов]
+        DIALOGUE_PREVIEW[Предпросмотр диалога]
+        ARGUMENT_ANALYZER[Анализатор аргументации]
+    end
+    
     HOME --> CONCEPT_LIST
     CONCEPT_LIST --> CONCEPT_EDITOR
     CONCEPT_LIST --> SYNTHESIS
@@ -87,3 +108,24 @@ flowchart TB
     CLAUDE_INTERFACE -.-> NAME_ANALYZER
     CLAUDE_INTERFACE -.-> CONCEPT_ORIGIN
     CLAUDE_INTERFACE -.-> CONCEPT_EVOLUTION
+    CLAUDE_INTERFACE -.-> HIST_ANALYZER
+    CLAUDE_INTERFACE -.-> PRACT_ANALYZER
+    CLAUDE_INTERFACE -.-> DIALOGUE_GENERATOR
+    
+    CONCEPT_EDITOR --> HIST_ANALYZER
+    CONCEPT_EDITOR --> PRACT_ANALYZER
+    CONCEPT_EDITOR --> DIALOGUE_GENERATOR
+    
+    HIST_ANALYZER --> INFLUENCE_VIEWER
+    HIST_ANALYZER --> TIMELINE_GENERATOR
+    HIST_ANALYZER --> TRADITION_MAPPER
+    
+    PRACT_ANALYZER --> DOMAIN_SELECTOR
+    PRACT_ANALYZER --> IMPLEMENTATION_VIEWER
+    PRACT_ANALYZER --> OPERATIONALIZATION
+    
+    DIALOGUE_GENERATOR --> PHIL_QUESTION
+    DIALOGUE_GENERATOR --> DIALOGUE_PREVIEW
+    DIALOGUE_GENERATOR --> ARGUMENT_ANALYZER
+    
+    SYNTHESIS --> DIALOGUE_GENERATOR
