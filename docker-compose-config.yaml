@@ -403,6 +403,134 @@ services:
       timeout: 10s
       retries: 3
 
+      historical-context-service:
+    build:
+      context: ./historical-context-service
+      dockerfile: Dockerfile.dev
+    ports:
+      - "4009:4009"
+    environment:
+      PORT: 4009
+      NODE_ENV: development
+      CONCEPT_SERVICE_URL: http://concept-service:4002
+      GRAPH_SERVICE_URL: http://graph-service:4003
+      THESIS_SERVICE_URL: http://thesis-service:4004
+      CLAUDE_SERVICE_URL: http://claude-service:4006
+      MONGO_URL: mongodb://philos:password@mongodb:27017/philos_concepts
+      REDIS_URL: redis://redis:6379
+      POSTGRES_URL: postgres://philos:password@postgres:5432/philos_concepts
+    depends_on:
+      - concept-service
+      - graph-service
+      - thesis-service
+      - claude-service
+      - mongodb
+      - redis
+      - postgres
+    volumes:
+      - ./historical-context-service:/app
+      - /app/node_modules
+    command: npm run dev
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:4009/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  practical-application-service:
+    build:
+      context: ./practical-application-service
+      dockerfile: Dockerfile.dev
+    ports:
+      - "4010:4010"
+    environment:
+      PORT: 4010
+      NODE_ENV: development
+      CONCEPT_SERVICE_URL: http://concept-service:4002
+      GRAPH_SERVICE_URL: http://graph-service:4003
+      THESIS_SERVICE_URL: http://thesis-service:4004
+      CLAUDE_SERVICE_URL: http://claude-service:4006
+      MONGO_URL: mongodb://philos:password@mongodb:27017/philos_concepts
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - concept-service
+      - graph-service
+      - thesis-service
+      - claude-service
+      - mongodb
+      - redis
+    volumes:
+      - ./practical-application-service:/app
+      - /app/node_modules
+    command: npm run dev
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:4010/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  dialogue-service:
+    build:
+      context: ./dialogue-service
+      dockerfile: Dockerfile.dev
+    ports:
+      - "4011:4011"
+    environment:
+      PORT: 4011
+      NODE_ENV: development
+      CONCEPT_SERVICE_URL: http://concept-service:4002
+      THESIS_SERVICE_URL: http://thesis-service:4004
+      CLAUDE_SERVICE_URL: http://claude-service:4006
+      MONGO_URL: mongodb://philos:password@mongodb:27017/philos_concepts
+      POSTGRES_URL: postgres://philos:password@postgres:5432/philos_concepts
+    depends_on:
+      - concept-service
+      - thesis-service
+      - claude-service
+      - mongodb
+      - postgres
+    volumes:
+      - ./dialogue-service:/app
+      - /app/node_modules
+    command: npm run dev
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:4011/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  evolution-service:
+    build:
+      context: ./evolution-service
+      dockerfile: Dockerfile.dev
+    ports:
+      - "4012:4012"
+    environment:
+      PORT: 4012
+      NODE_ENV: development
+      CONCEPT_SERVICE_URL: http://concept-service:4002
+      GRAPH_SERVICE_URL: http://graph-service:4003
+      THESIS_SERVICE_URL: http://thesis-service:4004
+      CLAUDE_SERVICE_URL: http://claude-service:4006
+      MONGO_URL: mongodb://philos:password@mongodb:27017/philos_concepts
+      POSTGRES_URL: postgres://philos:password@postgres:5432/philos_concepts
+    depends_on:
+      - concept-service
+      - graph-service
+      - thesis-service
+      - claude-service
+      - mongodb
+      - postgres
+    volumes:
+      - ./evolution-service:/app
+      - /app/node_modules
+    command: npm run dev
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:4012/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 volumes:
   postgres_data:
   neo4j_data:
