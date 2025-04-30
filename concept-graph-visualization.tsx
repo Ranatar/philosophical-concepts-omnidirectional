@@ -19,218 +19,184 @@ const ConceptGraphVisualization = ({ conceptId, readOnly = false }) => {
   const [evolutionMode, setEvolutionMode] = useState(false);
   const [evolutionSuggestions, setEvolutionSuggestions] = useState(null);
 
-  const requestGraphValidation = async () => {
+  // Общая функция для имитации API-запросов
+  const simulateApiRequest = async (apiFunction, mockResponse, errorMessage, setResultFunc = null) => {
     try {
-      // Показать индикатор загрузки
       setLoading(true);
       
-      // Здесь был бы реальный API запрос к сервису Claude
-      // const response = await api.validateGraph(conceptId, graph);
-      
       // Имитация запроса к API
-      setTimeout(() => {
-        const mockValidation = {
-          contradictions: [
-            { source: 1, target: 2, description: "Противоречие между категориями 'Субъективная реальность' и 'Интерсубъективность'" }
-          ],
-          missingCategories: [
-            { name: "Эпистемологические границы", description: "Категория для описания пределов познания" }
-          ],
-          missingRelationships: [
-            { source: "Субъективная реальность", target: "Объективная реальность", type: "опосредованная" }
-          ],
-          recommendations: [
-            "Добавить категорию 'Медиатор' как связующее звено между субъективным и интерсубъективным",
-            "Уточнить характер диалектической связи между субъективным и интерсубъективным"
-          ]
-        };
-        
-        setValidationResult(mockValidation);
-        setLoading(false);
-      }, 2000);
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          if (setResultFunc) {
+            setResultFunc(mockResponse);
+          }
+          setLoading(false);
+          resolve(mockResponse);
+        }, 2000);
+      });
     } catch (error) {
-      setError("Ошибка при валидации графа");
+      setError(errorMessage);
       setLoading(false);
+      throw error;
     }
+  };
+
+  const requestGraphValidation = async () => {
+    const mockValidation = {
+      contradictions: [
+        { source: 1, target: 2, description: "Противоречие между категориями 'Субъективная реальность' и 'Интерсубъективность'" }
+      ],
+      missingCategories: [
+        { name: "Эпистемологические границы", description: "Категория для описания пределов познания" }
+      ],
+      missingRelationships: [
+        { source: "Субъективная реальность", target: "Объективная реальность", type: "опосредованная" }
+      ],
+      recommendations: [
+        "Добавить категорию 'Медиатор' как связующее звено между субъективным и интерсубъективным",
+        "Уточнить характер диалектической связи между субъективным и интерсубъективным"
+      ]
+    };
+    
+    await simulateApiRequest(
+      "validateGraph", 
+      mockValidation, 
+      "Ошибка при валидации графа", 
+      setValidationResult
+    );
   };
 
   const requestCategoryEnrichment = async (categoryId) => {
-    try {
-      const category = graph.nodes.find(node => node.id === categoryId);
-      if (!category) return;
-      
-      // Показать индикатор загрузки
-      setLoading(true);
-      
-      // Здесь был бы реальный API запрос к сервису Claude
-      // const response = await api.enrichCategory(conceptId, categoryId);
-      
-      // Имитация запроса к API
-      setTimeout(() => {
-        const mockEnrichment = {
-          detailedDescription: `Категория "${category.name}" представляет собой фундаментальное понятие, описывающее... [подробное описание]`,
-          alternativeInterpretations: [
-            "В феноменологической традиции эта категория понимается как...",
-            "С точки зрения аналитической философии данная категория может быть рассмотрена..."
-          ],
-          historicalAnalogues: [
-            { philosopher: "Кант", concept: "Вещь в себе", description: "..." },
-            { philosopher: "Гуссерль", concept: "Интенциональность", description: "..." }
-          ],
-          relatedConcepts: [
-            "Сознание", "Восприятие", "Интерсубъективность"
-          ]
-        };
-        
-        setEnrichmentResult(mockEnrichment);
-        setLoading(false);
-      }, 2000);
-    } catch (error) {
-      setError(`Ошибка при обогащении категории ${categoryId}`);
-      setLoading(false);
-    }
+    const category = graph.nodes.find(node => node.id === categoryId);
+    if (!category) return;
+    
+    const mockEnrichment = {
+      detailedDescription: `Категория "${category.name}" представляет собой фундаментальное понятие, описывающее... [подробное описание]`,
+      alternativeInterpretations: [
+        "В феноменологической традиции эта категория понимается как...",
+        "С точки зрения аналитической философии данная категория может быть рассмотрена..."
+      ],
+      historicalAnalogues: [
+        { philosopher: "Кант", concept: "Вещь в себе", description: "..." },
+        { philosopher: "Гуссерль", concept: "Интенциональность", description: "..." }
+      ],
+      relatedConcepts: [
+        "Сознание", "Восприятие", "Интерсубъективность"
+      ]
+    };
+    
+    await simulateApiRequest(
+      "enrichCategory", 
+      mockEnrichment, 
+      `Ошибка при обогащении категории ${categoryId}`, 
+      setEnrichmentResult
+    );
   };
 
   const requestHistoricalContext = async () => {
-    try {
-      setLoading(true);
-      
-      // Здесь был бы реальный API запрос к сервису исторической контекстуализации
-      // const response = await api.getHistoricalContext(conceptId);
-      
-      // Имитация запроса к API
-      setTimeout(() => {
-        const mockHistoricalContext = {
-          timeContext: "Развитие в контексте постмодернистской философии XX века",
-          influences: [
-            { source: "Феноменология", description: "Идея интерсубъективности заимствована из феноменологической традиции" },
-            { source: "Экзистенциализм", description: "Трактовка субъективности имеет параллели с экзистенциалистским пониманием" }
-          ],
-          contemporaries: [
-            { name: "Структурализм", relationship: "противоположная", description: "Противопоставление концепции субъекта структуралистскому анти-субъективизму" },
-            { name: "Герменевтика", relationship: "схожая", description: "Схожее понимание диалектики субъективного и интерсубъективного" }
-          ],
-          nameAnalysis: "Название концепции адекватно отражает её историческое положение в дискурсе о субъективности"
-        };
-        
-        setHistoricalContextResult(mockHistoricalContext);
-        setLoading(false);
-      }, 2000);
-    } catch (error) {
-      setError("Ошибка при получении исторического контекста");
-      setLoading(false);
-    }
+    const mockHistoricalContext = {
+      timeContext: "Развитие в контексте постмодернистской философии XX века",
+      influences: [
+        { source: "Феноменология", description: "Идея интерсубъективности заимствована из феноменологической традиции" },
+        { source: "Экзистенциализм", description: "Трактовка субъективности имеет параллели с экзистенциалистским пониманием" }
+      ],
+      contemporaries: [
+        { name: "Структурализм", relationship: "противоположная", description: "Противопоставление концепции субъекта структуралистскому анти-субъективизму" },
+        { name: "Герменевтика", relationship: "схожая", description: "Схожее понимание диалектики субъективного и интерсубъективного" }
+      ],
+      nameAnalysis: "Название концепции адекватно отражает её историческое положение в дискурсе о субъективности"
+    };
+    
+    await simulateApiRequest(
+      "getHistoricalContext", 
+      mockHistoricalContext, 
+      "Ошибка при получении исторического контекста", 
+      setHistoricalContextResult
+    );
   };
 
   const requestPracticalApplication = async () => {
-    try {
-      setLoading(true);
-      
-      // Здесь был бы реальный API запрос к сервису практического применения
-      // const response = await api.getPracticalApplications(conceptId);
-      
-      // Имитация запроса к API
-      setTimeout(() => {
-        const mockPracticalApplication = {
-          domains: [
-            { 
-              name: "Образование", 
-              description: "Применение в педагогических практиках", 
-              relevantCategories: ["Субъективная реальность", "Интерсубъективность"],
-              methods: ["Диалогическое обучение", "Рефлексивные практики"]
-            },
-            { 
-              name: "Психотерапия", 
-              description: "Основа для терапевтического взаимодействия", 
-              relevantCategories: ["Интерсубъективность", "Субъективная реальность"],
-              methods: ["Феноменологическая терапия", "Диалогические практики"]
-            }
-          ]
-        };
-        
-        setPracticalApplicationResult(mockPracticalApplication);
-        setLoading(false);
-      }, 2000);
-    } catch (error) {
-      setError("Ошибка при получении анализа практического применения");
-      setLoading(false);
-    }
+    const mockPracticalApplication = {
+      domains: [
+        { 
+          name: "Образование", 
+          description: "Применение в педагогических практиках", 
+          relevantCategories: ["Субъективная реальность", "Интерсубъективность"],
+          methods: ["Диалогическое обучение", "Рефлексивные практики"]
+        },
+        { 
+          name: "Психотерапия", 
+          description: "Основа для терапевтического взаимодействия", 
+          relevantCategories: ["Интерсубъективность", "Субъективная реальность"],
+          methods: ["Феноменологическая терапия", "Диалогические практики"]
+        }
+      ]
+    };
+    
+    await simulateApiRequest(
+      "getPracticalApplications", 
+      mockPracticalApplication, 
+      "Ошибка при получении анализа практического применения", 
+      setPracticalApplicationResult
+    );
   };
 
   const requestDialogueGeneration = async () => {
-    try {
-      setLoading(true);
-      
-      // В реальном приложении здесь был бы запрос к другой концепции для сравнения
-      // или выбор из списка концепций
-      const otherConceptId = "mock-concept-2";
-      const philosophicalQuestion = "Природа объективной реальности";
-      
-      // Здесь был бы реальный API запрос к сервису диалогической интерпретации
-      // const response = await api.generateDialogue(conceptId, otherConceptId, philosophicalQuestion);
-      
-      // Имитация запроса к API
-      setTimeout(() => {
-        const mockDialogue = {
-          question: "Природа объективной реальности",
-          otherConcept: "Натуралистический реализм",
-          content: "Представитель субъективного идеализма: Объективная реальность не может существовать независимо от воспринимающего субъекта...\n\nПредставитель натуралистического реализма: Объективная реальность существует независимо от наших представлений о ней...",
-          convergencePoints: ["Признание множественности перспектив", "Важность эмпирического опыта"],
-          irreconcilableDifferences: ["Вопрос о независимом существовании реальности", "Статус научного знания"]
-        };
-        
-        setDialogueResult(mockDialogue);
-        setLoading(false);
-      }, 2000);
-    } catch (error) {
-      setError("Ошибка при генерации диалога");
-      setLoading(false);
-    }
+    // В реальном приложении здесь был бы запрос к другой концепции для сравнения
+    // или выбор из списка концепций
+    const otherConceptId = "mock-concept-2";
+    const philosophicalQuestion = "Природа объективной реальности";
+    
+    const mockDialogue = {
+      question: "Природа объективной реальности",
+      otherConcept: "Натуралистический реализм",
+      content: "Представитель субъективного идеализма: Объективная реальность не может существовать независимо от воспринимающего субъекта...\n\nПредставитель натуралистического реализма: Объективная реальность существует независимо от наших представлений о ней...",
+      convergencePoints: ["Признание множественности перспектив", "Важность эмпирического опыта"],
+      irreconcilableDifferences: ["Вопрос о независимом существовании реальности", "Статус научного знания"]
+    };
+    
+    await simulateApiRequest(
+      "generateDialogue", 
+      mockDialogue, 
+      "Ошибка при генерации диалога", 
+      setDialogueResult
+    );
   };
 
   const requestEvolutionAnalysis = async () => {
-    try {
-      setLoading(true);
-      
-      // Здесь был бы реальный API запрос к сервису эволюции концепций
-      // const response = await api.getEvolutionAnalysis(conceptId);
-      
-      // Имитация запроса к API
-      setTimeout(() => {
-        const mockEvolution = {
-          directions: [
-            { name: "Цифровая субъективность", description: "Развитие концепции в контексте цифровой реальности и виртуальных идентичностей" },
-            { name: "Нейрофеноменология", description: "Интеграция с современными нейронаучными данными о сознании и интерсубъективности" }
-          ],
-          suggestedChanges: [
-            { 
-              type: "new_category", 
-              name: "Цифровая идентичность", 
-              definition: "Проявление субъективности в цифровом пространстве",
-              relationTo: "Субъективная реальность",
-              relationType: "Extension"
-            },
-            { 
-              type: "modified_relationship", 
-              source: "Субъективная реальность",
-              target: "Интерсубъективность",
-              newType: "Эмерджентное взаимодействие",
-              description: "Переосмысление отношений с учетом новых данных когнитивной науки"
-            }
-          ],
-          nameEvolution: {
-            keepCurrent: true,
-            alternatives: ["Диалектика субъективности и интерсубъективности", "Феноменология интерактивного сознания"]
-          }
-        };
-        
-        setEvolutionResult(mockEvolution);
-        setLoading(false);
-      }, 2000);
-    } catch (error) {
-      setError("Ошибка при анализе эволюции концепции");
-      setLoading(false);
-    }
+    const mockEvolution = {
+      directions: [
+        { name: "Цифровая субъективность", description: "Развитие концепции в контексте цифровой реальности и виртуальных идентичностей" },
+        { name: "Нейрофеноменология", description: "Интеграция с современными нейронаучными данными о сознании и интерсубъективности" }
+      ],
+      suggestedChanges: [
+        { 
+          type: "new_category", 
+          name: "Цифровая идентичность", 
+          definition: "Проявление субъективности в цифровом пространстве",
+          relationTo: "Субъективная реальность",
+          relationType: "Extension"
+        },
+        { 
+          type: "modified_relationship", 
+          source: "Субъективная реальность",
+          target: "Интерсубъективность",
+          newType: "Эмерджентное взаимодействие",
+          description: "Переосмысление отношений с учетом новых данных когнитивной науки"
+        }
+      ],
+      nameEvolution: {
+        keepCurrent: true,
+        alternatives: ["Диалектика субъективности и интерсубъективности", "Феноменология интерактивного сознания"]
+      }
+    };
+    
+    await simulateApiRequest(
+      "getEvolutionAnalysis", 
+      mockEvolution, 
+      "Ошибка при анализе эволюции концепции", 
+      setEvolutionResult
+    );
   };
 
   const enterEvolutionMode = () => {
@@ -325,109 +291,119 @@ const ConceptGraphVisualization = ({ conceptId, readOnly = false }) => {
     setSelectedEdge(edge);
     setSelectedNode(null);
   };
-  
-  // Рендеринг графа
-  const renderGraph = () => {
-    if (loading) return <div className="flex items-center justify-center h-full">Загрузка графа...</div>;
-    if (error) return <div className="text-red-500">{error}</div>;
+
+  // Вспомогательная функция для подготовки данных для эволюционных изменений
+  const prepareEvolutionaryData = (baseNodes, baseEdges) => {
+    if (!evolutionMode || !evolutionSuggestions) {
+      return { nodes: baseNodes, edges: baseEdges };
+    }
+
+    const modifiedNodes = [...baseNodes];
+    const modifiedEdges = [...baseEdges];
+
+    // Модифицируем узлы для отображения предложенных изменений
+    modifiedNodes.forEach(node => {
+      // Проверяем, есть ли предложение удалить этот узел
+      const deleteProposal = evolutionSuggestions.deletedElements.find(
+        del => del.type === "category" && del.name === node.name
+      );
+      
+      if (deleteProposal) {
+        node.deleteProposed = true;
+      }
+      
+      // Проверяем, есть ли предложение изменить связи этого узла
+      const relModProposals = evolutionSuggestions.modifiedRelationships.filter(
+        mod => mod.source === node.name || mod.target === node.name
+      );
+      
+      if (relModProposals.length > 0) {
+        node.relModProposed = true;
+      }
+    });
     
+    // Модифицируем связи для отображения предложенных изменений
+    modifiedEdges.forEach(edge => {
+      const sourceNode = modifiedNodes.find(n => n.id === edge.source);
+      const targetNode = modifiedNodes.find(n => n.id === edge.target);
+      
+      if (sourceNode && targetNode) {
+        const modProposal = evolutionSuggestions.modifiedRelationships.find(
+          mod => mod.source === sourceNode.name && mod.target === targetNode.name
+        );
+        
+        if (modProposal) {
+          edge.modProposed = true;
+          edge.newType = modProposal.newType;
+        }
+      }
+    });
+    
+    // Добавляем предложенные новые категории
+    const newCategoriesNodes = evolutionSuggestions.newCategories.map((newCat, index) => {
+      // Размещаем новые категории в отдельной области
+      const angle = Math.PI / 2 + (index / evolutionSuggestions.newCategories.length) * Math.PI;
+      const width = 800;
+      const height = 600;
+      const centerX = width / 2;
+      const centerY = height / 2;
+      const nodeRadius = 40;
+      const radius = Math.min(width, height) / 2 - nodeRadius * 2;
+      const x = centerX + radius * 1.3 * Math.cos(angle);
+      const y = centerY + radius * 1.3 * Math.sin(angle);
+      
+      return {
+        ...newCat,
+        id: `new-${index}`,
+        x,
+        y,
+        newProposed: true
+      };
+    });
+    
+    // Объединяем с существующими узлами
+    const combinedNodes = [...modifiedNodes, ...newCategoriesNodes];
+    
+    // Добавляем предложенные новые связи
+    const newCategoryEdges = evolutionSuggestions.newCategories.map((newCat, index) => {
+      const targetNode = combinedNodes.find(n => n.name === newCat.relationTo);
+      
+      if (targetNode) {
+        return {
+          id: `new-edge-${index}`,
+          source: `new-${index}`,
+          target: targetNode.id,
+          sourceX: newCategoriesNodes[index].x,
+          sourceY: newCategoriesNodes[index].y,
+          targetX: targetNode.x,
+          targetY: targetNode.y,
+          type: newCat.relationType,
+          newProposed: true
+        };
+      }
+      return null;
+    }).filter(edge => edge !== null);
+    
+    // Объединяем с существующими связями
+    const combinedEdges = [...modifiedEdges, ...newCategoryEdges];
+
+    return { nodes: combinedNodes, edges: combinedEdges };
+  };
+  
+  // Функция для подготовки узлов графа с координатами
+  const prepareNodesWithCoordinates = (nodes) => {
     const width = 800;
     const height = 600;
-    const nodeRadius = 40;
-    
-    // Простое расположение узлов в круге
     const centerX = width / 2;
     const centerY = height / 2;
+    const nodeRadius = 40;
     const radius = Math.min(width, height) / 2 - nodeRadius * 2;
     
     // Расположить узлы по кругу
-    const nodes = graph.nodes.map((node, index) => {
-      const angle = (index / graph.nodes.length) * 2 * Math.PI;
+    return nodes.map((node, index) => {
+      const angle = (index / nodes.length) * 2 * Math.PI;
       const x = centerX + radius * Math.cos(angle);
       const y = centerY + radius * Math.sin(angle);
-      
-      if (evolutionMode && evolutionSuggestions) {
-        // Модифицируем узлы для отображения предложенных изменений
-        nodes.forEach(node => {
-          // Проверяем, есть ли предложение удалить этот узел
-          const deleteProposal = evolutionSuggestions.deletedElements.find(
-            del => del.type === "category" && del.name === node.name
-          );
-          
-          if (deleteProposal) {
-            node.deleteProposed = true;
-          }
-          
-          // Проверяем, есть ли предложение изменить связи этого узла
-          const relModProposals = evolutionSuggestions.modifiedRelationships.filter(
-            mod => mod.source === node.name || mod.target === node.name
-          );
-          
-          if (relModProposals.length > 0) {
-            node.relModProposed = true;
-          }
-        });
-        
-        // Модифицируем связи для отображения предложенных изменений
-        edges.forEach(edge => {
-          const sourceNode = nodes.find(n => n.id === edge.source);
-          const targetNode = nodes.find(n => n.id === edge.target);
-          
-          if (sourceNode && targetNode) {
-            const modProposal = evolutionSuggestions.modifiedRelationships.find(
-              mod => mod.source === sourceNode.name && mod.target === targetNode.name
-            );
-            
-            if (modProposal) {
-              edge.modProposed = true;
-              edge.newType = modProposal.newType;
-            }
-          }
-        });
-        
-        // Добавим предложенные новые категории
-        const newCategoriesNodes = evolutionSuggestions.newCategories.map((newCat, index) => {
-          // Разместим новые категории в отдельной области
-          const angle = Math.PI / 2 + (index / evolutionSuggestions.newCategories.length) * Math.PI;
-          const radius = Math.min(width, height) / 2 - nodeRadius * 2;
-          const x = centerX + radius * 1.3 * Math.cos(angle);
-          const y = centerY + radius * 1.3 * Math.sin(angle);
-          
-          return {
-            ...newCat,
-            id: `new-${index}`,
-            x,
-            y,
-            newProposed: true
-          };
-        });
-        
-        // Объединяем с существующими узлами
-        nodes = [...nodes, ...newCategoriesNodes];
-        
-        // Добавим предложенные новые связи
-        const newCategoryEdges = evolutionSuggestions.newCategories.map((newCat, index) => {
-          const targetNode = nodes.find(n => n.name === newCat.relationTo);
-          
-          if (targetNode) {
-            return {
-              id: `new-edge-${index}`,
-              source: `new-${index}`,
-              target: targetNode.id,
-              sourceX: newCategoriesNodes[index].x,
-              sourceY: newCategoriesNodes[index].y,
-              targetX: targetNode.x,
-              targetY: targetNode.y,
-              type: newCat.relationType,
-              newProposed: true
-            };
-          }
-          return null;
-        }).filter(edge => edge !== null);
-        
-        // Объединяем с существующими связями
-        edges = [...edges, ...newCategoryEdges];
-      }
       
       return {
         ...node,
@@ -435,11 +411,17 @@ const ConceptGraphVisualization = ({ conceptId, readOnly = false }) => {
         y
       };
     });
-    
-    // Найти соответствующие координаты для связей
-    const edges = graph.edges.map(edge => {
+  };
+
+  // Функция для подготовки связей графа с координатами
+  const prepareEdgesWithCoordinates = (edges, nodes) => {
+    return edges.map(edge => {
       const source = nodes.find(n => n.id === edge.source);
       const target = nodes.find(n => n.id === edge.target);
+      
+      if (!source || !target) {
+        return null;
+      }
       
       return {
         ...edge,
@@ -448,7 +430,25 @@ const ConceptGraphVisualization = ({ conceptId, readOnly = false }) => {
         targetX: target.x,
         targetY: target.y
       };
-    });
+    }).filter(edge => edge !== null);
+  };
+  
+  // Рендеринг графа
+  const renderGraph = () => {
+    if (loading) return <div className="flex items-center justify-center h-full">Загрузка графа...</div>;
+    if (error) return <div className="text-red-500">{error}</div>;
+    
+    const width = 800;
+    const height = 600;
+    
+    // Подготовка узлов с координатами
+    const nodesWithCoordinates = prepareNodesWithCoordinates(graph.nodes);
+    
+    // Подготовка связей с координатами
+    const edgesWithCoordinates = prepareEdgesWithCoordinates(graph.edges, nodesWithCoordinates);
+    
+    // Подготовка данных с учётом эволюционных изменений
+    const { nodes, edges } = prepareEvolutionaryData(nodesWithCoordinates, edgesWithCoordinates);
     
     return (
       <svg 
@@ -482,101 +482,112 @@ const ConceptGraphVisualization = ({ conceptId, readOnly = false }) => {
             <polygon points="0 0, 10 3.5, 0 7" fill="#A0AEC0" />
           </marker>
         </defs>
-        {/* Связи */}
-        {edges.map(edge => {
-          // Вычисляем угол для правильной ориентации стрелки
-          const dx = edge.targetX - edge.sourceX;
-          const dy = edge.targetY - edge.sourceY;
-          const angle = Math.atan2(dy, dx) * 180 / Math.PI;
-          
-          // Вычисляем смещение для стрелки, чтобы она не накладывалась на узел
-          const nodeRadius = 40 * (0.8 + 0.2); // приблизительный радиус узла
-          const length = Math.sqrt(dx * dx + dy * dy);
-          const offsetX = dx * nodeRadius / length;
-          const offsetY = dy * nodeRadius / length;
-          
-          // Позиция стрелки (немного смещена от конечного узла)
-          const arrowX = edge.targetX - offsetX;
-          const arrowY = edge.targetY - offsetY;
-          
-          // Проверяем тип направленности связи
-          const isDirected = edge.direction !== 'bidirectional';
-          const isBidirectional = edge.direction === 'bidirectional';
-          
-          return (
-            <g key={`edge-${edge.id}`} onClick={() => handleEdgeClick(edge)}>
-              <line
-                x1={edge.sourceX}
-                y1={edge.sourceY}
-                x2={edge.targetX}
-                y2={edge.targetY}
-                strokeWidth={2 + (edge.strength || 1) * 3}
-                stroke={
-                  edge.newProposed ? "#10B981" :
-                  edge.modProposed ? "#F59E0B" :
-                  selectedEdge && selectedEdge.id === edge.id ? "#3182CE" : "#A0AEC0"
-                }
-                strokeDasharray={edge.modProposed ? "5,5" : "none"}
-                className="cursor-pointer"
-                markerEnd={isDirected ? "url(#arrowhead)" : null}
-                markerStart={isBidirectional ? "url(#arrowhead-start)" : null}
-              />
-              
-              {/* Метка связи */}
-              <text
-                x={(edge.sourceX + edge.targetX) / 2}
-                y={(edge.sourceY + edge.targetY) / 2 - 10}
-                textAnchor="middle"
-                fill="#4A5568"
-                className="text-sm"
-              >
-                {edge.type}
-              </text>
-            </g>
-          );
-        })}
         
-        {/* Узлы */}
-        {nodes.map(node => (
-          <g 
-            key={`node-${node.id}`} 
-            transform={`translate(${node.x}, ${node.y})`}
-            onClick={() => handleNodeClick(node)}
-            className="cursor-pointer"
-          >
-            <circle
-              r={nodeRadius * (0.8 + (node.centrality || 0.5) * 0.4)}
-              fill={
-                node.newProposed ? "#D1FAE5" :
-                node.deleteProposed ? "#FEE2E2" :
-                node.relModProposed ? "#FEF3C7" :
-                selectedNode && selectedNode.id === node.id ? "#EBF8FF" : "#F7FAFC"
-              }
-              stroke={
-                node.newProposed ? "#10B981" :
-                node.deleteProposed ? "#EF4444" :
-                node.relModProposed ? "#F59E0B" :
-                selectedNode && selectedNode.id === node.id ? "#3182CE" : "#E2E8F0"
-              }
-              strokeWidth={
-                (node.newProposed || node.deleteProposed || node.relModProposed) ? 2 :
-                selectedNode && selectedNode.id === node.id ? 3 : 1
-              }
-              strokeDasharray={node.deleteProposed ? "5,5" : "none"}
-            />
-            
-            <text
-              textAnchor="middle" 
-              dy=".3em"
-              className="text-sm font-medium"
-              fill="#4A5568"
-            >
-              {node.name}
-            </text>
-          </g>
-        ))}
+        {/* Рендер связей */}
+        {renderEdges(edges)}
+        
+        {/* Рендер узлов */}
+        {renderNodes(nodes)}
       </svg>
     );
+  };
+
+  // Функция для рендеринга связей
+  const renderEdges = (edges) => {
+    return edges.map(edge => {
+      // Вычисляем угол для правильной ориентации стрелки
+      const dx = edge.targetX - edge.sourceX;
+      const dy = edge.targetY - edge.sourceY;
+      const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+      
+      // Вычисляем смещение для стрелки, чтобы она не накладывалась на узел
+      const nodeRadius = 40 * (0.8 + 0.2); // приблизительный радиус узла
+      const length = Math.sqrt(dx * dx + dy * dy);
+      const offsetX = dx * nodeRadius / length;
+      const offsetY = dy * nodeRadius / length;
+      
+      // Позиция стрелки (немного смещена от конечного узла)
+      const arrowX = edge.targetX - offsetX;
+      const arrowY = edge.targetY - offsetY;
+      
+      // Проверяем тип направленности связи
+      const isDirected = edge.direction !== 'bidirectional';
+      const isBidirectional = edge.direction === 'bidirectional';
+      
+      return (
+        <g key={`edge-${edge.id}`} onClick={() => handleEdgeClick(edge)}>
+          <line
+            x1={edge.sourceX}
+            y1={edge.sourceY}
+            x2={edge.targetX}
+            y2={edge.targetY}
+            strokeWidth={2 + (edge.strength || 1) * 3}
+            stroke={
+              edge.newProposed ? "#10B981" :
+              edge.modProposed ? "#F59E0B" :
+              selectedEdge && selectedEdge.id === edge.id ? "#3182CE" : "#A0AEC0"
+            }
+            strokeDasharray={edge.modProposed ? "5,5" : "none"}
+            className="cursor-pointer"
+            markerEnd={isDirected ? "url(#arrowhead)" : null}
+            markerStart={isBidirectional ? "url(#arrowhead-start)" : null}
+          />
+          
+          {/* Метка связи */}
+          <text
+            x={(edge.sourceX + edge.targetX) / 2}
+            y={(edge.sourceY + edge.targetY) / 2 - 10}
+            textAnchor="middle"
+            fill="#4A5568"
+            className="text-sm"
+          >
+            {edge.type}
+          </text>
+        </g>
+      );
+    });
+  };
+  
+  // Функция для рендеринга узлов
+  const renderNodes = (nodes) => {
+    return nodes.map(node => (
+      <g 
+        key={`node-${node.id}`} 
+        transform={`translate(${node.x}, ${node.y})`}
+        onClick={() => handleNodeClick(node)}
+        className="cursor-pointer"
+      >
+        <circle
+          r={40 * (0.8 + (node.centrality || 0.5) * 0.4)}
+          fill={
+            node.newProposed ? "#D1FAE5" :
+            node.deleteProposed ? "#FEE2E2" :
+            node.relModProposed ? "#FEF3C7" :
+            selectedNode && selectedNode.id === node.id ? "#EBF8FF" : "#F7FAFC"
+          }
+          stroke={
+            node.newProposed ? "#10B981" :
+            node.deleteProposed ? "#EF4444" :
+            node.relModProposed ? "#F59E0B" :
+            selectedNode && selectedNode.id === node.id ? "#3182CE" : "#E2E8F0"
+          }
+          strokeWidth={
+            (node.newProposed || node.deleteProposed || node.relModProposed) ? 2 :
+            selectedNode && selectedNode.id === node.id ? 3 : 1
+          }
+          strokeDasharray={node.deleteProposed ? "5,5" : "none"}
+        />
+        
+        <text
+          textAnchor="middle" 
+          dy=".3em"
+          className="text-sm font-medium"
+          fill="#4A5568"
+        >
+          {node.name}
+        </text>
+      </g>
+    ));
   };
   
   return (

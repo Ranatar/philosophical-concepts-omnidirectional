@@ -2,223 +2,450 @@
   "collections": {
     "Theses": {
       "schema": {
-        "thesis_id": "ObjectId",
-        "concept_id": "UUID (связь с Concepts в PostgreSQL)",
-        "type": "Строка (онтологический, эпистемологический и т.д.)",
-        "content": "Текст",
-        "related_categories": ["Array of category_ids (связь с Category в Neo4j)"],
-        "style": "Строка (академический, популярный, афористичный)",
-        "generation_parameters": {
-          "level_detail": "Число",
-          "focus": "Строка",
-          "quantity": "Число"
+        "thesis_id": { "bsonType": "objectId", "description": "Уникальный идентификатор тезиса" },
+        "concept_id": { "bsonType": "string", "description": "UUID связи с Concepts в PostgreSQL" },
+        "type": { "bsonType": "string", "description": "Тип тезиса (онтологический, эпистемологический и т.д.)" },
+        "content": { "bsonType": "string", "description": "Текст тезиса" },
+        "related_categories": { 
+          "bsonType": "array", 
+          "description": "Массив идентификаторов связанных категорий",
+          "items": { "bsonType": "string", "description": "UUID связи с Category в Neo4j" }
         },
-        "created_at": "Дата",
-        "parent_theses": ["Array of thesis_ids (если это синтезированный тезис)"]
+        "style": { "bsonType": "string", "description": "Стиль тезиса (академический, популярный, афористичный)" },
+        "generation_parameters": {
+          "bsonType": "object",
+          "description": "Параметры генерации тезиса",
+          "properties": {
+            "level_detail": { "bsonType": "number", "description": "Уровень детализации" },
+            "focus": { "bsonType": "string", "description": "Фокус тезиса" },
+            "quantity": { "bsonType": "number", "description": "Количество" }
+          }
+        },
+        "created_at": { "bsonType": "date", "description": "Дата создания" },
+        "parent_theses": { 
+          "bsonType": "array", 
+          "description": "Массив родительских тезисов (если это синтезированный тезис)",
+          "items": { "bsonType": "objectId", "description": "Идентификатор родительского тезиса" }
+        }
       },
-      "indexes": ["concept_id", "type", "created_at"]
+      "indexes": [
+        { "key": { "concept_id": 1 }, "name": "concept_id_index" },
+        { "key": { "type": 1 }, "name": "thesis_type_index" },
+        { "key": { "created_at": -1 }, "name": "created_at_index" }
+      ]
     },
     
     "CategoryDescriptions": {
       "schema": {
-        "description_id": "ObjectId",
-        "category_id": "UUID (связь с Category в Neo4j)",
-        "detailed_description": "Текст",
-        "alternative_interpretations": ["Array of текстов"],
-        "historical_analogues": [{
-          "analogue_name": "Строка",
-          "philosopher": "Строка",
-          "tradition": "Строка",
-          "description": "Текст"
-        }],
-        "related_concepts": [{
-          "concept_id": "UUID",
-          "relationship_type": "Строка",
-          "description": "Текст"
-        }],
-        "claude_generation_id": "UUID (связь с ClaudeInteraction в PostgreSQL)",
-        "created_at": "Дата",
-        "last_modified": "Дата"
+        "description_id": { "bsonType": "objectId", "description": "Уникальный идентификатор описания" },
+        "category_id": { "bsonType": "string", "description": "UUID связи с Category в Neo4j" },
+        "detailed_description": { "bsonType": "string", "description": "Детальное описание категории" },
+        "alternative_interpretations": { 
+          "bsonType": "array", 
+          "description": "Массив альтернативных интерпретаций",
+          "items": { "bsonType": "string", "description": "Текст интерпретации" }
+        },
+        "historical_analogues": { 
+          "bsonType": "array", 
+          "description": "Массив исторических аналогов",
+          "items": { 
+            "bsonType": "object",
+            "description": "Исторический аналог",
+            "properties": {
+              "analogue_name": { "bsonType": "string", "description": "Название аналога" },
+              "philosopher": { "bsonType": "string", "description": "Имя философа" },
+              "tradition": { "bsonType": "string", "description": "Философская традиция" },
+              "description": { "bsonType": "string", "description": "Описание аналога" }
+            }
+          }
+        },
+        "related_concepts": { 
+          "bsonType": "array", 
+          "description": "Массив связанных концепций",
+          "items": { 
+            "bsonType": "object",
+            "description": "Связанная концепция",
+            "properties": {
+              "concept_id": { "bsonType": "string", "description": "UUID связи с Concepts в PostgreSQL" },
+              "relationship_type": { "bsonType": "string", "description": "Тип отношения" },
+              "description": { "bsonType": "string", "description": "Описание отношения" }
+            }
+          }
+        },
+        "claude_generation_id": { "bsonType": "string", "description": "UUID связи с ClaudeInteraction в PostgreSQL" },
+        "created_at": { "bsonType": "date", "description": "Дата создания" },
+        "last_modified": { "bsonType": "date", "description": "Дата последнего изменения" }
       },
-      "indexes": ["category_id", "created_at"]
+      "indexes": [
+        { "key": { "category_id": 1 }, "name": "category_id_index" },
+        { "key": { "created_at": -1 }, "name": "created_at_index" }
+      ]
     },
     
     "RelationshipDescriptions": {
       "schema": {
-        "description_id": "ObjectId",
-        "relationship_id": "UUID (связь со связью в Neo4j)",
-        "philosophical_foundation": "Текст",
-        "counterarguments": ["Array of текстов"],
-        "analogues": [{
-          "tradition": "Строка",
-          "philosopher": "Строка",
-          "description": "Текст"
-        }],
-        "claude_generation_id": "UUID (связь с ClaudeInteraction в PostgreSQL)",
-        "created_at": "Дата",
-        "last_modified": "Дата"
+        "description_id": { "bsonType": "objectId", "description": "Уникальный идентификатор описания" },
+        "relationship_id": { "bsonType": "string", "description": "UUID связи со связью в Neo4j" },
+        "philosophical_foundation": { "bsonType": "string", "description": "Философское обоснование" },
+        "counterarguments": { 
+          "bsonType": "array", 
+          "description": "Массив контраргументов",
+          "items": { "bsonType": "string", "description": "Текст контраргумента" }
+        },
+        "analogues": { 
+          "bsonType": "array", 
+          "description": "Массив аналогов",
+          "items": { 
+            "bsonType": "object",
+            "description": "Аналог",
+            "properties": {
+              "tradition": { "bsonType": "string", "description": "Философская традиция" },
+              "philosopher": { "bsonType": "string", "description": "Имя философа" },
+              "description": { "bsonType": "string", "description": "Описание аналога" }
+            }
+          }
+        },
+        "claude_generation_id": { "bsonType": "string", "description": "UUID связи с ClaudeInteraction в PostgreSQL" },
+        "created_at": { "bsonType": "date", "description": "Дата создания" },
+        "last_modified": { "bsonType": "date", "description": "Дата последнего изменения" }
       },
-      "indexes": ["relationship_id", "created_at"]
+      "indexes": [
+        { "key": { "relationship_id": 1 }, "name": "relationship_id_index" },
+        { "key": { "created_at": -1 }, "name": "created_at_index" }
+      ]
     },
     
     "ConceptAnalyses": {
       "schema": {
-        "analysis_id": "ObjectId",
-        "concept_id": "UUID (связь с Concepts в PostgreSQL)",
-        "analysis_type": "Строка (критический, исторический, практический...)",
-        "content": "Текст",
+        "analysis_id": { "bsonType": "objectId", "description": "Уникальный идентификатор анализа" },
+        "concept_id": { "bsonType": "string", "description": "UUID связи с Concepts в PostgreSQL" },
+        "analysis_type": { "bsonType": "string", "description": "Тип анализа (критический, исторический, практический...)" },
+        "content": { "bsonType": "string", "description": "Текст анализа" },
         "generation_parameters": {
-          "depth": "Число",
-          "focus": "Строка",
-          "context": "Строка"
+          "bsonType": "object",
+          "description": "Параметры генерации анализа",
+          "properties": {
+            "depth": { "bsonType": "number", "description": "Глубина анализа" },
+            "focus": { "bsonType": "string", "description": "Фокус анализа" },
+            "context": { "bsonType": "string", "description": "Контекст анализа" }
+          }
         },
-        "claude_generation_id": "UUID (связь с ClaudeInteraction в PostgreSQL)",
-        "created_at": "Дата"
+        "claude_generation_id": { "bsonType": "string", "description": "UUID связи с ClaudeInteraction в PostgreSQL" },
+        "created_at": { "bsonType": "date", "description": "Дата создания" }
       },
-      "indexes": ["concept_id", "analysis_type", "created_at"]
+      "indexes": [
+        { "key": { "concept_id": 1 }, "name": "concept_id_index" },
+        { "key": { "analysis_type": 1 }, "name": "analysis_type_index" },
+        { "key": { "created_at": -1 }, "name": "created_at_index" }
+      ]
     },
     
     "Dialogues": {
       "schema": {
-        "dialogue_id": "ObjectId",
-        "concept_ids": ["Array of concept_ids (связь с Concepts в PostgreSQL)"],
-        "topic": "Строка",
-        "content": "Текст",
-        "claude_generation_id": "UUID (связь с ClaudeInteraction в PostgreSQL)",
-        "generated_at": "Дата",
-        "parameters": {
-          "style": "Строка",
-          "format": "Строка",
-          "focus": "Строка"
+        "dialogue_id": { "bsonType": "objectId", "description": "Уникальный идентификатор диалога" },
+        "concept_ids": { 
+          "bsonType": "array", 
+          "description": "Массив идентификаторов участвующих концепций",
+          "items": { "bsonType": "string", "description": "UUID связи с Concepts в PostgreSQL" }
         },
-        "discussion_points": [{
-          "topic": "Строка",
-          "description": "Текст",
-          "concept_positions": {
-            "concept_id": "Строка (позиция концепции)"
+        "topic": { "bsonType": "string", "description": "Тема диалога" },
+        "content": { "bsonType": "string", "description": "Текст диалога" },
+        "claude_generation_id": { "bsonType": "string", "description": "UUID связи с ClaudeInteraction в PostgreSQL" },
+        "generated_at": { "bsonType": "date", "description": "Дата генерации" },
+        "parameters": {
+          "bsonType": "object",
+          "description": "Параметры генерации диалога",
+          "properties": {
+            "style": { "bsonType": "string", "description": "Стиль диалога" },
+            "format": { "bsonType": "string", "description": "Формат диалога" },
+            "focus": { "bsonType": "string", "description": "Фокус диалога" }
           }
-        }],
-        "arguments": [{
-          "concept_id": "UUID",
-          "argument": "Строка",
-          "foundation": "Строка",
-          "counterarguments": [{
-            "concept_id": "UUID",
-            "counterargument": "Строка"
-          }]
-        }],
-        "convergence_points": [{
-          "description": "Строка",
-          "significance": "Число (0-1)"
-        }],
-        "irreconcilable_differences": [{
-          "description": "Строка",
-          "concepts": ["Array of UUID"],
-          "philosophical_root": "Строка"
-        }]
+        },
+        "discussion_points": { 
+          "bsonType": "array", 
+          "description": "Массив точек обсуждения",
+          "items": { 
+            "bsonType": "object",
+            "description": "Точка обсуждения",
+            "properties": {
+              "topic": { "bsonType": "string", "description": "Тема точки обсуждения" },
+              "description": { "bsonType": "string", "description": "Описание точки обсуждения" },
+              "concept_positions": { 
+                "bsonType": "object",
+                "description": "Позиции концепций",
+                "patternProperties": {
+                  "^[a-zA-Z0-9-]+$": { "bsonType": "string", "description": "Позиция концепции" }
+                }
+              }
+            }
+          }
+        },
+        "arguments": { 
+          "bsonType": "array", 
+          "description": "Массив аргументов",
+          "items": { 
+            "bsonType": "object",
+            "description": "Аргумент",
+            "properties": {
+              "concept_id": { "bsonType": "string", "description": "UUID связи с Concepts в PostgreSQL" },
+              "argument": { "bsonType": "string", "description": "Текст аргумента" },
+              "foundation": { "bsonType": "string", "description": "Обоснование аргумента" },
+              "counterarguments": { 
+                "bsonType": "array", 
+                "description": "Массив контраргументов",
+                "items": { 
+                  "bsonType": "object",
+                  "description": "Контраргумент",
+                  "properties": {
+                    "concept_id": { "bsonType": "string", "description": "UUID связи с Concepts в PostgreSQL" },
+                    "counterargument": { "bsonType": "string", "description": "Текст контраргумента" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "convergence_points": { 
+          "bsonType": "array", 
+          "description": "Массив точек сближения",
+          "items": { 
+            "bsonType": "object",
+            "description": "Точка сближения",
+            "properties": {
+              "description": { "bsonType": "string", "description": "Описание точки сближения" },
+              "significance": { "bsonType": "number", "description": "Значимость точки сближения (0-1)" }
+            }
+          }
+        },
+        "irreconcilable_differences": { 
+          "bsonType": "array", 
+          "description": "Массив непримиримых различий",
+          "items": { 
+            "bsonType": "object",
+            "description": "Непримиримое различие",
+            "properties": {
+              "description": { "bsonType": "string", "description": "Описание непримиримого различия" },
+              "concepts": { 
+                "bsonType": "array", 
+                "description": "Массив идентификаторов затронутых концепций",
+                "items": { "bsonType": "string", "description": "UUID концепции" }
+              },
+              "philosophical_root": { "bsonType": "string", "description": "Философский корень различия" }
+            }
+          }
+        }
       },
-      "indexes": ["concept_ids", "topic", "generated_at"]
+      "indexes": [
+        { "key": { "concept_ids": 1 }, "name": "concept_ids_index" },
+        { "key": { "topic": 1 }, "name": "topic_index" },
+        { "key": { "generated_at": -1 }, "name": "generated_at_index" }
+      ]
     },
 
     "HistoricalContexts": {
       "schema": {
-        "context_id": "ObjectId",
-        "concept_id": "UUID (связь с Concepts в PostgreSQL)",
-        "time_period": "Строка",
-        "historical_analysis": "Текст",
-        "influences": [{
-          "source": "Строка (философ, школа, традиция)",
-          "description": "Текст",
-          "strength": "Число (0-1)"
-        }],
-        "contemporaries": [{
-          "name": "Строка (концепция, школа, философ)",
-          "relationship": "Строка (схожая, противоположная, смешанная)",
-          "description": "Текст"
-        }],
-        "subsequent_influence": [{
-          "target": "Строка (направление)",
-          "description": "Текст",
-          "significance": "Число (0-1)"
-        }],
-        "name_context_analysis": "Текст",
-        "claude_generation_id": "UUID (связь с ClaudeInteraction в PostgreSQL)",
-        "created_at": "Дата",
-        "updated_at": "Дата"
+        "context_id": { "bsonType": "objectId", "description": "Уникальный идентификатор исторического контекста" },
+        "concept_id": { "bsonType": "string", "description": "UUID связи с Concepts в PostgreSQL" },
+        "time_period": { "bsonType": "string", "description": "Временной период" },
+        "historical_analysis": { "bsonType": "string", "description": "Текст исторического анализа" },
+        "influences": { 
+          "bsonType": "array", 
+          "description": "Массив влияний",
+          "items": { 
+            "bsonType": "object",
+            "description": "Влияние",
+            "properties": {
+              "source": { "bsonType": "string", "description": "Источник влияния (философ, школа, традиция)" },
+              "description": { "bsonType": "string", "description": "Описание влияния" },
+              "strength": { "bsonType": "number", "description": "Сила влияния (0-1)" }
+            }
+          }
+        },
+        "contemporaries": { 
+          "bsonType": "array", 
+          "description": "Массив современников",
+          "items": { 
+            "bsonType": "object",
+            "description": "Современник",
+            "properties": {
+              "name": { "bsonType": "string", "description": "Имя современника (концепция, школа, философ)" },
+              "relationship": { "bsonType": "string", "description": "Отношение (схожая, противоположная, смешанная)" },
+              "description": { "bsonType": "string", "description": "Описание отношения" }
+            }
+          }
+        },
+        "subsequent_influence": { 
+          "bsonType": "array", 
+          "description": "Массив последующих влияний",
+          "items": { 
+            "bsonType": "object",
+            "description": "Последующее влияние",
+            "properties": {
+              "target": { "bsonType": "string", "description": "Объект влияния (направление)" },
+              "description": { "bsonType": "string", "description": "Описание влияния" },
+              "significance": { "bsonType": "number", "description": "Значимость влияния (0-1)" }
+            }
+          }
+        },
+        "name_context_analysis": { "bsonType": "string", "description": "Анализ названия в историческом контексте" },
+        "claude_generation_id": { "bsonType": "string", "description": "UUID связи с ClaudeInteraction в PostgreSQL" },
+        "created_at": { "bsonType": "date", "description": "Дата создания" },
+        "updated_at": { "bsonType": "date", "description": "Дата обновления" }
       },
-      "indexes": ["concept_id", "created_at"]
+      "indexes": [
+        { "key": { "concept_id": 1 }, "name": "concept_id_index" },
+        { "key": { "created_at": -1 }, "name": "created_at_index" }
+      ]
     },
 
     "PracticalApplications": {
       "schema": {
-        "application_id": "ObjectId",
-        "concept_id": "UUID (связь с Concepts в PostgreSQL)",
-        "domains": [{
-          "name": "Строка",
-          "description": "Текст",
-          "relevance": "Число (0-1)"
-        }],
-        "application_analysis": "Текст",
-        "implementation_methods": [{
-          "domain": "Строка",
-          "method": "Строка",
-          "description": "Текст",
-          "requirements": ["Array of Строка"]
-        }],
-        "relevance_mappings": [{
-          "domain": "Строка",
-          "thesis_id": "ObjectId",
-          "category_id": "UUID",
-          "relevance": "Число (0-1)",
-          "application_note": "Текст"
-        }],
-        "challenges": [{
-          "domain": "Строка",
-          "description": "Текст",
-          "potential_solutions": ["Array of Строка"]
-        }],
-        "claude_generation_id": "UUID (связь с ClaudeInteraction в PostgreSQL)",
-        "created_at": "Дата",
-        "updated_at": "Дата"
+        "application_id": { "bsonType": "objectId", "description": "Уникальный идентификатор практического применения" },
+        "concept_id": { "bsonType": "string", "description": "UUID связи с Concepts в PostgreSQL" },
+        "domains": { 
+          "bsonType": "array", 
+          "description": "Массив областей применения",
+          "items": { 
+            "bsonType": "object",
+            "description": "Область применения",
+            "properties": {
+              "name": { "bsonType": "string", "description": "Название области" },
+              "description": { "bsonType": "string", "description": "Описание области" },
+              "relevance": { "bsonType": "number", "description": "Релевантность области (0-1)" }
+            }
+          }
+        },
+        "application_analysis": { "bsonType": "string", "description": "Анализ применения" },
+        "implementation_methods": { 
+          "bsonType": "array", 
+          "description": "Массив методов реализации",
+          "items": { 
+            "bsonType": "object",
+            "description": "Метод реализации",
+            "properties": {
+              "domain": { "bsonType": "string", "description": "Область применения" },
+              "method": { "bsonType": "string", "description": "Название метода" },
+              "description": { "bsonType": "string", "description": "Описание метода" },
+              "requirements": { 
+                "bsonType": "array", 
+                "description": "Массив требований",
+                "items": { "bsonType": "string", "description": "Требование" }
+              }
+            }
+          }
+        },
+        "relevance_mappings": { 
+          "bsonType": "array", 
+          "description": "Массив сопоставлений релевантности",
+          "items": { 
+            "bsonType": "object",
+            "description": "Сопоставление релевантности",
+            "properties": {
+              "domain": { "bsonType": "string", "description": "Область применения" },
+              "thesis_id": { "bsonType": "objectId", "description": "Идентификатор тезиса" },
+              "category_id": { "bsonType": "string", "description": "UUID категории" },
+              "relevance": { "bsonType": "number", "description": "Релевантность (0-1)" },
+              "application_note": { "bsonType": "string", "description": "Примечание по применению" }
+            }
+          }
+        },
+        "challenges": { 
+          "bsonType": "array", 
+          "description": "Массив вызовов",
+          "items": { 
+            "bsonType": "object",
+            "description": "Вызов",
+            "properties": {
+              "domain": { "bsonType": "string", "description": "Область применения" },
+              "description": { "bsonType": "string", "description": "Описание вызова" },
+              "potential_solutions": { 
+                "bsonType": "array", 
+                "description": "Массив потенциальных решений",
+                "items": { "bsonType": "string", "description": "Потенциальное решение" }
+              }
+            }
+          }
+        },
+        "claude_generation_id": { "bsonType": "string", "description": "UUID связи с ClaudeInteraction в PostgreSQL" },
+        "created_at": { "bsonType": "date", "description": "Дата создания" },
+        "updated_at": { "bsonType": "date", "description": "Дата обновления" }
       },
-      "indexes": ["concept_id", "domains.name"]
+      "indexes": [
+        { "key": { "concept_id": 1 }, "name": "concept_id_index" },
+        { "key": { "domains.name": 1 }, "name": "domain_name_index" }
+      ]
     },
 
     "ConceptEvolutions": {
       "schema": {
-        "evolution_id": "ObjectId",
-        "concept_id": "UUID (связь с Concepts в PostgreSQL)",
-        "directions": [{
-          "name": "Строка",
-          "description": "Текст",
-          "scientific_basis": "Текст",
-          "social_context": "Текст"
-        }],
-        "suggested_changes": [{
-          "type": "Строка (new_category, modified_relationship, delete)",
-          "element_id": "UUID или ObjectId",
-          "name": "Строка",
-          "definition": "Текст",
-          "relation_to": "Строка",
-          "relation_type": "Строка",
-          "source": "Строка",
-          "target": "Строка",
-          "reason": "Текст",
-          "description": "Текст"
-        }],
-        "name_evolution": {
-          "keep_current": "Boolean",
-          "alternatives": ["Array of Строка"],
-          "reasoning": "Текст"
+        "evolution_id": { "bsonType": "objectId", "description": "Уникальный идентификатор эволюции концепции" },
+        "concept_id": { "bsonType": "string", "description": "UUID связи с Concepts в PostgreSQL" },
+        "directions": { 
+          "bsonType": "array", 
+          "description": "Массив направлений эволюции",
+          "items": { 
+            "bsonType": "object",
+            "description": "Направление эволюции",
+            "properties": {
+              "name": { "bsonType": "string", "description": "Название направления" },
+              "description": { "bsonType": "string", "description": "Описание направления" },
+              "scientific_basis": { "bsonType": "string", "description": "Научная основа" },
+              "social_context": { "bsonType": "string", "description": "Социальный контекст" }
+            }
+          }
         },
-        "timeframe": "Строка (ближайшее будущее, среднесрочная перспектива, долгосрочная перспектива)",
-        "scientific_areas": ["Array of Строка"],
-        "social_contexts": ["Array of Строка"],
-        "claude_generation_id": "UUID (связь с ClaudeInteraction в PostgreSQL)",
-        "created_at": "Дата",
-        "updated_at": "Дата"
+        "suggested_changes": { 
+          "bsonType": "array", 
+          "description": "Массив предлагаемых изменений",
+          "items": { 
+            "bsonType": "object",
+            "description": "Предлагаемое изменение",
+            "properties": {
+              "type": { "bsonType": "string", "description": "Тип изменения (new_category, modified_relationship, delete)" },
+              "element_id": { "bsonType": "string", "description": "Идентификатор элемента (UUID или ObjectId)" },
+              "name": { "bsonType": "string", "description": "Название элемента" },
+              "definition": { "bsonType": "string", "description": "Определение элемента" },
+              "relation_to": { "bsonType": "string", "description": "Связь с" },
+              "relation_type": { "bsonType": "string", "description": "Тип связи" },
+              "source": { "bsonType": "string", "description": "Источник связи" },
+              "target": { "bsonType": "string", "description": "Цель связи" },
+              "reason": { "bsonType": "string", "description": "Причина изменения" },
+              "description": { "bsonType": "string", "description": "Описание изменения" }
+            }
+          }
+        },
+        "name_evolution": {
+          "bsonType": "object",
+          "description": "Эволюция названия",
+          "properties": {
+            "keep_current": { "bsonType": "bool", "description": "Сохранить текущее название" },
+            "alternatives": { 
+              "bsonType": "array", 
+              "description": "Массив альтернативных названий",
+              "items": { "bsonType": "string", "description": "Альтернативное название" }
+            },
+            "reasoning": { "bsonType": "string", "description": "Обоснование" }
+          }
+        },
+        "timeframe": { "bsonType": "string", "description": "Временные рамки (ближайшее будущее, среднесрочная перспектива, долгосрочная перспектива)" },
+        "scientific_areas": { 
+          "bsonType": "array", 
+          "description": "Массив научных областей",
+          "items": { "bsonType": "string", "description": "Научная область" }
+        },
+        "social_contexts": { 
+          "bsonType": "array", 
+          "description": "Массив социальных контекстов",
+          "items": { "bsonType": "string", "description": "Социальный контекст" }
+        },
+        "claude_generation_id": { "bsonType": "string", "description": "UUID связи с ClaudeInteraction в PostgreSQL" },
+        "created_at": { "bsonType": "date", "description": "Дата создания" },
+        "updated_at": { "bsonType": "date", "description": "Дата обновления" }
       },
-      "indexes": ["concept_id", "created_at"]
+      "indexes": [
+        { "key": { "concept_id": 1 }, "name": "concept_id_index" },
+        { "key": { "created_at": -1 }, "name": "created_at_index" }
+      ]
     }
   }
 }

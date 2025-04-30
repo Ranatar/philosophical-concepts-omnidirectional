@@ -39,7 +39,7 @@ const ClaudeInterface = ({ conceptId, interactionType = 'freeform', prefilledTem
     scrollToBottom();
   }, [messages]);
   
-  // Установка префильтрованного шаблона при загрузке
+  // Установка предзаполненного шаблона при загрузке
   useEffect(() => {
     if (prefilledTemplate) {
       const template = templates.find(t => t.id === prefilledTemplate);
@@ -53,36 +53,85 @@ const ClaudeInterface = ({ conceptId, interactionType = 'freeform', prefilledTem
   // Обработка выбора шаблона
   const handleTemplateChange = (e) => {
     const templateId = e.target.value;
-    setSelectedTemplate(templateId);
     
     if (templateId) {
       const template = templates.find(t => t.id === templateId);
-      setInput(template.template);
+      if (template) {
+        setSelectedTemplate(templateId);
+        setInput(template.template);
+      }
     } else {
+      setSelectedTemplate('');
       setInput('');
     }
   };
-  
-  const sendAsyncMessage = async () => {
-    if (!input.trim()) return;
-    
+
+  // Общая функция обработки сообщений и ошибок
+  const handleMessage = (messageType, content, isAsync = false, taskId = null) => {
     // Добавить сообщение пользователя
-    const userMessage = { id: Date.now(), role: 'user', content: input };
+    const userMessage = { id: Date.now(), role: 'user', content };
     setMessages(prev => [...prev, userMessage]);
+    setInput('');
+    
+    if (isAsync) {
+      setIsAsyncProcessing(true);
+      
+      // Добавляем уведомление о задаче в очереди
+      const taskMessage = { 
+        id: Date.now() + 1, 
+        role: 'system', 
+        content: `Ваш запрос поставлен в очередь (ID: ${taskId}). Обработка может занять некоторое время. Вы получите уведомление, когда результат будет готов.` 
+      };
+      
+      setMessages(prev => [...prev, taskMessage]);
+      
+      // Обновляем состояние асинхронных задач
+      setAsyncTasks(prev => ({
+        ...prev,
+        [taskId]: {
+          status: 'queued',
+          query: content,
+          createdAt: new Date().toISOString()
+        }
+      }));
+    } else {
+      setIsProcessing(true);
+    }
+  };
+
+  // Обработка ошибок
+  const handleError = (errorMessage, taskId = null) => {
+    if (taskId) {
+      setAsyncTasks(prev => ({
+        ...prev,
+        [taskId]: {
+          ...prev[taskId],
+          status: 'error',
+          errorAt: new Date().toISOString()
+        }
+      }));
+      setIsAsyncProcessing(false);
+    } else {
+      setIsProcessing(false);
+    }
+    
+    // Добавление сообщения об ошибке
+    setMessages(prev => [...prev, { 
+      id: Date.now() + 2, 
+      role: 'system', 
+      content: errorMessage 
+    }]);
+  };
+  
+  // Отправка асинхронного запроса
+  const sendAsyncMessage = async () => {
+    if (!input.trim() || isProcessing || isAsyncProcessing) return;
     
     // Генерируем ID задачи
     const taskId = `task-${Date.now()}`;
     
-    // Добавляем уведомление о задаче в очереди
-    const taskMessage = { 
-      id: Date.now() + 1, 
-      role: 'system', 
-      content: `Ваш запрос поставлен в очередь (ID: ${taskId}). Обработка может занять некоторое время. Вы получите уведомление, когда результат будет готов.` 
-    };
-    
-    setMessages(prev => [...prev, taskMessage]);
-    setInput('');
-    setIsAsyncProcessing(true);
+    // Обработка сообщения
+    handleMessage(input, input, true, taskId);
     
     try {
       // Здесь был бы асинхронный API запрос
@@ -90,16 +139,6 @@ const ClaudeInterface = ({ conceptId, interactionType = 'freeform', prefilledTem
       // const taskId = response.taskId;
       
       console.log('Async task created with ID:', taskId);
-      
-      // Обновляем состояние асинхронных задач
-      setAsyncTasks(prev => ({
-        ...prev,
-        [taskId]: {
-          status: 'queued',
-          query: input,
-          createdAt: new Date().toISOString()
-        }
-      }));
       
       // Имитация проверки статуса задачи
       setTimeout(() => {
@@ -139,36 +178,16 @@ const ClaudeInterface = ({ conceptId, interactionType = 'freeform', prefilledTem
       
     } catch (error) {
       console.error('Error sending async message to Claude:', error);
-      
-      // Добавление сообщения об ошибке
-      setMessages(prev => [...prev, { 
-        id: Date.now() + 2, 
-        role: 'system', 
-        content: `Произошла ошибка при обработке асинхронного запроса (ID: ${taskId}). Пожалуйста, попробуйте еще раз.` 
-      }]);
-      
-      setAsyncTasks(prev => ({
-        ...prev,
-        [taskId]: {
-          ...prev[taskId],
-          status: 'error',
-          errorAt: new Date().toISOString()
-        }
-      }));
-      
-      setIsAsyncProcessing(false);
+      handleError(`Произошла ошибка при обработке асинхронного запроса (ID: ${taskId}). Пожалуйста, попробуйте еще раз.`, taskId);
     }
   };
 
-  // Отправка запроса к Claude
+  // Отправка синхронного запроса к Claude
   const sendMessage = async () => {
-    if (!input.trim()) return;
+    if (!input.trim() || isProcessing || isAsyncProcessing) return;
     
-    // Добавить сообщение пользователя
-    const userMessage = { id: Date.now(), role: 'user', content: input };
-    setMessages(prev => [...prev, userMessage]);
-    setInput('');
-    setIsProcessing(true);
+    // Обработка сообщения
+    handleMessage('user', input);
     
     try {
       // Имитация запроса к API
@@ -201,14 +220,7 @@ const ClaudeInterface = ({ conceptId, interactionType = 'freeform', prefilledTem
       
     } catch (error) {
       console.error('Error sending message to Claude:', error);
-      setIsProcessing(false);
-      
-      // Добавление сообщения об ошибке
-      setMessages(prev => [...prev, { 
-        id: Date.now() + 1, 
-        role: 'system', 
-        content: 'Произошла ошибка при обработке запроса. Пожалуйста, попробуйте еще раз.' 
-      }]);
+      handleError('Произошла ошибка при обработке запроса. Пожалуйста, попробуйте еще раз.');
     }
   };
   
@@ -221,8 +233,14 @@ const ClaudeInterface = ({ conceptId, interactionType = 'freeform', prefilledTem
   
   // Копирование текста в буфер обмена
   const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text);
-    // Здесь можно добавить уведомление о копировании
+    navigator.clipboard.writeText(text)
+      .then(() => {
+        console.log('Text copied to clipboard');
+        // Здесь можно добавить уведомление о копировании
+      })
+      .catch(err => {
+        console.error('Failed to copy text: ', err);
+      });
   };
   
   return (
