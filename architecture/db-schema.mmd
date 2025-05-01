@@ -39,7 +39,7 @@ flowchart TD
     type
     content
     style
-    related_categories (array)"]:::new
+    related_categories (array)"]
     Category1 --> |referenced_in| Thesis
     Category2 --> |referenced_in| Thesis
     
@@ -47,7 +47,7 @@ flowchart TD
     ConceptName["Название
     name_id
     name
-    analysis"]:::new
+    analysis"]
     Concept --> |HAS_NAME| ConceptName
     ConceptName --> |BELONGS_TO| Concept
     
@@ -55,15 +55,15 @@ flowchart TD
     ConceptOrigin["Происхождение концепции
     origin_id
     parent_concepts (array)
-    influence_weights (array)"]:::new
+    influence_weights (array)"]
     Concept --> |HAS_ORIGIN| ConceptOrigin
     ConceptOrigin --> |DESCRIBES| Concept
     
     %% Трансформации - разделим связи для большей ясности
     ThesisToGraph["Трансформация
-    тезисы → граф"]:::new
+    тезисы → граф"]
     GraphToThesis["Трансформация
-    граф → тезисы"]:::new
+    граф → тезисы"]
     
     %% Связи для ThesisToGraph (преобразование тезисов в граф)
     Thesis --> |SOURCE_FOR| ThesisToGraph
@@ -79,7 +79,7 @@ flowchart TD
     ConceptEvolution["Эволюция концепции
     evolution_id
     concept_id
-    suggested_changes"]:::new
+    suggested_changes"]
     Concept --> |EVOLVES_TO| ConceptEvolution
     ConceptEvolution --> |DERIVED_FROM| Concept
     
@@ -87,7 +87,7 @@ flowchart TD
     NameAnalysis["Анализ названия
     analysis_id
     name
-    alternative_names (array)"]:::new
+    alternative_names (array)"]
     ConceptName --> |HAS_ANALYSIS| NameAnalysis
     NameAnalysis --> |ANALYZES| ConceptName
     
@@ -98,7 +98,7 @@ flowchart TD
     time_period
     influences (array)
     contemporaries (array)
-    subsequent_influence (array)"]:::new
+    subsequent_influence (array)"]
     Concept --> |HAS_HISTORICAL_CONTEXT| HistoricalContext
     HistoricalContext --> |CONTEXTUALIZES| Concept
     
@@ -108,7 +108,7 @@ flowchart TD
     concept_id
     domains (array)
     implementation_methods (array)
-    relevance_mappings (array)"]:::new
+    relevance_mappings (array)"]
     Concept --> |HAS_APPLICATIONS| PracticalApplication
     PracticalApplication --> |APPLIES| Concept
     Thesis --> |APPLIES_IN| PracticalApplication
@@ -119,13 +119,9 @@ flowchart TD
     concept_ids (array)
     philosophical_question
     discussion_points (array)
-    arguments (array)"]:::new
+    arguments (array)"]
     Concept --> |PARTICIPATES_IN| DialogueInterpretation
     DialogueInterpretation --> |INTERPRETS| Concept
-    
-    %% Обозначение новых элементов
-    classDef new fill:#f8d7da,stroke:#dc3545,stroke-width:2px
-    classDef default fill:#f8f9fa,stroke:#495057
     
     %% Используем отдельные стили для особых связей вместо linkStyle
     style ThesisToGraph stroke:#dc3545,stroke-width:2px
