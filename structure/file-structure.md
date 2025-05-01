@@ -1,0 +1,797 @@
+# Структура файлов для реализации архитектуры сервиса философских концепций
+
+## 1. Инфраструктура DevOps
+
+- `docker-compose.yml` - Основной файл для локальной разработки 
+- `docker-compose.override.yml` - Переопределения для разработки
+- `docker-compose.prod.yml` - Конфигурация для продакшн
+- `Dockerfile.dev` и `Dockerfile.prod` - Для каждого сервиса
+- `kubernetes/` - Папка с Kubernetes-манифестами
+  - `kubernetes/deployments/` - Деплойменты для всех сервисов
+  - `kubernetes/services/` - Сервисы для всех компонентов
+  - `kubernetes/ingress/` - Настройки Ingress
+  - `kubernetes/config-maps/` - ConfigMaps для конфигурации
+  - `kubernetes/secrets/` - Шаблоны секретов
+  - `kubernetes/persistent-volumes/` - Persistent Volumes для БД
+  - `kubernetes/hpa/` - Horizontal Pod Autoscalers
+- `.github/workflows/` - CI/CD пайплайны
+  - `.github/workflows/build.yml` - Сборка образов
+  - `.github/workflows/test.yml` - Тестирование
+  - `.github/workflows/deploy.yml` - Деплой
+- `monitoring/` - Конфигурации для систем мониторинга
+  - `monitoring/prometheus/` - Конфигурации Prometheus
+  - `monitoring/grafana/dashboards/` - Дашборды Grafana
+  - `monitoring/logstash/pipeline/` - Конфигурации Logstash
+- `init/` - Скрипты инициализации
+  - `init/postgres/` - Инициализация PostgreSQL
+  - `init/neo4j/` - Инициализация Neo4j
+  - `init/mongo/` - Инициализация MongoDB
+
+## 2. Клиентская часть (Frontend)
+
+- `frontend/`
+  - `src/`
+    - `components/` - Повторно используемые компоненты
+      - `common/` - Общие компоненты UI
+        - `Button.tsx`
+        - `Input.tsx`
+        - `Select.tsx`
+        - `Modal.tsx`
+        - `Loader.tsx`
+        - `ErrorBoundary.tsx`
+        - `Notification.tsx`
+      - `layout/` - Компоненты разметки
+        - `Header.tsx`
+        - `Sidebar.tsx`
+        - `Footer.tsx`
+        - `MainLayout.tsx`
+      - `conceptGraph/` - Компоненты для работы с графом
+        - `ConceptGraphVisualization.tsx` - Визуализация графа
+        - `CategoryManager.tsx` - Управление категориями
+        - `RelationshipManager.tsx` - Управление связями
+        - `GraphControls.tsx` - Элементы управления графом
+        - `NodeDetails.tsx` - Детали узла
+        - `EdgeDetails.tsx` - Детали связи
+        - `QuantitativeEditor.tsx` - Редактор количественных характеристик
+        - `GraphFromThesis.tsx` - Генератор графа из тезисов
+        - `ValidationResults.tsx` - Результаты валидации
+      - `theses/` - Компоненты для работы с тезисами
+        - `ThesisList.tsx` - Список тезисов
+        - `ThesisDetails.tsx` - Детали тезиса
+        - `ThesisGenerator.tsx` - Генератор тезисов
+        - `ThesisFilter.tsx` - Фильтрация тезисов
+        - `ThesisEditor.tsx` - Редактор тезисов
+        - `ThesisOriginAnalysis.tsx` - Анализ происхождения тезисов
+      - `claude/` - Компоненты для работы с Claude
+        - `ClaudeInterface.tsx` - Интерфейс взаимодействия с Claude
+        - `TemplateSelector.tsx` - Селектор шаблонов
+        - `AsyncTasksList.tsx` - Список асинхронных задач
+      - `synthesis/` - Компоненты для синтеза
+        - `ConceptSelector.tsx` - Выбор концепций
+        - `SynthesisParameters.tsx` - Параметры синтеза
+        - `SynthesisPreview.tsx` - Предпросмотр результатов
+        - `SynthesisHistory.tsx` - История синтезов
+        - `CompatibilityAnalysis.tsx` - Анализ совместимости
+      - `names/` - Компоненты для работы с названиями
+        - `NameAnalyzer.tsx` - Анализатор названий
+        - `NameGenerator.tsx` - Генератор названий
+        - `AlternativesList.tsx` - Список альтернатив
+      - `historical/` - Компоненты для исторической контекстуализации
+        - `HistoricalContextView.tsx` - Отображение исторического контекста
+        - `InfluenceGraph.tsx` - Граф влияний
+        - `Timeline.tsx` - Временная шкала
+      - `practical/` - Компоненты для практического применения
+        - `DomainsView.tsx` - Отображение областей применения
+        - `ImplementationMethods.tsx` - Методы реализации
+        - `RelevanceMap.tsx` - Карта релевантности
+      - `dialogue/` - Компоненты для диалогов
+        - `DialogueGenerator.tsx` - Генератор диалогов
+        - `PhilosophicalQuestionEditor.tsx` - Редактор вопросов
+        - `DialogueView.tsx` - Отображение диалога
+        - `ArgumentAnalysis.tsx` - Анализ аргументации
+      - `evolution/` - Компоненты для эволюции концепций
+        - `EvolutionAnalysis.tsx` - Анализ эволюции
+        - `EvolutionVisualizer.tsx` - Визуализация эволюции
+        - `SuggestedChanges.tsx` - Предложенные изменения
+    - `pages/` - Страницы приложения
+      - `home/` 
+        - `HomePage.tsx`
+      - `concepts/`
+        - `ConceptsListPage.tsx`
+        - `ConceptEditorPage.tsx`
+        - `ConceptViewPage.tsx`
+      - `synthesis/`
+        - `SynthesisPage.tsx`
+        - `SynthesisResultPage.tsx`
+      - `user/`
+        - `ProfilePage.tsx`
+        - `LoginPage.tsx`
+        - `RegisterPage.tsx`
+    - `context/` - React-контексты
+      - `AuthContext.tsx`
+      - `NotificationContext.tsx`
+      - `ConceptContext.tsx`
+    - `hooks/` - Пользовательские хуки
+      - `useApi.ts` - Хук для работы с API
+      - `useAuth.ts` - Хук для аутентификации
+      - `useGraph.ts` - Хук для работы с графом
+      - `useThesis.ts` - Хук для работы с тезисами
+      - `useClaude.ts` - Хук для работы с Claude
+    - `services/` - Сервисы для работы с API
+      - `api.ts` - Базовый API-клиент
+      - `authService.ts` - Сервис аутентификации
+      - `conceptService.ts` - Сервис концепций
+      - `graphService.ts` - Сервис графов
+      - `thesisService.ts` - Сервис тезисов
+      - `synthesisService.ts` - Сервис синтеза
+      - `claudeService.ts` - Сервис Claude
+      - `nameService.ts` - Сервис анализа названий
+      - `originService.ts` - Сервис определения происхождения
+      - `historicalService.ts` - Сервис исторической контекстуализации
+      - `practicalService.ts` - Сервис практического применения
+      - `dialogueService.ts` - Сервис диалогической интерпретации
+      - `evolutionService.ts` - Сервис эволюции концепций
+    - `utils/` - Утилиты
+      - `formatters.ts` - Форматирование данных
+      - `validators.ts` - Валидация данных
+      - `graphHelpers.ts` - Вспомогательные функции для работы с графами
+      - `thesisHelpers.ts` - Вспомогательные функции для работы с тезисами
+    - `types/` - Типы и интерфейсы
+      - `concept.types.ts` - Типы концепций
+      - `graph.types.ts` - Типы графов
+      - `thesis.types.ts` - Типы тезисов
+      - `user.types.ts` - Типы пользователей
+      - `claude.types.ts` - Типы для взаимодействия с Claude
+    - `App.tsx` - Главный компонент приложения
+    - `index.tsx` - Точка входа
+  - `public/` - Публичные файлы
+  - `package.json` - Зависимости
+  - `tsconfig.json` - Конфигурация TypeScript
+  - `jest.config.js` - Конфигурация Jest для тестирования
+  - `.eslintrc.js` - Конфигурация ESLint
+  - `.prettierrc` - Конфигурация Prettier
+  - `Dockerfile` - Dockerfile для приложения
+
+## 3. API Gateway
+
+- `api-gateway/`
+  - `src/`
+    - `server.js` - Точка входа
+    - `routes/` - Маршруты
+      - `index.js` - Основной файл маршрутов
+      - `userRoutes.js` - Маршруты для пользователей
+      - `conceptRoutes.js` - Маршруты для концепций
+      - `graphRoutes.js` - Маршруты для графов
+      - `thesisRoutes.js` - Маршруты для тезисов
+      - `synthesisRoutes.js` - Маршруты для синтеза
+      - `claudeRoutes.js` - Маршруты для Claude
+      - `nameRoutes.js` - Маршруты для анализа названий
+      - `originRoutes.js` - Маршруты для определения происхождения
+      - `historicalRoutes.js` - Маршруты для исторической контекстуализации
+      - `practicalRoutes.js` - Маршруты для практического применения
+      - `dialogueRoutes.js` - Маршруты для диалогов
+      - `evolutionRoutes.js` - Маршруты для эволюции
+    - `middleware/` - Промежуточные слои
+      - `auth.js` - Аутентификация и авторизация
+      - `errorHandler.js` - Обработка ошибок
+      - `logging.js` - Логирование
+      - `rateLimit.js` - Ограничение частоты запросов
+    - `services/` - Сервисы
+      - `serviceRegistry.js` - Реестр сервисов
+      - `serviceDiscovery.js` - Обнаружение сервисов
+    - `config/` - Конфигурация
+      - `index.js` - Основная конфигурация
+      - `routes.js` - Конфигурация маршрутов
+    - `utils/` - Утилиты
+      - `responseFormatter.js` - Форматирование ответов
+      - `healthCheck.js` - Проверка состояния
+  - `package.json` - Зависимости
+  - `Dockerfile` - Dockerfile для сервиса
+  - `tests/` - Тесты
+
+## 4. Микросервисы
+
+### 4.1. Сервис пользователей (User Service)
+
+- `user-service/`
+  - `src/`
+    - `server.js` - Точка входа
+    - `controllers/`
+      - `userController.js` - Управление пользователями
+      - `authController.js` - Аутентификация
+      - `profileController.js` - Управление профилями
+      - `activityController.js` - Управление активностью
+    - `services/`
+      - `userService.js` - Бизнес-логика пользователей
+      - `authService.js` - Бизнес-логика аутентификации
+      - `tokenService.js` - Управление токенами
+      - `passwordService.js` - Управление паролями
+      - `activityService.js` - Управление активностью
+    - `models/`
+      - `userModel.js` - Модель пользователя
+      - `activityModel.js` - Модель активности
+    - `repositories/`
+      - `userRepository.js` - Доступ к данным пользователей
+      - `activityRepository.js` - Доступ к данным активности
+    - `routes/`
+      - `userRoutes.js` - Маршруты пользователей
+      - `authRoutes.js` - Маршруты аутентификации
+      - `profileRoutes.js` - Маршруты профилей
+      - `activityRoutes.js` - Маршруты активностей
+    - `middleware/`
+      - `auth.js` - Промежуточный слой аутентификации
+      - `validation.js` - Валидация запросов
+    - `config/`
+      - `index.js` - Основная конфигурация
+      - `db.js` - Конфигурация БД
+    - `utils/`
+      - `passwordUtil.js` - Утилиты для работы с паролями
+      - `tokenUtil.js` - Утилиты для работы с токенами
+  - `tests/` - Тесты
+  - `package.json` - Зависимости
+  - `Dockerfile` - Dockerfile для сервиса
+
+### 4.2. Сервис концепций (Concept Service)
+
+- `concept-service/`
+  - `src/`
+    - `server.js` - Точка входа
+    - `controllers/`
+      - `conceptController.js` - Управление концепциями
+      - `metadataController.js` - Управление метаданными
+      - `philosopherController.js` - Управление философами
+      - `traditionController.js` - Управление традициями
+    - `services/`
+      - `conceptService.js` - Бизнес-логика концепций
+      - `metadataService.js` - Управление метаданными
+      - `philosopherService.js` - Управление философами
+      - `traditionService.js` - Управление традициями
+      - `coordinationService.js` - Координация с другими сервисами
+    - `models/`
+      - `conceptModel.js` - Модель концепции
+      - `philosopherModel.js` - Модель философа
+      - `traditionModel.js` - Модель традиции
+      - `conceptPhilosopherModel.js` - Связь между концепциями и философами
+      - `conceptTraditionModel.js` - Связь между концепциями и традициями
+    - `repositories/`
+      - `conceptRepository.js` - Доступ к данным концепций
+      - `philosopherRepository.js` - Доступ к данным философов
+      - `traditionRepository.js` - Доступ к данным традиций
+    - `routes/`
+      - `conceptRoutes.js` - Маршруты концепций
+      - `philosopherRoutes.js` - Маршруты философов
+      - `traditionRoutes.js` - Маршруты традиций
+    - `clients/` - Клиенты для других сервисов
+      - `graphServiceClient.js` - Клиент сервиса графов
+      - `thesisServiceClient.js` - Клиент сервиса тезисов
+    - `config/`
+      - `index.js` - Основная конфигурация
+      - `db.js` - Конфигурация БД
+  - `tests/` - Тесты
+  - `package.json` - Зависимости
+  - `Dockerfile` - Dockerfile для сервиса
+
+### 4.3. Сервис графов (Graph Service)
+
+- `graph-service/`
+  - `src/`
+    - `server.js` - Точка входа
+    - `controllers/`
+      - `graphController.js` - Управление графами
+      - `categoryController.js` - Управление категориями
+      - `relationshipController.js` - Управление связями
+      - `visualizationController.js` - Визуализация графов
+      - `characteristicController.js` - Управление характеристиками
+    - `services/`
+      - `graphService.js` - Бизнес-логика графов
+      - `categoryService.js` - Управление категориями
+      - `relationshipService.js` - Управление связями
+      - `characteristicService.js` - Управление количественными характеристиками
+      - `validationService.js` - Валидация графов
+      - `enrichmentService.js` - Обогащение графов
+    - `models/`
+      - `graphModel.js` - Модель графа
+      - `categoryModel.js` - Модель категории
+      - `relationshipModel.js` - Модель связи
+    - `repositories/`
+      - `neo4jRepository.js` - Общий репозиторий для Neo4j
+      - `graphRepository.js` - Доступ к данным графов
+      - `categoryRepository.js` - Доступ к данным категорий
+      - `relationshipRepository.js` - Доступ к данным связей
+    - `routes/`
+      - `graphRoutes.js` - Маршруты графов
+      - `categoryRoutes.js` - Маршруты категорий
+      - `relationshipRoutes.js` - Маршруты связей
+      - `characteristicRoutes.js` - Маршруты характеристик
+      - `validationRoutes.js` - Маршруты валидации
+    - `clients/`
+      - `claudeServiceClient.js` - Клиент сервиса Claude
+    - `utils/`
+      - `graphConverter.js` - Конвертация графа
+      - `cypher.js` - Утилиты для работы с Cypher
+      - `graphFormatter.js` - Форматирование графа
+    - `config/`
+      - `index.js` - Основная конфигурация
+      - `neo4j.js` - Конфигурация Neo4j
+  - `tests/` - Тесты
+  - `package.json` - Зависимости
+  - `Dockerfile` - Dockerfile для сервиса
+
+### 4.4. Сервис тезисов (Thesis Service)
+
+- `thesis-service/`
+  - `src/`
+    - `server.js` - Точка входа
+    - `controllers/`
+      - `thesisController.js` - Управление тезисами
+      - `generationController.js` - Генерация тезисов
+      - `analysisController.js` - Анализ тезисов
+      - `descriptionController.js` - Управление описаниями
+    - `services/`
+      - `thesisService.js` - Бизнес-логика тезисов
+      - `generationService.js` - Генерация тезисов
+      - `analysisService.js` - Анализ тезисов
+      - `comparisonService.js` - Сравнение тезисов
+      - `descriptionService.js` - Управление описаниями категорий и связей
+    - `models/`
+      - `thesisModel.js` - Модель тезиса
+      - `categoryDescriptionModel.js` - Модель описания категории
+      - `relationshipDescriptionModel.js` - Модель описания связи
+    - `repositories/`
+      - `mongoRepository.js` - Общий репозиторий для MongoDB
+      - `thesisRepository.js` - Доступ к данным тезисов
+      - `categoryDescriptionRepository.js` - Доступ к данным описаний категорий
+      - `relationshipDescriptionRepository.js` - Доступ к данным описаний связей
+    - `routes/`
+      - `thesisRoutes.js` - Маршруты тезисов
+      - `generationRoutes.js` - Маршруты генерации
+      - `analysisRoutes.js` - Маршруты анализа
+      - `descriptionRoutes.js` - Маршруты описаний
+    - `clients/`
+      - `graphServiceClient.js` - Клиент сервиса графов
+      - `claudeServiceClient.js` - Клиент сервиса Claude
+    - `utils/`
+      - `thesisFormatter.js` - Форматирование тезисов
+      - `thesisAnalyzer.js` - Анализ тезисов
+    - `config/`
+      - `index.js` - Основная конфигурация
+      - `mongodb.js` - Конфигурация MongoDB
+  - `tests/` - Тесты
+  - `package.json` - Зависимости
+  - `Dockerfile` - Dockerfile для сервиса
+
+### 4.5. Сервис синтеза (Synthesis Service)
+
+- `synthesis-service/`
+  - `src/`
+    - `server.js` - Точка входа
+    - `controllers/`
+      - `synthesisController.js` - Управление синтезом
+      - `compatibilityController.js` - Анализ совместимости
+      - `critiqueController.js` - Критический анализ
+    - `services/`
+      - `synthesisService.js` - Бизнес-логика синтеза
+      - `compatibilityService.js` - Анализ совместимости
+      - `critiqueService.js` - Критический анализ
+      - `coordinationService.js` - Координация с другими сервисами
+      - `characteristicMergingService.js` - Слияние количественных характеристик
+    - `models/`
+      - `synthesisModel.js` - Модель синтеза
+      - `compatibilityModel.js` - Модель совместимости
+      - `critiqueModel.js` - Модель критического анализа
+    - `repositories/`
+      - `synthesisRepository.js` - Доступ к данным синтеза
+      - `compatibilityRepository.js` - Доступ к данным совместимости
+    - `routes/`
+      - `synthesisRoutes.js` - Маршруты синтеза
+      - `compatibilityRoutes.js` - Маршруты совместимости
+      - `critiqueRoutes.js` - Маршруты критики
+    - `clients/`
+      - `graphServiceClient.js` - Клиент сервиса графов
+      - `thesisServiceClient.js` - Клиент сервиса тезисов
+      - `claudeServiceClient.js` - Клиент сервиса Claude
+    - `utils/`
+      - `synthesisStrategies.js` - Стратегии синтеза
+      - `compatibilityAnalyzer.js` - Анализ совместимости
+    - `config/`
+      - `index.js` - Основная конфигурация
+  - `tests/` - Тесты
+  - `package.json` - Зависимости
+  - `Dockerfile` - Dockerfile для сервиса
+
+### 4.6. Сервис Claude (Claude Service)
+
+- `claude-service/`
+  - `src/`
+    - `server.js` - Точка входа
+    - `controllers/`
+      - `claudeController.js` - Управление запросами к Claude
+      - `taskController.js` - Управление задачами
+      - `templateController.js` - Управление шаблонами
+    - `services/`
+      - `claudeService.js` - Бизнес-логика работы с Claude
+      - `requestFormatterService.js` - Форматирование запросов
+      - `responseProcessorService.js` - Обработка ответов
+      - `taskQueueService.js` - Управление очередью задач
+      - `templateService.js` - Управление шаблонами
+    - `models/`
+      - `interactionModel.js` - Модель взаимодействия
+      - `taskModel.js` - Модель задачи
+      - `templateModel.js` - Модель шаблона
+    - `repositories/`
+      - `interactionRepository.js` - Доступ к данным взаимодействий
+      - `taskRepository.js` - Доступ к данным задач
+      - `templateRepository.js` - Доступ к данным шаблонов
+    - `routes/`
+      - `claudeRoutes.js` - Маршруты Claude
+      - `taskRoutes.js` - Маршруты задач
+      - `templateRoutes.js` - Маршруты шаблонов
+    - `clients/`
+      - `claudeApiClient.js` - Клиент API Claude
+    - `utils/`
+      - `formatters/` - Форматтеры для различных типов запросов
+        - `graphFormatters.js` - Форматтеры для графов
+        - `thesisFormatters.js` - Форматтеры для тезисов
+        - `synthesisFormatters.js` - Форматтеры для синтеза
+        - `nameFormatters.js` - Форматтеры для названий
+        - `originFormatters.js` - Форматтеры для происхождения
+        - `historicalFormatters.js` - Форматтеры для исторического контекста
+        - `practicalFormatters.js` - Форматтеры для практического применения
+        - `dialogueFormatters.js` - Форматтеры для диалогов
+        - `evolutionFormatters.js` - Форматтеры для эволюции
+      - `responseProcessors.js` - Обработчики ответов
+      - `queueHelpers.js` - Утилиты для работы с очередями
+    - `messaging/`
+      - `rabbitMQClient.js` - Клиент RabbitMQ
+      - `queueConsumer.js` - Потребитель сообщений
+      - `queueProducer.js` - Производитель сообщений
+    - `config/`
+      - `index.js` - Основная конфигурация
+      - `queues.js` - Конфигурация очередей
+      - `claude.js` - Конфигурация Claude API
+  - `tests/` - Тесты
+  - `package.json` - Зависимости
+  - `Dockerfile` - Dockerfile для сервиса
+
+### 4.7. Сервис анализа названий (Name Analysis Service)
+
+- `name-analysis-service/`
+  - `src/`
+    - `server.js` - Точка входа
+    - `controllers/`
+      - `nameAnalysisController.js` - Управление анализом названий
+      - `alternativeController.js` - Управление альтернативными названиями
+    - `services/`
+      - `nameAnalysisService.js` - Бизнес-логика анализа названий
+      - `alternativeService.js` - Управление альтернативными названиями
+    - `models/`
+      - `nameAnalysisModel.js` - Модель анализа названия
+    - `repositories/`
+      - `nameAnalysisRepository.js` - Доступ к данным анализа названий
+    - `routes/`
+      - `nameAnalysisRoutes.js` - Маршруты анализа названий
+      - `alternativeRoutes.js` - Маршруты альтернатив
+    - `clients/`
+      - `conceptServiceClient.js` - Клиент сервиса концепций
+      - `graphServiceClient.js` - Клиент сервиса графов
+      - `thesisServiceClient.js` - Клиент сервиса тезисов
+      - `claudeServiceClient.js` - Клиент сервиса Claude
+    - `config/`
+      - `index.js` - Основная конфигурация
+  - `tests/` - Тесты
+  - `package.json` - Зависимости
+  - `Dockerfile` - Dockerfile для сервиса
+
+### 4.8. Сервис определения происхождения (Origin Detection Service)
+
+- `origin-detection-service/`
+  - `src/`
+    - `server.js` - Точка входа
+    - `controllers/`
+      - `originController.js` - Управление определением происхождения
+    - `services/`
+      - `originService.js` - Бизнес-логика определения происхождения
+      - `parentConceptService.js` - Управление родительскими концепциями
+    - `models/`
+      - `originModel.js` - Модель происхождения
+      - `parentConceptModel.js` - Модель родительской концепции
+    - `repositories/`
+      - `originRepository.js` - Доступ к данным происхождения
+      - `parentConceptRepository.js` - Доступ к данным родительских концепций
+    - `routes/`
+      - `originRoutes.js` - Маршруты происхождения
+    - `clients/`
+      - `conceptServiceClient.js` - Клиент сервиса концепций
+      - `graphServiceClient.js` - Клиент сервиса графов
+      - `thesisServiceClient.js` - Клиент сервиса тезисов
+      - `claudeServiceClient.js` - Клиент сервиса Claude
+    - `utils/`
+      - `originAnalyzer.js` - Анализ происхождения
+    - `config/`
+      - `index.js` - Основная конфигурация
+  - `tests/` - Тесты
+  - `package.json` - Зависимости
+  - `Dockerfile` - Dockerfile для сервиса
+
+### 4.9. Сервис исторической контекстуализации (Historical Context Service)
+
+- `historical-context-service/`
+  - `src/`
+    - `server.js` - Точка входа
+    - `controllers/`
+      - `historicalContextController.js` - Управление историческим контекстом
+      - `influenceController.js` - Управление влияниями
+      - `contemporaryController.js` - Управление современниками
+    - `services/`
+      - `historicalContextService.js` - Бизнес-логика исторического контекста
+      - `influenceService.js` - Управление влияниями
+      - `contemporaryService.js` - Управление современниками
+      - `timelineService.js` - Управление временной шкалой
+    - `models/`
+      - `historicalContextModel.js` - Модель исторического контекста
+      - `influenceModel.js` - Модель влияния
+      - `contemporaryModel.js` - Модель современника
+    - `repositories/`
+      - `historicalContextRepository.js` - Доступ к данным исторического контекста
+    - `routes/`
+      - `historicalContextRoutes.js` - Маршруты исторического контекста
+      - `influenceRoutes.js` - Маршруты влияний
+      - `contemporaryRoutes.js` - Маршруты современников
+    - `clients/`
+      - `conceptServiceClient.js` - Клиент сервиса концепций
+      - `graphServiceClient.js` - Клиент сервиса графов
+      - `thesisServiceClient.js` - Клиент сервиса тезисов
+      - `claudeServiceClient.js` - Клиент сервиса Claude
+    - `utils/`
+      - `timelineFormatter.js` - Форматирование временной шкалы
+      - `philosophyPeriods.js` - Данные о философских периодах
+    - `config/`
+      - `index.js` - Основная конфигурация
+  - `tests/` - Тесты
+  - `package.json` - Зависимости
+  - `Dockerfile` - Dockerfile для сервиса
+
+### 4.10. Сервис практического применения (Practical Application Service)
+
+- `practical-application-service/`
+  - `src/`
+    - `server.js` - Точка входа
+    - `controllers/`
+      - `practicalApplicationController.js` - Управление практическим применением
+      - `domainController.js` - Управление областями применения
+      - `implementationController.js` - Управление методами реализации
+    - `services/`
+      - `practicalApplicationService.js` - Бизнес-логика практического применения
+      - `domainService.js` - Управление областями применения
+      - `implementationService.js` - Управление методами реализации
+      - `relevanceMappingService.js` - Управление сопоставлениями релевантности
+    - `models/`
+      - `practicalApplicationModel.js` - Модель практического применения
+      - `domainModel.js` - Модель области применения
+      - `implementationMethodModel.js` - Модель метода реализации
+    - `repositories/`
+      - `practicalApplicationRepository.js` - Доступ к данным практического применения
+    - `routes/`
+      - `practicalApplicationRoutes.js` - Маршруты практического применения
+      - `domainRoutes.js` - Маршруты областей применения
+      - `implementationRoutes.js` - Маршруты методов реализации
+    - `clients/`
+      - `conceptServiceClient.js` - Клиент сервиса концепций
+      - `graphServiceClient.js` - Клиент сервиса графов
+      - `thesisServiceClient.js` - Клиент сервиса тезисов
+      - `claudeServiceClient.js` - Клиент сервиса Claude
+    - `utils/`
+      - `domainClassification.js` - Классификация областей применения
+      - `relevanceCalculator.js` - Расчёт релевантности
+    - `config/`
+      - `index.js` - Основная конфигурация
+  - `tests/` - Тесты
+  - `package.json` - Зависимости
+  - `Dockerfile` - Dockerfile для сервиса
+
+### 4.11. Сервис диалогической интерпретации (Dialogue Service)
+
+- `dialogue-service/`
+  - `src/`
+    - `server.js` - Точка входа
+    - `controllers/`
+      - `dialogueController.js` - Управление диалогами
+      - `questionController.js` - Управление философскими вопросами
+      - `argumentController.js` - Управление аргументами
+    - `services/`
+      - `dialogueService.js` - Бизнес-логика диалогов
+      - `questionService.js` - Управление философскими вопросами
+      - `argumentService.js` - Управление аргументами
+      - `convergenceService.js` - Управление точками сближения
+    - `models/`
+      - `dialogueModel.js` - Модель диалога
+      - `participantModel.js` - Модель участника диалога
+      - `argumentModel.js` - Модель аргумента
+    - `repositories/`
+      - `dialogueRepository.js` - Доступ к данным диалогов
+      - `participantRepository.js` - Доступ к данным участников
+    - `routes/`
+      - `dialogueRoutes.js` - Маршруты диалогов
+      - `questionRoutes.js` - Маршруты вопросов
+      - `argumentRoutes.js` - Маршруты аргументов
+    - `clients/`
+      - `conceptServiceClient.js` - Клиент сервиса концепций
+      - `thesisServiceClient.js` - Клиент сервиса тезисов
+      - `claudeServiceClient.js` - Клиент сервиса Claude
+    - `utils/`
+      - `dialogueFormatter.js` - Форматирование диалогов
+      - `argumentAnalyzer.js` - Анализ аргументации
+    - `config/`
+      - `index.js` - Основная конфигурация
+  - `tests/` - Тесты
+  - `package.json` - Зависимости
+  - `Dockerfile` - Dockerfile для сервиса
+
+### 4.12. Сервис эволюции концепций (Evolution Service)
+
+- `evolution-service/`
+  - `src/`
+    - `server.js` - Точка входа
+    - `controllers/`
+      - `evolutionController.js` - Управление эволюцией
+      - `directionController.js` - Управление направлениями эволюции
+      - `changeController.js` - Управление изменениями
+    - `services/`
+      - `evolutionService.js` - Бизнес-логика эволюции
+      - `directionService.js` - Управление направлениями эволюции
+      - `changeService.js` - Управление изменениями
+      - `nameEvolutionService.js` - Управление эволюцией названия
+    - `models/`
+      - `evolutionModel.js` - Модель эволюции
+      - `directionModel.js` - Модель направления эволюции
+      - `changeModel.js` - Модель изменения
+    - `repositories/`
+      - `evolutionRepository.js` - Доступ к данным эволюции
+    - `routes/`
+      - `evolutionRoutes.js` - Маршруты эволюции
+      - `directionRoutes.js` - Маршруты направлений
+      - `changeRoutes.js` - Маршруты изменений
+    - `clients/`
+      - `conceptServiceClient.js` - Клиент сервиса концепций
+      - `graphServiceClient.js` - Клиент сервиса графов
+      - `thesisServiceClient.js` - Клиент сервиса тезисов
+      - `claudeServiceClient.js` - Клиент сервиса Claude
+    - `utils/`
+      - `evolutionAnalyzer.js` - Анализ эволюции
+      - `changeApplier.js` - Применение изменений
+    - `config/`
+      - `index.js` - Основная конфигурация
+  - `tests/` - Тесты
+  - `package.json` - Зависимости
+  - `Dockerfile` - Dockerfile для сервиса
+
+## 5. Общие библиотеки и утилиты
+
+- `shared/`
+  - `lib/` - Общие библиотеки
+    - `errors/` - Обработка ошибок
+      - `AppError.js` - Базовый класс ошибки
+      - `HttpErrors.js` - HTTP-ошибки
+      - `ValidationError.js` - Ошибки валидации
+      - `NotFoundError.js` - Ошибки не найденных ресурсов
+    - `validation/` - Валидация
+      - `validators.js` - Общие валидаторы
+      - `schemas/` - Схемы валидации
+        - `conceptSchemas.js` - Схемы для концепций
+        - `graphSchemas.js` - Схемы для графов
+        - `thesisSchemas.js` - Схемы для тезисов
+    - `logging/` - Логирование
+      - `logger.js` - Общий логгер
+      - `requestLogger.js` - Логирование запросов
+    - `metrics/` - Метрики
+      - `prometheus.js` - Интеграция с Prometheus
+      - `counters.js` - Счётчики метрик
+    - `auth/` - Аутентификация
+      - `jwtHelper.js` - Утилиты для работы с JWT
+      - `roleHelper.js` - Утилиты для работы с ролями
+    - `db/` - Работа с БД
+      - `postgres/` - Утилиты для PostgreSQL
+        - `client.js` - Клиент PostgreSQL
+        - `queryBuilder.js` - Построитель запросов
+      - `neo4j/` - Утилиты для Neo4j
+        - `driver.js` - Драйвер Neo4j
+        - `cypherBuilder.js` - Построитель Cypher-запросов
+      - `mongodb/` - Утилиты для MongoDB
+        - `client.js` - Клиент MongoDB
+        - `queryBuilder.js` - Построитель запросов
+      - `redis/` - Утилиты для Redis
+        - `client.js` - Клиент Redis
+        - `cacheHelper.js` - Помощник для кэширования
+    - `messaging/` - Работа с сообщениями
+      - `rabbitmq/` - Утилиты для RabbitMQ
+        - `connection.js` - Соединение с RabbitMQ
+        - `channelManager.js` - Управление каналами
+      - `producers.js` - Продюсеры сообщений
+      - `consumers.js` - Потребители сообщений
+    - `http/` - HTTP-утилиты
+      - `client.js` - HTTP-клиент
+      - `responseFormatter.js` - Форматирование ответов
+    - `formatting/` - Форматирование
+      - `dateFormatters.js` - Форматирование дат
+      - `stringFormatters.js` - Форматирование строк
+  - `models/` - Общие модели
+    - `Concept.js` - Модель концепции
+    - `Graph.js` - Модель графа
+    - `Thesis.js` - Модель тезиса
+    - `User.js` - Модель пользователя
+  - `constants/` - Константы
+    - `errorCodes.js` - Коды ошибок
+    - `statuses.js` - Статусы
+    - `roles.js` - Роли
+    - `philosophyConstants.js` - Константы для философских понятий
+
+## 6. Базы данных
+
+### 6.1. PostgreSQL
+
+- `db/postgres/`
+  - `migrations/` - Миграции
+    - `00001_create_users_table.sql`
+    - `00002_create_concepts_table.sql`
+    - `00003_create_philosophers_table.sql`
+    - `00004_create_traditions_table.sql`
+    - `00005_create_concept_philosophers_table.sql`
+    - `00006_create_concept_traditions_table.sql`
+    - `00007_create_user_activity_table.sql`
+    - `00008_create_claude_interactions_table.sql`
+    - `00009_create_concept_names_table.sql`
+    - `00010_create_concept_origins_table.sql`
+    - `00011_create_transformations_table.sql`
+    - `00012_create_concept_evolutions_table.sql`
+    - `00013_create_historical_contexts_table.sql`
+    - `00014_create_practical_applications_table.sql`
+    - `00015_create_dialogue_interpretations_table.sql`
+    - `00016_create_dialogue_participants_table.sql`
+  - `seeds/` - Начальные данные
+    - `00001_philosophers.sql`
+    - `00002_traditions.sql`
+    - `00003_test_users.sql`
+    - `00004_test_concepts.sql`
+  - `scripts/` - Скрипты для работы с БД
+    - `backup.sh` - Создание резервной копии
+    - `restore.sh` - Восстановление из резервной копии
+    - `migrate.sh` - Выполнение миграций
+
+### 6.2. Neo4j
+
+- `db/neo4j/`
+  - `migrations/` - Миграции
+    - `00001_create_constraints.cypher` - Создание ограничений
+    - `00002_create_indexes.cypher` - Создание индексов
+    - `00003_concept_nodes.cypher` - Узлы концепций
+    - `00004_category_nodes.cypher` - Узлы категорий
+    - `00005_relationship_types.cypher` - Типы связей
+  - `seeds/` - Начальные данные
+    - `00001_test_graphs.cypher` - Тестовые графы
+  - `scripts/` - Скрипты для работы с Neo4j
+    - `backup.sh` - Создание резервной копии
+    - `restore.sh` - Восстановление из резервной копии
+    - `init.sh` - Инициализация базы данных
+
+### 6.3. MongoDB
+
+- `db/mongodb/`
+  - `migrations/` - Миграции
+    - `00001_create_collections.js` - Создание коллекций
+    - `00002_create_indexes.js` - Создание индексов
+    - `00003_add_validations.js` - Добавление валидаций
+  - `schemas/` - Схемы валидации
+    - `theses.js` - Схема тезисов
+    - `categoryDescriptions.js` - Схема описаний категорий
+    - `relationshipDescriptions.js` - Схема описаний связей
+    - `conceptAnalyses.js` - Схема анализов концепций
+    - `dialogues.js` - Схема диалогов
+    - `historicalContexts.js` - Схема исторических контекстов
+    - `practicalApplications.js` - Схема практических применений
+    - `conceptEvolutions.js` - Схема эволюции концепций
+  - `seeds/` - Начальные данные
+    - `00001_test_theses.js` - Тестовые тезисы
+  - `scripts/` - Скрипты для работы с MongoDB
+    - `backup.sh` - Создание резервной копии
+    - `restore.sh` - Восстановление из резервной копии
+    - `init.sh` - Инициализация базы данных
