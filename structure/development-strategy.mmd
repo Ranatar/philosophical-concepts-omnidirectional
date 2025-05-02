@@ -37,27 +37,27 @@ graph TD
     %% Core Microservices
     Phase2 --> CoreServices["Core Microservices<br>(High Priority)"]
     
-    CoreServices --> User["I. User Service (7-10 sessions)<br>Dependencies: PostgreSQL<br>Components: (включает)<br>- User management<br>- Authentication<br>- Profile<br>- Activity tracking"]
-    CoreServices --> Concept["II. Concept Service (8-12 sessions)<br>Dependencies: PostgreSQL, Redis<br>Components: (включает)<br>- Concept management<br>- Metadata<br>- Philosophers<br>- Traditions"]
-    CoreServices --> Graph["III. Graph Service (10-15 sessions)<br>Dependencies: Neo4j, Redis<br>Components: (включает)<br>- Graph management<br>- Categories<br>- Relationships<br>- Visualization<br>- Characteristics"]
-    CoreServices --> Thesis["IV. Thesis Service (8-12 sessions)<br>Dependencies: MongoDB, Redis<br>Components: (включает)<br>- Thesis management<br>- Generation<br>- Analysis<br>- Descriptions"]
-    CoreServices --> ClaudeS["V. Claude Service (10-15 sessions)<br>Dependencies: RabbitMQ, PostgreSQL<br>Components: (включает)<br>- Claude API integration<br>- Request formatting<br>- Response processing<br>- Task queue<br>- Templates"]
-    CoreServices --> ApiGateway["VI. API Gateway (7-10 sessions)<br>Dependencies: All core services<br>Components: (включает)<br>- Routing<br>- Authentication middleware<br>- Service registry<br>- Error handling<br>- Rate limiting"]
+    CoreServices --> User["I. User Service (7-10 sessions)<br>Dependencies: PostgreSQL<br>Components: <br>- User management<br>- Authentication<br>- Profile<br>- Activity tracking"]
+    CoreServices --> Concept["II. Concept Service (8-12 sessions)<br>Dependencies: PostgreSQL, Redis<br>Components: <br>- Concept management<br>- Metadata<br>- Philosophers<br>- Traditions"]
+    CoreServices --> Graph["III. Graph Service (10-15 sessions)<br>Dependencies: Neo4j, Redis<br>Components: <br>- Graph management<br>- Categories<br>- Relationships<br>- Visualization<br>- Characteristics"]
+    CoreServices --> Thesis["IV. Thesis Service (8-12 sessions)<br>Dependencies: MongoDB, Redis<br>Components: <br>- Thesis management<br>- Generation<br>- Analysis<br>- Descriptions"]
+    CoreServices --> ClaudeS["V. Claude Service (10-15 sessions)<br>Dependencies: RabbitMQ, PostgreSQL<br>Components: <br>- Claude API integration<br>- Request formatting<br>- Response processing<br>- Task queue<br>- Templates"]
+    CoreServices --> ApiGateway["VI. API Gateway (7-10 sessions)<br>Dependencies: All core services<br>Components: <br>- Routing<br>- Authentication middleware<br>- Service registry<br>- Error handling<br>- Rate limiting"]
     
     %% Extended Microservices
     Phase3 --> ExtendedServices["Extended Microservices<br>(Medium Priority)"]
     
-    ExtendedServices --> Synthesis["VII. Synthesis Service (8-12 sessions)<br>Dependencies: Graph, Thesis, Claude<br>Components: (включает)<br>- Synthesis algorithms<br>- Compatibility analysis<br>- Critique generation<br>- Characteristic merging"]
-    ExtendedServices --> NameAnalysis["VIII. Name Analysis Service (5-8 sessions)<br>Dependencies: Concept, Claude<br>Components: (включает)<br>- Name analysis<br>- Alternative generation<br>- Semantic evaluation"]
-    ExtendedServices --> Origin["IX. Origin Detection Service (5-8 sessions)<br>Dependencies: Concept, Graph, Claude<br>Components: (включает)<br>- Origin detection<br>- Parent concept identification<br>- Influence tracking"]
+    ExtendedServices --> Synthesis["VII. Synthesis Service (8-12 sessions)<br>Dependencies: Graph, Thesis, Claude<br>Components: <br>- Synthesis algorithms<br>- Compatibility analysis<br>- Critique generation<br>- Characteristic merging"]
+    ExtendedServices --> NameAnalysis["VIII. Name Analysis Service (5-8 sessions)<br>Dependencies: Concept, Claude<br>Components: <br>- Name analysis<br>- Alternative generation<br>- Semantic evaluation"]
+    ExtendedServices --> Origin["IX. Origin Detection Service (5-8 sessions)<br>Dependencies: Concept, Graph, Claude<br>Components: <br>- Origin detection<br>- Parent concept identification<br>- Influence tracking"]
     
     %% Specialized Microservices
     Phase4 --> SpecializedServices["Specialized Microservices<br>(Low Priority)"]
     
-    SpecializedServices --> Historical["X. Historical Context Service (5-8 sessions)<br>Dependencies: Concept, Claude<br>Components: (включает)<br>- Historical contextualization<br>- Influence mapping<br>- Contemporary analysis<br>- Timeline generation"]
-    SpecializedServices --> Practical["XI. Practical Application Service (5-8 sessions)<br>Dependencies: Concept, Claude<br>Components: (включает)<br>- Domain identification<br>- Implementation methods<br>- Relevance mapping"]
-    SpecializedServices --> Dialogue["XII. Dialogue Service (5-8 sessions)<br>Dependencies: Concept, Thesis, Claude<br>Components: (включает)<br>- Dialogue generation<br>- Question management<br>- Argument analysis<br>- Convergence points"]
-    SpecializedServices --> Evolution["XIII. Evolution Service (5-8 sessions)<br>Dependencies: Concept, Graph, Claude<br>Components: (включает)<br>- Evolution analysis<br>- Direction identification<br>- Change management<br>- Name evolution"]
+    SpecializedServices --> Historical["X. Historical Context Service (5-8 sessions)<br>Dependencies: Concept, Claude<br>Components: <br>- Historical contextualization<br>- Influence mapping<br>- Contemporary analysis<br>- Timeline generation"]
+    SpecializedServices --> Practical["XI. Practical Application Service (5-8 sessions)<br>Dependencies: Concept, Claude<br>Components: <br>- Domain identification<br>- Implementation methods<br>- Relevance mapping"]
+    SpecializedServices --> Dialogue["XII. Dialogue Service (5-8 sessions)<br>Dependencies: Concept, Thesis, Claude<br>Components: <br>- Dialogue generation<br>- Question management<br>- Argument analysis<br>- Convergence points"]
+    SpecializedServices --> Evolution["XIII. Evolution Service (5-8 sessions)<br>Dependencies: Concept, Graph, Claude<br>Components: <br>- Evolution analysis<br>- Direction identification<br>- Change management<br>- Name evolution"]
     
     %% Frontend Development
     Phase2 & Phase3 & Phase4 --> Frontend["Frontend Development<br>(70-100 sessions)"]
