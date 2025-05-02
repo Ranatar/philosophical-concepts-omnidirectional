@@ -1,0 +1,152 @@
+flowchart TD
+    classDef frontend fill:#d4f1f9,stroke:#05a,stroke-width:1px
+    classDef apigateway fill:#ffe6cc,stroke:#d79b00,stroke-width:1px
+    classDef service fill:#d5e8d4,stroke:#82b366,stroke-width:1px
+    classDef specialservice fill:#e1d5e7,stroke:#9673a6,stroke-width:1px
+    classDef database fill:#f8cecc,stroke:#b85450,stroke-width:1px
+    classDef shared fill:#fff2cc,stroke:#d6b656,stroke-width:1px
+    classDef external fill:#f5f5f5,stroke:#666,stroke-width:1px
+    
+    %% User and Frontend
+    User([User])
+    FE[Frontend Client] --> |HTTP Requests| AG
+    class FE frontend
+    
+    %% API Gateway
+    AG[API Gateway] 
+    class AG apigateway
+    
+    %% Core Services
+    US[User Service]
+    CS[Concept Service]
+    GS[Graph Service]
+    TS[Thesis Service]
+    SS[Synthesis Service]
+    CLS[Claude Service]
+    class US,CS,GS,TS,SS,CLS service
+    
+    %% Specialized Services
+    NAS[Name Analysis Service]
+    ODS[Origin Detection Service]
+    HCS[Historical Context Service]
+    PAS[Practical Application Service]
+    DS[Dialogue Service]
+    ES[Evolution Service]
+    class NAS,ODS,HCS,PAS,DS,ES specialservice
+    
+    %% Databases
+    PG[(PostgreSQL)]
+    Neo[(Neo4j)]
+    Mongo[(MongoDB)]
+    Redis[(Redis)]
+    class PG,Neo,Mongo,Redis database
+    
+    %% External Services
+    Claude[Claude API]
+    class Claude external
+    
+    %% Shared Libraries
+    SL[Shared Libraries]
+    class SL shared
+    
+    %% Frontend to API Gateway connections
+    User --> FE
+    
+    %% API Gateway to Service connections
+    AG --> US
+    AG --> CS
+    AG --> GS
+    AG --> TS
+    AG --> SS
+    AG --> CLS
+    AG --> NAS
+    AG --> ODS
+    AG --> HCS
+    AG --> PAS
+    AG --> DS
+    AG --> ES
+    
+    %% Service dependencies (based on client files)
+    CS --> |graphServiceClient| GS
+    CS --> |thesisServiceClient| TS
+    
+    GS --> |claudeServiceClient| CLS
+    
+    TS --> |graphServiceClient| GS
+    TS --> |claudeServiceClient| CLS
+    
+    SS --> |graphServiceClient| GS
+    SS --> |thesisServiceClient| TS
+    SS --> |claudeServiceClient| CLS
+    
+    NAS --> |conceptServiceClient| CS
+    NAS --> |graphServiceClient| GS
+    NAS --> |thesisServiceClient| TS
+    NAS --> |claudeServiceClient| CLS
+    
+    ODS --> |conceptServiceClient| CS
+    ODS --> |graphServiceClient| GS
+    ODS --> |thesisServiceClient| TS
+    ODS --> |claudeServiceClient| CLS
+    
+    HCS --> |conceptServiceClient| CS
+    HCS --> |graphServiceClient| GS
+    HCS --> |thesisServiceClient| TS
+    HCS --> |claudeServiceClient| CLS
+    
+    PAS --> |conceptServiceClient| CS
+    PAS --> |graphServiceClient| GS
+    PAS --> |thesisServiceClient| TS
+    PAS --> |claudeServiceClient| CLS
+    
+    DS --> |conceptServiceClient| CS
+    DS --> |thesisServiceClient| TS
+    DS --> |claudeServiceClient| CLS
+    
+    ES --> |conceptServiceClient| CS
+    ES --> |graphServiceClient| GS
+    ES --> |thesisServiceClient| TS
+    ES --> |claudeServiceClient| CLS
+    
+    %% Database connections
+    US --> PG
+    CS --> PG
+    GS --> Neo
+    TS --> Mongo
+    
+    %% Messaging & Caching
+    CLS --> Redis
+    CLS --> Claude
+    
+    %% Shared libraries
+    SL -.-> US
+    SL -.-> CS
+    SL -.-> GS
+    SL -.-> TS
+    SL -.-> SS
+    SL -.-> CLS
+    SL -.-> NAS
+    SL -.-> ODS
+    SL -.-> HCS
+    SL -.-> PAS
+    SL -.-> DS
+    SL -.-> ES
+
+    subgraph Frontend Components
+        FE_Components[Components]
+        FE_Pages[Pages]
+        FE_Context[Context]
+        FE_Hooks[Hooks]
+        FE_Services[Services]
+
+        FE_Components --> FE_Context
+        FE_Pages --> FE_Context
+        FE_Context --> FE_Hooks
+        FE_Hooks --> FE_Services
+        FE_Services -.-> AG
+    end
+
+    subgraph Data Flow
+        direction LR
+        Request[Request] --> Processing[Processing] --> Response[Response]
+    end

@@ -1,0 +1,128 @@
+%%{
+  init: {
+    'theme': 'base',
+    'themeVariables': {
+      'primaryColor': '#5D7FFF',
+      'primaryTextColor': '#fff',
+      'primaryBorderColor': '#3752A5',
+      'lineColor': '#4C566A',
+      'secondaryColor': '#FFC266',
+      'tertiaryColor': '#D4E8FF'
+    }
+  }
+}%%
+
+graph TD
+    classDef phaseClass fill:#d0f0c0,stroke:#228B22,stroke-width:2px
+    classDef coreClass fill:#ffe0b2,stroke:#ff9800,stroke-width:2px,color:#333
+    classDef extendedClass fill:#e1bee7,stroke:#9c27b0,stroke-width:1px,color:#333
+    classDef specializedClass fill:#ffcdd2,stroke:#f44336,stroke-width:1px,color:#333
+    classDef frontendClass fill:#b3e5fc,stroke:#03a9f4,stroke-width:1px,color:#333
+    classDef dbClass fill:#f5f5f5,stroke:#616161,stroke-width:1px,color:#333
+    classDef techniqueClass fill:#e8eaf6,stroke:#3f51b5,stroke-width:1px,color:#333
+    classDef infraClass fill:#fff9c4,stroke:#fbc02d,stroke-width:1px,color:#333
+
+    %% Main Title
+    Title["Philosophical Concepts Service Development Strategy<br>81,300-156,600 Lines of Code<br>210-340 Claude Sessions"]
+    
+    %% Development Phases
+    Title --> Phases["Development Phases"]
+    
+    Phases --> Phase1["Phase 1: Preparation (20-30 sessions)<br>- Database design<br>- Common libraries<br>- Service templates<br>- Basic infrastructure"]
+    Phases --> Phase2["Phase 2: Core System (60-100 sessions)<br>- User Service<br>- Concept Service<br>- Graph Service<br>- Thesis Service<br>- Claude Service<br>- API Gateway<br>- Basic Frontend"]
+    Phases --> Phase3["Phase 3: Extended Functionality (50-80 sessions)<br>- Synthesis Service<br>- Name Analysis Service<br>- Origin Detection Service<br>- Extended Frontend"]
+    Phases --> Phase4["Phase 4: Specialized Services (50-80 sessions)<br>- Historical Context Service<br>- Practical Application Service<br>- Dialogue Service<br>- Evolution Service<br>- Specialized Frontend"]
+    Phases --> Phase5["Phase 5: Integration and DevOps (30-50 sessions)<br>- Kubernetes manifests<br>- CI/CD pipelines<br>- Monitoring and logging<br>- Documentation<br>- Integration testing"]
+    
+    %% Core Microservices
+    Phase2 --> CoreServices["Core Microservices<br>(High Priority)"]
+    
+    CoreServices --> User["1. User Service (7-10 sessions)<br>Dependencies: PostgreSQL<br>Components:<br>- User management<br>- Authentication<br>- Profile<br>- Activity tracking"]
+    CoreServices --> Concept["2. Concept Service (8-12 sessions)<br>Dependencies: PostgreSQL, Redis<br>Components:<br>- Concept management<br>- Metadata<br>- Philosophers<br>- Traditions"]
+    CoreServices --> Graph["3. Graph Service (10-15 sessions)<br>Dependencies: Neo4j, Redis<br>Components:<br>- Graph management<br>- Categories<br>- Relationships<br>- Visualization<br>- Characteristics"]
+    CoreServices --> Thesis["4. Thesis Service (8-12 sessions)<br>Dependencies: MongoDB, Redis<br>Components:<br>- Thesis management<br>- Generation<br>- Analysis<br>- Descriptions"]
+    CoreServices --> ClaudeS["5. Claude Service (10-15 sessions)<br>Dependencies: RabbitMQ, PostgreSQL<br>Components:<br>- Claude API integration<br>- Request formatting<br>- Response processing<br>- Task queue<br>- Templates"]
+    CoreServices --> ApiGateway["6. API Gateway (7-10 sessions)<br>Dependencies: All core services<br>Components:<br>- Routing<br>- Authentication middleware<br>- Service registry<br>- Error handling<br>- Rate limiting"]
+    
+    %% Extended Microservices
+    Phase3 --> ExtendedServices["Extended Microservices<br>(Medium Priority)"]
+    
+    ExtendedServices --> Synthesis["7. Synthesis Service (8-12 sessions)<br>Dependencies: Graph, Thesis, Claude<br>Components:<br>- Synthesis algorithms<br>- Compatibility analysis<br>- Critique generation<br>- Characteristic merging"]
+    ExtendedServices --> NameAnalysis["8. Name Analysis Service (5-8 sessions)<br>Dependencies: Concept, Claude<br>Components:<br>- Name analysis<br>- Alternative generation<br>- Semantic evaluation"]
+    ExtendedServices --> Origin["9. Origin Detection Service (5-8 sessions)<br>Dependencies: Concept, Graph, Claude<br>Components:<br>- Origin detection<br>- Parent concept identification<br>- Influence tracking"]
+    
+    %% Specialized Microservices
+    Phase4 --> SpecializedServices["Specialized Microservices<br>(Low Priority)"]
+    
+    SpecializedServices --> Historical["10. Historical Context Service (5-8 sessions)<br>Dependencies: Concept, Claude<br>Components:<br>- Historical contextualization<br>- Influence mapping<br>- Contemporary analysis<br>- Timeline generation"]
+    SpecializedServices --> Practical["11. Practical Application Service (5-8 sessions)<br>Dependencies: Concept, Claude<br>Components:<br>- Domain identification<br>- Implementation methods<br>- Relevance mapping"]
+    SpecializedServices --> Dialogue["12. Dialogue Service (5-8 sessions)<br>Dependencies: Concept, Thesis, Claude<br>Components:<br>- Dialogue generation<br>- Question management<br>- Argument analysis<br>- Convergence points"]
+    SpecializedServices --> Evolution["13. Evolution Service (5-8 sessions)<br>Dependencies: Concept, Graph, Claude<br>Components:<br>- Evolution analysis<br>- Direction identification<br>- Change management<br>- Name evolution"]
+    
+    %% Frontend Development
+    Phase2 & Phase3 & Phase4 --> Frontend["Frontend Development<br>(70-100 sessions)"]
+    
+    Frontend --> FE1["Basic Components & Infrastructure (10-15 sessions)<br>- Common UI components<br>- Layout components<br>- Project setup<br>- Routing and state management"]
+    Frontend --> FE2["Authentication & Profile (5-8 sessions)<br>- Login/Register pages<br>- User profile<br>- Session management"]
+    Frontend --> FE3["Graph Visualization & Editing (15-20 sessions)<br>- Graph visualization<br>- Category management<br>- Relationship management<br>- Graph controls<br>- Node/Edge details"]
+    Frontend --> FE4["Thesis Management (10-15 sessions)<br>- Thesis list<br>- Thesis details<br>- Thesis generator<br>- Thesis filter<br>- Thesis editor<br>- Origin analysis"]
+    Frontend --> FE5["Claude Interface (5-8 sessions)<br>- Interaction interface<br>- Template selector<br>- Async tasks list"]
+    Frontend --> FE6["Synthesis & Analysis Tools (10-15 sessions)<br>- Concept selector<br>- Synthesis parameters<br>- Synthesis preview<br>- Synthesis history<br>- Compatibility analysis<br>- Name analyzer/generator"]
+    Frontend --> FE7["Specialized Interfaces (15-20 sessions)<br>- Historical context components<br>- Practical application components<br>- Dialogue components<br>- Evolution components"]
+    
+    %% Databases and Infrastructure
+    Phase1 --> Databases["Database Design & Setup"]
+    
+    Databases --> PostgreSQL["PostgreSQL<br>- Users<br>- Concepts<br>- Philosophers<br>- Traditions<br>- Claude interactions<br>- Concept names<br>- Concept origins<br>- Transformations<br>- Concept evolutions"]
+    Databases --> Neo4j["Neo4j<br>- Graph database<br>- Concept nodes<br>- Category nodes<br>- Relationship types<br>- Constraints<br>- Indexes"]
+    Databases --> MongoDB["MongoDB<br>- Theses<br>- Category descriptions<br>- Relationship descriptions<br>- Concept analyses<br>- Dialogues<br>- Historical contexts<br>- Practical applications"]
+    Databases --> Redis["Redis<br>- Caching<br>- Session storage<br>- Real-time data"]
+    Databases --> RabbitMQ["RabbitMQ<br>- Task queues<br>- Asynchronous processing<br>- Service communication"]
+    
+    %% DevOps Infrastructure
+    Phase5 --> DevOps["DevOps Infrastructure"]
+    
+    DevOps --> Docker["Docker<br>- Development containers<br>- Production containers<br>- Multi-stage builds"]
+    DevOps --> Kubernetes["Kubernetes<br>- Deployments<br>- Services<br>- Ingress<br>- ConfigMaps<br>- Secrets<br>- Persistent volumes<br>- HPA"]
+    DevOps --> CICD["CI/CD Pipelines<br>- GitHub Actions<br>- Build pipeline<br>- Test pipeline<br>- Deploy pipeline"]
+    DevOps --> Monitoring["Monitoring & Logging<br>- Prometheus<br>- Grafana dashboards<br>- ELK stack<br>- Health checks"]
+    
+    %% Claude Optimization Techniques
+    Title --> Techniques["Techniques for Working with Claude 3.7"]
+    
+    Techniques --> T1["File Decomposition<br>- Structural approach<br>- 200-300 lines per session<br>- Logical separation<br>- Interface definition first"]
+    Techniques --> T2["Templating & Reuse<br>- CRUD templates<br>- Controller-service-repository pattern<br>- Standard test templates<br>- Component patterns"]
+    Techniques --> T3["Context Management<br>- Interaction chains<br>- Providing snippets from prior work<br>- Development journal<br>- Clear task definition"]
+    Techniques --> T4["Iterative Development<br>- Start with basic functionality<br>- Request specific improvements<br>- Progressive enhancement<br>- Critical code analysis"]
+    Techniques --> T5["Documentation Process<br>- Decision journal<br>- Interface documentation<br>- Dependency tracking<br>- Code fragment library<br>- Knowledge management"]
+    
+    %% Service Development Strategy
+    Techniques --> ServiceDev["Service Development Workflow<br>(Per service)"]
+    
+    ServiceDev --> SD1["1. Data Model & Interfaces (1-2 sessions)<br>- Entity definitions<br>- DTOs<br>- Repository interfaces"]
+    ServiceDev --> SD2["2. Data Access (1-2 sessions)<br>- Repository implementation<br>- Database migrations<br>- Data access tests"]
+    ServiceDev --> SD3["3. Business Logic (2-3 sessions)<br>- Service implementation<br>- Core algorithms<br>- Business logic tests"]
+    ServiceDev --> SD4["4. API & Routes (1-2 sessions)<br>- Controller implementation<br>- Route definition<br>- API documentation"]
+    ServiceDev --> SD5["5. Integration & Configuration (1-2 sessions)<br>- Service integration<br>- Configuration setup<br>- Docker configuration"]
+    
+    %% Dependencies between services
+    User --> Concept
+    Concept --> Graph
+    Graph --> Thesis
+    Thesis --> ClaudeS
+    ClaudeS --> ApiGateway
+    ApiGateway --> Synthesis
+    Graph & Thesis & ClaudeS --> Synthesis
+    Concept & ClaudeS --> NameAnalysis
+    Concept & Graph & ClaudeS --> Origin
+    ApiGateway --> SpecializedServices
+    
+    %% Apply classes
+    class Phase1,Phase2,Phase3,Phase4,Phase5 phaseClass
+    class User,Concept,Graph,Thesis,ClaudeS,ApiGateway coreClass
+    class Synthesis,NameAnalysis,Origin extendedClass
+    class Historical,Practical,Dialogue,Evolution specializedClass
+    class FE1,FE2,FE3,FE4,FE5,FE6,FE7 frontendClass
+    class PostgreSQL,Neo4j,MongoDB,Redis,RabbitMQ dbClass
+    class T1,T2,T3,T4,T5,ServiceDev,SD1,SD2,SD3,SD4,SD5 techniqueClass
+    class Docker,Kubernetes,CICD,Monitoring infraClass

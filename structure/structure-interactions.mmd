@@ -1,0 +1,203 @@
+flowchart TD
+    %% Style definitions
+    classDef frontend fill:#d4f1f9,stroke:#05a,stroke-width:1px
+    classDef component fill:#b3e0ff,stroke:#0066cc,stroke-width:1px
+    classDef controller fill:#ffe6cc,stroke:#d79b00,stroke-width:1px
+    classDef service fill:#d5e8d4,stroke:#82b366,stroke-width:1px
+    classDef repository fill:#e1d5e7,stroke:#9673a6,stroke-width:1px
+    classDef model fill:#fff2cc,stroke:#d6b656,stroke-width:1px
+    classDef database fill:#f8cecc,stroke:#b85450,stroke-width:1px
+    classDef util fill:#f5f5f5,stroke:#666,stroke-width:1px
+    
+    %% Core Frontend Components
+    FE_Components[frontend/src/components]
+    FE_Concept[frontend/src/components/conceptGraph]
+    FE_Thesis[frontend/src/components/theses]
+    FE_Claude[frontend/src/components/claude]
+    FE_Synthesis[frontend/src/components/synthesis]
+    FE_Names[frontend/src/components/names]
+    FE_Historical[frontend/src/components/historical]
+    FE_Practical[frontend/src/components/practical]
+    FE_Dialogue[frontend/src/components/dialogue]
+    FE_Evolution[frontend/src/components/evolution]
+    
+    %% Frontend Hooks & Services
+    FE_Hooks[frontend/src/hooks]
+    FE_Services[frontend/src/services]
+    
+    %% API Gateway Core
+    AG_Routes[api-gateway/src/routes]
+    AG_Middleware[api-gateway/src/middleware]
+    
+    %% Core Services Components
+    CS_Controller[concept-service/src/controllers]
+    CS_Service[concept-service/src/services]
+    CS_Repo[concept-service/src/repositories]
+    CS_Routes[concept-service/src/routes]
+    CS_Models[concept-service/src/models]
+    CS_Clients[concept-service/src/clients]
+    
+    GS_Controller[graph-service/src/controllers]
+    GS_Service[graph-service/src/services]
+    GS_Repo[graph-service/src/repositories]
+    GS_Routes[graph-service/src/routes]
+    GS_Models[graph-service/src/models]
+    GS_Clients[graph-service/src/clients]
+    
+    TS_Controller[thesis-service/src/controllers]
+    TS_Service[thesis-service/src/services]
+    TS_Repo[thesis-service/src/repositories]
+    TS_Routes[thesis-service/src/routes]
+    TS_Models[thesis-service/src/models]
+    TS_Clients[thesis-service/src/clients]
+    
+    CLS_Controller[claude-service/src/controllers]
+    CLS_Service[claude-service/src/services]
+    CLS_Repo[claude-service/src/repositories]
+    CLS_Routes[claude-service/src/routes]
+    CLS_Models[claude-service/src/models]
+    CLS_Clients[claude-service/src/clients]
+    CLS_Formatters[claude-service/src/utils/formatters]
+    
+    %% Databases
+    PG_DB[(PostgreSQL)]
+    Neo4j_DB[(Neo4j)]
+    MongoDB_DB[(MongoDB)]
+    Redis_DB[(Redis)]
+    
+    %% External APIs
+    Claude_API[Claude API]
+    
+    %% Relationships - Frontend Components to Hooks
+    FE_Components --> FE_Hooks
+    FE_Concept --> |useGraph.ts| FE_Hooks
+    FE_Thesis --> |useThesis.ts| FE_Hooks
+    FE_Claude --> |useClaude.ts| FE_Hooks
+    FE_Synthesis --> FE_Hooks
+    FE_Names --> FE_Hooks
+    FE_Historical --> FE_Hooks
+    FE_Practical --> FE_Hooks
+    FE_Dialogue --> FE_Hooks
+    FE_Evolution --> FE_Hooks
+    
+    %% Relationships - Frontend Hooks to Services
+    FE_Hooks --> |useApi.ts| FE_Services
+    FE_Hooks --> |useAuth.ts| FE_Services
+    FE_Hooks --> |useGraph.ts| FE_Services
+    FE_Hooks --> |useThesis.ts| FE_Services
+    FE_Hooks --> |useClaude.ts| FE_Services
+    
+    %% Relationships - Frontend Services to API Gateway
+    FE_Services --> |api.ts| AG_Routes
+    FE_Services --> |conceptService.ts| AG_Routes
+    FE_Services --> |graphService.ts| AG_Routes
+    FE_Services --> |thesisService.ts| AG_Routes
+    FE_Services --> |synthesisService.ts| AG_Routes
+    FE_Services --> |claudeService.ts| AG_Routes
+    FE_Services --> |nameService.ts| AG_Routes
+    FE_Services --> |originService.ts| AG_Routes
+    FE_Services --> |historicalService.ts| AG_Routes
+    FE_Services --> |practicalService.ts| AG_Routes
+    FE_Services --> |dialogueService.ts| AG_Routes
+    FE_Services --> |evolutionService.ts| AG_Routes
+    
+    %% API Gateway routing to Microservices
+    AG_Routes --> |userRoutes.js| CS_Routes
+    AG_Routes --> |conceptRoutes.js| CS_Routes
+    AG_Routes --> |graphRoutes.js| GS_Routes
+    AG_Routes --> |thesisRoutes.js| TS_Routes
+    AG_Routes --> |claudeRoutes.js| CLS_Routes
+    
+    %% Microservice internal structure - Concept Service
+    CS_Routes --> CS_Controller
+    CS_Controller --> CS_Service
+    CS_Service --> CS_Repo
+    CS_Repo --> CS_Models
+    CS_Models --> PG_DB
+    CS_Service --> CS_Clients
+    CS_Clients --> |graphServiceClient.js| GS_Routes
+    CS_Clients --> |thesisServiceClient.js| TS_Routes
+    
+    %% Microservice internal structure - Graph Service
+    GS_Routes --> GS_Controller
+    GS_Controller --> GS_Service
+    GS_Service --> GS_Repo
+    GS_Repo --> GS_Models
+    GS_Models --> Neo4j_DB
+    GS_Service --> GS_Clients
+    GS_Clients --> |claudeServiceClient.js| CLS_Routes
+    
+    %% Microservice internal structure - Thesis Service
+    TS_Routes --> TS_Controller
+    TS_Controller --> TS_Service
+    TS_Service --> TS_Repo
+    TS_Repo --> TS_Models
+    TS_Models --> MongoDB_DB
+    TS_Service --> TS_Clients
+    TS_Clients --> |claudeServiceClient.js| CLS_Routes
+    TS_Clients --> |graphServiceClient.js| GS_Routes
+    
+    %% Microservice internal structure - Claude Service
+    CLS_Routes --> CLS_Controller
+    CLS_Controller --> CLS_Service
+    CLS_Service --> CLS_Repo
+    CLS_Repo --> CLS_Models
+    CLS_Service --> CLS_Formatters
+    CLS_Models --> Redis_DB
+    CLS_Service --> CLS_Clients
+    CLS_Clients --> |claudeApiClient.js| Claude_API
+    
+    %% Highlight special relationships
+    CLS_Formatters --> |graphFormatters.js| GS_Service
+    CLS_Formatters --> |thesisFormatters.js| TS_Service
+    
+    %% Class Assignment
+    class FE_Components,FE_Concept,FE_Thesis,FE_Claude,FE_Synthesis,FE_Names,FE_Historical,FE_Practical,FE_Dialogue,FE_Evolution frontend
+    class FE_Hooks,FE_Services component
+    class AG_Routes,AG_Middleware controller
+    class CS_Controller,GS_Controller,TS_Controller,CLS_Controller controller
+    class CS_Service,GS_Service,TS_Service,CLS_Service service
+    class CS_Repo,GS_Repo,TS_Repo,CLS_Repo repository
+    class CS_Models,GS_Models,TS_Models,CLS_Models model
+    class PG_DB,Neo4j_DB,MongoDB_DB,Redis_DB database
+    class CLS_Formatters,CS_Clients,GS_Clients,TS_Clients,CLS_Clients util
+    
+    %% Messaging Flows
+    subgraph "Data Flow in System"
+        direction TB
+        Client[Client Request] --> FrontendProcessing[Frontend Processing]
+        FrontendProcessing --> APIGateway[API Gateway]
+        APIGateway --> Microservice[Microservice]
+        Microservice --> Database[Database]
+        Microservice --> InterService[Inter-Service Communication]
+        Microservice --> ExternalAPI[External API]
+        Database --> Response[Generate Response]
+        InterService --> Response
+        ExternalAPI --> Response
+        Response --> Client
+    end
+    
+    %% Key File Interactions - Claude Service Formatters
+    subgraph "Claude Service Formatters Interaction"
+        CLS_Formatters_Graph[graphFormatters.js]
+        CLS_Formatters_Thesis[thesisFormatters.js]
+        CLS_Formatters_Synthesis[synthesisFormatters.js]
+        CLS_Formatters_Name[nameFormatters.js]
+        CLS_Formatters_Origin[originFormatters.js]
+        CLS_Formatters_Historical[historicalFormatters.js]
+        CLS_Formatters_Practical[practicalFormatters.js]
+        CLS_Formatters_Dialogue[dialogueFormatters.js]
+        CLS_Formatters_Evolution[evolutionFormatters.js]
+        
+        CLS_Service_Main[claudeService.js]
+        
+        CLS_Service_Main --> CLS_Formatters_Graph
+        CLS_Service_Main --> CLS_Formatters_Thesis
+        CLS_Service_Main --> CLS_Formatters_Synthesis
+        CLS_Service_Main --> CLS_Formatters_Name
+        CLS_Service_Main --> CLS_Formatters_Origin
+        CLS_Service_Main --> CLS_Formatters_Historical
+        CLS_Service_Main --> CLS_Formatters_Practical
+        CLS_Service_Main --> CLS_Formatters_Dialogue
+        CLS_Service_Main --> CLS_Formatters_Evolution
+    end
