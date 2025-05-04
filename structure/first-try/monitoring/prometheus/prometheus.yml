@@ -1,0 +1,38 @@
+# monitoring/prometheus/prometheus.yml
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['localhost:9093']
+
+rule_files:
+  - 'alerts/*.yml'
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'philosophy-service'
+    static_configs:
+      - targets: ['localhost:3000']
+    metrics_path: '/metrics'
+
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['localhost:9187']
+
+  - job_name: 'neo4j'
+    static_configs:
+      - targets: ['localhost:2004']
+
+  - job_name: 'mongodb'
+    static_configs:
+      - targets: ['localhost:9216']
+
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['localhost:9121']
