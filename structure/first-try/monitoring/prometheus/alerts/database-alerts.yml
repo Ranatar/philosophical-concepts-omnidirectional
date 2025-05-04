@@ -1,0 +1,37 @@
+# monitoring/prometheus/alerts/database-alerts.yml
+groups:
+- name: database_alerts
+  rules:
+  - alert: DatabaseDown
+    expr: up{job=~"postgres|neo4j|mongodb|redis"} == 0
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Database {{ $labels.job }} is down"
+      description: "Database {{ $labels.job }} has been down for more than 1 minute."
+
+  - alert: HighResponseTime
+    expr: histogram_quantile(0.95, rate(db_operation_duration_seconds_bucket[5m])) > 2
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High database response time"
+      description: "Database operations are taking longer than 2 seconds at 95th percentile."
+
+  - alert: SyncErrorsHigh
+    expr: increase(db_sync_errors_total[1h]) > 10
+    labels:
+      severity: warning
+    annotations:
+      summary: "High number of synchronization errors"
+      description: "More than 10 synchronization errors in the last hour."
+
+  - alert: DataIntegrityIssues
+    expr: data_integrity_issues{severity="critical"} > 0
+    labels:
+      severity: critical
+    annotations:
+      summary: "Critical data integrity issues detected"
+      description: "There are {{ $value }} critical data integrity issues."
