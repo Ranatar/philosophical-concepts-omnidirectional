@@ -1,33 +1,177 @@
-# Структура файлов для реализации архитектуры сервиса философских концепций
+# Структура файлов проекта философских концепций
 
 ## 1. Инфраструктура DevOps
 
+### 1.1. Docker-конфигурация
 - `docker-compose.yml` - Основной файл для локальной разработки 
 - `docker-compose.override.yml` - Переопределения для разработки
 - `docker-compose.prod.yml` - Конфигурация для продакшн
-- `Dockerfile.dev` и `Dockerfile.prod` - Для каждого сервиса
-- `kubernetes/` - Папка с Kubernetes-манифестами
-  - `kubernetes/deployments/` - Деплойменты для всех сервисов
-  - `kubernetes/services/` - Сервисы для всех компонентов
-  - `kubernetes/ingress/` - Настройки Ingress
-  - `kubernetes/config-maps/` - ConfigMaps для конфигурации
-  - `kubernetes/secrets/` - Шаблоны секретов
-  - `kubernetes/persistent-volumes/` - Persistent Volumes для БД
+- `Dockerfile.dev` - Шаблон Dockerfile для разработки (для всех сервисов)
+- `Dockerfile.prod` - Шаблон Dockerfile для продакшн (для всех сервисов)
+
+### 1.2. Инициализация баз данных
+- `init/postgres/init.sql` - Скрипт инициализации PostgreSQL
+- `init/neo4j/init.sh` - Скрипт инициализации Neo4j
+- `init/mongo/init.js` - Скрипт инициализации MongoDB
+
+### 1.3. Kubernetes-манифесты
+- `kubernetes/`
+  - `kubernetes/deployments/` - Деплойменты
+    - `kubernetes/deployments/frontend-deployment.yaml` - Деплоймент для фронтенда
+    - `kubernetes/deployments/api-gateway-deployment.yaml` - Деплоймент для API Gateway
+    - `kubernetes/deployments/user-service-deployment.yaml` - Деплоймент для сервиса пользователей
+    - `kubernetes/deployments/concept-service-deployment.yaml` - Деплоймент для сервиса концепций
+    - `kubernetes/deployments/graph-service-deployment.yaml` - Деплоймент для сервиса графов
+    - `kubernetes/deployments/thesis-service-deployment.yaml` - Деплоймент для сервиса тезисов
+    - `kubernetes/deployments/synthesis-service-deployment.yaml` - Деплоймент для сервиса синтеза
+    - `kubernetes/deployments/claude-service-deployment.yaml` - Деплоймент для сервиса Claude
+    - `kubernetes/deployments/name-service-deployment.yaml` - Деплоймент для сервиса анализа названий
+    - `kubernetes/deployments/origin-service-deployment.yaml` - Деплоймент для сервиса определения происхождения
+    - `kubernetes/deployments/historical-service-deployment.yaml` - Деплоймент для сервиса исторической контекстуализации
+    - `kubernetes/deployments/practical-service-deployment.yaml` - Деплоймент для сервиса практического применения
+    - `kubernetes/deployments/dialogue-service-deployment.yaml` - Деплоймент для сервиса диалогической интерпретации
+    - `kubernetes/deployments/evolution-service-deployment.yaml` - Деплоймент для сервиса эволюции концепций
+    - `kubernetes/deployments/postgres-deployment.yaml` - Деплоймент для PostgreSQL
+    - `kubernetes/deployments/neo4j-deployment.yaml` - Деплоймент для Neo4j
+    - `kubernetes/deployments/mongodb-deployment.yaml` - Деплоймент для MongoDB
+    - `kubernetes/deployments/redis-deployment.yaml` - Деплоймент для Redis
+    - `kubernetes/deployments/rabbitmq-deployment.yaml` - Деплоймент для RabbitMQ
+    - `kubernetes/deployments/prometheus-deployment.yaml` - Деплоймент для Prometheus
+    - `kubernetes/deployments/grafana-deployment.yaml` - Деплоймент для Grafana
+    - `kubernetes/deployments/elasticsearch-deployment.yaml` - Деплоймент для Elasticsearch
+    - `kubernetes/deployments/logstash-deployment.yaml` - Деплоймент для Logstash
+    - `kubernetes/deployments/kibana-deployment.yaml` - Деплоймент для Kibana
+  - `kubernetes/services/` - Сервисы
+    - `kubernetes/services/frontend-service.yaml` - Сервис для фронтенда
+    - `kubernetes/services/api-gateway-service.yaml` - Сервис для API Gateway
+    - `kubernetes/services/user-service-service.yaml` - Сервис для сервиса пользователей
+    - `kubernetes/services/concept-service-service.yaml` - Сервис для сервиса концепций
+    - `kubernetes/services/graph-service-service.yaml` - Сервис для сервиса графов
+    - `kubernetes/services/thesis-service-service.yaml` - Сервис для сервиса тезисов
+    - `kubernetes/services/synthesis-service-service.yaml` - Сервис для сервиса синтеза
+    - `kubernetes/services/claude-service-service.yaml` - Сервис для сервиса Claude
+    - `kubernetes/services/name-service-service.yaml` - Сервис для сервиса анализа названий
+    - `kubernetes/services/origin-service-service.yaml` - Сервис для сервиса определения происхождения
+    - `kubernetes/services/historical-service-service.yaml` - Сервис для сервиса исторической контекстуализации
+    - `kubernetes/services/practical-service-service.yaml` - Сервис для сервиса практического применения
+    - `kubernetes/services/dialogue-service-service.yaml` - Сервис для сервиса диалогической интерпретации
+    - `kubernetes/services/evolution-service-service.yaml` - Сервис для сервиса эволюции концепций
+    - `kubernetes/services/postgres-service.yaml` - Сервис для PostgreSQL
+    - `kubernetes/services/neo4j-service.yaml` - Сервис для Neo4j
+    - `kubernetes/services/mongodb-service.yaml` - Сервис для MongoDB
+    - `kubernetes/services/redis-service.yaml` - Сервис для Redis
+    - `kubernetes/services/rabbitmq-service.yaml` - Сервис для RabbitMQ
+    - `kubernetes/services/prometheus-service.yaml` - Сервис для Prometheus
+    - `kubernetes/services/grafana-service.yaml` - Сервис для Grafana
+    - `kubernetes/services/elasticsearch-service.yaml` - Сервис для Elasticsearch
+    - `kubernetes/services/logstash-service.yaml` - Сервис для Logstash
+    - `kubernetes/services/kibana-service.yaml` - Сервис для Kibana
+  - `kubernetes/ingress/` - Ingress
+    - `kubernetes/ingress/ingress.yaml` - Основной Ingress-манифест
+  - `kubernetes/config-maps/` - ConfigMaps
+    - `kubernetes/config-maps/env-config.yaml` - ConfigMap для переменных окружения
+    - `kubernetes/config-maps/postgres-config.yaml` - ConfigMap для PostgreSQL
+    - `kubernetes/config-maps/neo4j-config.yaml` - ConfigMap для Neo4j
+    - `kubernetes/config-maps/mongodb-config.yaml` - ConfigMap для MongoDB
+    - `kubernetes/config-maps/redis-config.yaml` - ConfigMap для Redis
+    - `kubernetes/config-maps/rabbitmq-config.yaml` - ConfigMap для RabbitMQ
+    - `kubernetes/config-maps/logging-config.yaml` - ConfigMap для логирования
+    - `kubernetes/config-maps/prometheus-config.yaml` - ConfigMap для Prometheus
+    - `kubernetes/config-maps/grafana-config.yaml` - ConfigMap для Grafana
+  - `kubernetes/secrets/` - Secrets
+    - `kubernetes/secrets/secret-template.yaml` - Шаблон для секретов
+    - `kubernetes/secrets/db-secrets-template.yaml` - Шаблон для секретов баз данных
+    - `kubernetes/secrets/api-keys-template.yaml` - Шаблон для секретов API-ключей
+  - `kubernetes/persistent-volumes/` - Persistent Volumes
+    - `kubernetes/persistent-volumes/postgres-pv.yaml` - PV для PostgreSQL
+    - `kubernetes/persistent-volumes/neo4j-pv.yaml` - PV для Neo4j
+    - `kubernetes/persistent-volumes/mongodb-pv.yaml` - PV для MongoDB
+    - `kubernetes/persistent-volumes/rabbitmq-pv.yaml` - PV для RabbitMQ
+    - `kubernetes/persistent-volumes/elasticsearch-pv.yaml` - PV для Elasticsearch
   - `kubernetes/hpa/` - Horizontal Pod Autoscalers
-- `.github/workflows/` - CI/CD пайплайны
+    - `kubernetes/hpa/frontend-hpa.yaml` - HPA для фронтенда
+    - `kubernetes/hpa/api-gateway-hpa.yaml` - HPA для API Gateway
+    - `kubernetes/hpa/user-service-hpa.yaml` - HPA для сервиса пользователей
+    - `kubernetes/hpa/concept-service-hpa.yaml` - HPA для сервиса концепций
+    - `kubernetes/hpa/graph-service-hpa.yaml` - HPA для сервиса графов
+    - `kubernetes/hpa/thesis-service-hpa.yaml` - HPA для сервиса тезисов
+    - `kubernetes/hpa/synthesis-service-hpa.yaml` - HPA для сервиса синтеза
+    - `kubernetes/hpa/claude-service-hpa.yaml` - HPA для сервиса Claude
+
+### 1.4. CI/CD пайплайны
+- `.github/workflows/` - GitHub Actions workflows
   - `.github/workflows/build.yml` - Сборка образов
   - `.github/workflows/test.yml` - Тестирование
   - `.github/workflows/deploy.yml` - Деплой
-- `monitoring/` - Конфигурации для систем мониторинга
-  - `monitoring/prometheus/` - Конфигурации Prometheus
-  - `monitoring/grafana/dashboards/` - Дашборды Grafana
-  - `monitoring/logstash/pipeline/` - Конфигурации Logstash
-- `init/` - Скрипты инициализации
-  - `init/postgres/` - Инициализация PostgreSQL
-  - `init/neo4j/` - Инициализация Neo4j
-  - `init/mongo/` - Инициализация MongoDB
+  - `.github/workflows/lint.yml` - Линтинг кода
+  - `.github/workflows/pr-checks.yml` - Проверки для Pull Request
+- `scripts/ci/` - CI/CD скрипты
+  - `scripts/ci/build-services.sh` - Скрипт для сборки сервисов
+  - `scripts/ci/run-tests.sh` - Скрипт для запуска тестов
+  - `scripts/ci/push-images.sh` - Скрипт для публикации образов
+  - `scripts/ci/deploy.sh` - Скрипт для деплоя
+  - `scripts/ci/update-config.sh` - Скрипт для обновления конфигурации
 
-## 2. Клиентская часть (Frontend)
+### 1.5. Nginx конфигурация
+- `nginx/nginx.conf` - Основная конфигурация Nginx
+- `nginx/conf.d/frontend.conf` - Конфигурация для фронтенда
+- `nginx/conf.d/api-gateway.conf` - Конфигурация для API Gateway
+
+### 1.6. Мониторинг и логирование
+- `monitoring/` - Конфигурации мониторинга
+  - `monitoring/prometheus/` - Prometheus
+    - `monitoring/prometheus/prometheus.yml` - Конфигурация Prometheus
+    - `monitoring/prometheus/rules/alert-rules.yml` - Правила оповещений
+    - `monitoring/prometheus/rules/recording-rules.yml` - Правила записи
+  - `monitoring/grafana/` - Grafana
+    - `monitoring/grafana/dashboards/overview.json` - Дашборд общего обзора
+    - `monitoring/grafana/dashboards/frontend.json` - Дашборд фронтенда
+    - `monitoring/grafana/dashboards/api-gateway.json` - Дашборд API Gateway
+    - `monitoring/grafana/dashboards/services.json` - Дашборд сервисов
+    - `monitoring/grafana/dashboards/databases.json` - Дашборд баз данных
+    - `monitoring/grafana/dashboards/rabbitmq.json` - Дашборд RabbitMQ
+    - `monitoring/grafana/dashboards/claude.json` - Дашборд взаимодействия с Claude
+    - `monitoring/grafana/dashboards/business-metrics.json` - Дашборд бизнес-метрик
+    - `monitoring/grafana/provisioning/datasources/prometheus.yml` - Конфигурация источника данных Prometheus
+  - `monitoring/logstash/` - Logstash
+    - `monitoring/logstash/pipeline/logstash.conf` - Конфигурация пайплайна Logstash
+    - `monitoring/logstash/config/logstash.yml` - Конфигурация Logstash
+  - `monitoring/elasticsearch/` - Elasticsearch
+    - `monitoring/elasticsearch/config/elasticsearch.yml` - Конфигурация Elasticsearch
+  - `monitoring/kibana/` - Kibana
+    - `monitoring/kibana/config/kibana.yml` - Конфигурация Kibana
+    - `monitoring/kibana/dashboards/logs-dashboard.json` - Дашборд логов в Kibana
+
+## 2. Шаблоны компонентов
+
+### 2.1. Шаблоны для бэкенда
+- `templates/backend/controllers/crud-controller-template.js` - Шаблон CRUD-контроллера
+- `templates/backend/controllers/specialized-controller-template.js` - Шаблон специализированного контроллера
+- `templates/backend/services/crud-service-template.js` - Шаблон CRUD-сервиса
+- `templates/backend/services/specialized-service-template.js` - Шаблон специализированного сервиса
+- `templates/backend/repositories/postgres-repository-template.js` - Шаблон репозитория PostgreSQL
+- `templates/backend/repositories/neo4j-repository-template.js` - Шаблон репозитория Neo4j
+- `templates/backend/repositories/mongodb-repository-template.js` - Шаблон репозитория MongoDB
+- `templates/backend/clients/service-client-template.js` - Шаблон клиента сервиса
+- `templates/backend/tests/unit-test-template.js` - Шаблон юнит-теста
+- `templates/backend/tests/integration-test-template.js` - Шаблон интеграционного теста
+
+### 2.2. Шаблоны для фронтенда
+- `templates/frontend/components/base-component-template.tsx` - Шаблон базового компонента
+- `templates/frontend/components/form-component-template.tsx` - Шаблон компонента формы
+- `templates/frontend/components/list-component-template.tsx` - Шаблон компонента списка
+- `templates/frontend/hooks/use-api-template.ts` - Шаблон хука для работы с API
+- `templates/frontend/hooks/use-form-template.ts` - Шаблон хука для работы с формами
+- `templates/frontend/services/api-service-template.ts` - Шаблон сервиса API
+- `templates/frontend/services/entity-service-template.ts` - Шаблон сервиса для работы с сущностями
+
+### 2.3. Шаблоны для тестирования API
+- `templates/api-tests/api-test-template.js` - Шаблон для тестирования API
+
+### 2.4. Шаблоны для документации
+- `templates/docs/api-documentation-template.md` - Шаблон документации API
+
+## 3. Клиентская часть (Frontend)
 
 - `frontend/`
   - `src/`
@@ -80,19 +224,26 @@
         - `HistoricalContextView.tsx` - Отображение исторического контекста
         - `InfluenceGraph.tsx` - Граф влияний
         - `Timeline.tsx` - Временная шкала
+        - `PeriodSelector.tsx` - Выбор исторического периода
+        - `InfluenceManager.tsx` - Управление влияниями
       - `practical/` - Компоненты для практического применения
         - `DomainsView.tsx` - Отображение областей применения
         - `ImplementationMethods.tsx` - Методы реализации
         - `RelevanceMap.tsx` - Карта релевантности
+        - `DomainSelector.tsx` - Выбор области применения
+        - `OperationalizationTools.tsx` - Инструменты операционализации
       - `dialogue/` - Компоненты для диалогов
         - `DialogueGenerator.tsx` - Генератор диалогов
         - `PhilosophicalQuestionEditor.tsx` - Редактор вопросов
         - `DialogueView.tsx` - Отображение диалога
         - `ArgumentAnalysis.tsx` - Анализ аргументации
+        - `ConceptPositionEditor.tsx` - Редактор позиций концепций
       - `evolution/` - Компоненты для эволюции концепций
         - `EvolutionAnalysis.tsx` - Анализ эволюции
         - `EvolutionVisualizer.tsx` - Визуализация эволюции
         - `SuggestedChanges.tsx` - Предложенные изменения
+        - `DirectionSelector.tsx` - Выбор направления эволюции
+        - `ChangeApplicator.tsx` - Применение изменений
     - `pages/` - Страницы приложения
       - `home/` 
         - `HomePage.tsx`
@@ -103,6 +254,20 @@
       - `synthesis/`
         - `SynthesisPage.tsx`
         - `SynthesisResultPage.tsx`
+      - `names/`
+        - `NameAnalysisPage.tsx`
+      - `origin/`
+        - `OriginAnalysisPage.tsx`
+      - `historical/`
+        - `HistoricalContextPage.tsx`
+      - `practical/`
+        - `PracticalApplicationPage.tsx`
+      - `dialogue/`
+        - `DialoguePage.tsx`
+        - `DialogueResultPage.tsx`
+      - `evolution/`
+        - `EvolutionPage.tsx`
+        - `EvolutionResultPage.tsx`
       - `user/`
         - `ProfilePage.tsx`
         - `LoginPage.tsx`
@@ -111,12 +276,24 @@
       - `AuthContext.tsx`
       - `NotificationContext.tsx`
       - `ConceptContext.tsx`
+      - `SynthesisContext.tsx`
+      - `HistoricalContext.tsx`
+      - `PracticalContext.tsx`
+      - `DialogueContext.tsx`
+      - `EvolutionContext.tsx`
     - `hooks/` - Пользовательские хуки
       - `useApi.ts` - Хук для работы с API
       - `useAuth.ts` - Хук для аутентификации
       - `useGraph.ts` - Хук для работы с графом
       - `useThesis.ts` - Хук для работы с тезисами
       - `useClaude.ts` - Хук для работы с Claude
+      - `useSynthesis.ts` - Хук для работы с синтезом
+      - `useNameAnalysis.ts` - Хук для работы с анализом названий
+      - `useOriginDetection.ts` - Хук для работы с происхождением
+      - `useHistoricalContext.ts` - Хук для работы с историческим контекстом
+      - `usePracticalApplication.ts` - Хук для работы с практическим применением
+      - `useDialogue.ts` - Хук для работы с диалогами
+      - `useEvolution.ts` - Хук для работы с эволюцией
     - `services/` - Сервисы для работы с API
       - `api.ts` - Базовый API-клиент
       - `authService.ts` - Сервис аутентификации
@@ -136,23 +313,49 @@
       - `validators.ts` - Валидация данных
       - `graphHelpers.ts` - Вспомогательные функции для работы с графами
       - `thesisHelpers.ts` - Вспомогательные функции для работы с тезисами
+      - `synthesisHelpers.ts` - Вспомогательные функции для синтеза
+      - `nameHelpers.ts` - Вспомогательные функции для анализа названий
+      - `originHelpers.ts` - Вспомогательные функции для происхождения
+      - `historicalHelpers.ts` - Вспомогательные функции для исторического контекста
+      - `practicalHelpers.ts` - Вспомогательные функции для практического применения
+      - `dialogueHelpers.ts` - Вспомогательные функции для диалогов
+      - `evolutionHelpers.ts` - Вспомогательные функции для эволюции
     - `types/` - Типы и интерфейсы
       - `concept.types.ts` - Типы концепций
       - `graph.types.ts` - Типы графов
       - `thesis.types.ts` - Типы тезисов
       - `user.types.ts` - Типы пользователей
       - `claude.types.ts` - Типы для взаимодействия с Claude
+      - `synthesis.types.ts` - Типы для синтеза
+      - `name.types.ts` - Типы для анализа названий
+      - `origin.types.ts` - Типы для происхождения
+      - `historical.types.ts` - Типы для исторического контекста
+      - `practical.types.ts` - Типы для практического применения
+      - `dialogue.types.ts` - Типы для диалогов
+      - `evolution.types.ts` - Типы для эволюции
     - `App.tsx` - Главный компонент приложения
     - `index.tsx` - Точка входа
   - `public/` - Публичные файлы
+    - `index.html` - Шаблон HTML
   - `package.json` - Зависимости
   - `tsconfig.json` - Конфигурация TypeScript
   - `jest.config.js` - Конфигурация Jest для тестирования
   - `.eslintrc.js` - Конфигурация ESLint
   - `.prettierrc` - Конфигурация Prettier
   - `Dockerfile` - Dockerfile для приложения
+  - `tests/` - Тесты
+    - `components/` - Тесты компонентов
+      - `common/Button.test.tsx`
+      - `synthesis/ConceptSelector.test.tsx`
+      - `names/NameAnalyzer.test.tsx`
+    - `hooks/useAuth.test.ts`
+    - `services/`
+      - `api.test.ts`
+      - `synthesisService.test.ts`
+      - `nameService.test.ts`
+      - `originService.test.ts`
 
-## 3. API Gateway
+## 4. API Gateway
 
 - `api-gateway/`
   - `src/`
@@ -188,10 +391,12 @@
   - `package.json` - Зависимости
   - `Dockerfile` - Dockerfile для сервиса
   - `tests/` - Тесты
+    - `routes.test.js` - Тесты маршрутов
+    - `middleware.test.js` - Тесты middleware
 
-## 4. Микросервисы
+## 5. Микросервисы
 
-### 4.1. Сервис пользователей (User Service)
+### 5.1. Сервис пользователей (User Service)
 
 - `user-service/`
   - `src/`
@@ -228,10 +433,14 @@
       - `passwordUtil.js` - Утилиты для работы с паролями
       - `tokenUtil.js` - Утилиты для работы с токенами
   - `tests/` - Тесты
+    - `controllers/userController.test.js`
+    - `services/userService.test.js`
+    - `repositories/userRepository.test.js`
+    - `routes/userRoutes.test.js`
   - `package.json` - Зависимости
   - `Dockerfile` - Dockerfile для сервиса
 
-### 4.2. Сервис концепций (Concept Service)
+### 5.2. Сервис концепций (Concept Service)
 
 - `concept-service/`
   - `src/`
@@ -268,10 +477,13 @@
       - `index.js` - Основная конфигурация
       - `db.js` - Конфигурация БД
   - `tests/` - Тесты
+    - `controllers/conceptController.test.js`
+    - `services/conceptService.test.js`
+    - `repositories/conceptRepository.test.js`
   - `package.json` - Зависимости
   - `Dockerfile` - Dockerfile для сервиса
 
-### 4.3. Сервис графов (Graph Service)
+### 5.3. Сервис графов (Graph Service)
 
 - `graph-service/`
   - `src/`
@@ -314,10 +526,13 @@
       - `index.js` - Основная конфигурация
       - `neo4j.js` - Конфигурация Neo4j
   - `tests/` - Тесты
+    - `controllers/graphController.test.js`
+    - `services/graphService.test.js`
+    - `repositories/graphRepository.test.js`
   - `package.json` - Зависимости
   - `Dockerfile` - Dockerfile для сервиса
 
-### 4.4. Сервис тезисов (Thesis Service)
+### 5.4. Сервис тезисов (Thesis Service)
 
 - `thesis-service/`
   - `src/`
@@ -357,49 +572,13 @@
       - `index.js` - Основная конфигурация
       - `mongodb.js` - Конфигурация MongoDB
   - `tests/` - Тесты
+    - `controllers/thesisController.test.js`
+    - `services/thesisService.test.js`
+    - `repositories/thesisRepository.test.js`
   - `package.json` - Зависимости
   - `Dockerfile` - Dockerfile для сервиса
 
-### 4.5. Сервис синтеза (Synthesis Service)
-
-- `synthesis-service/`
-  - `src/`
-    - `server.js` - Точка входа
-    - `controllers/`
-      - `synthesisController.js` - Управление синтезом
-      - `compatibilityController.js` - Анализ совместимости
-      - `critiqueController.js` - Критический анализ
-    - `services/`
-      - `synthesisService.js` - Бизнес-логика синтеза
-      - `compatibilityService.js` - Анализ совместимости
-      - `critiqueService.js` - Критический анализ
-      - `coordinationService.js` - Координация с другими сервисами
-      - `characteristicMergingService.js` - Слияние количественных характеристик
-    - `models/`
-      - `synthesisModel.js` - Модель синтеза
-      - `compatibilityModel.js` - Модель совместимости
-      - `critiqueModel.js` - Модель критического анализа
-    - `repositories/`
-      - `synthesisRepository.js` - Доступ к данным синтеза
-      - `compatibilityRepository.js` - Доступ к данным совместимости
-    - `routes/`
-      - `synthesisRoutes.js` - Маршруты синтеза
-      - `compatibilityRoutes.js` - Маршруты совместимости
-      - `critiqueRoutes.js` - Маршруты критики
-    - `clients/`
-      - `graphServiceClient.js` - Клиент сервиса графов
-      - `thesisServiceClient.js` - Клиент сервиса тезисов
-      - `claudeServiceClient.js` - Клиент сервиса Claude
-    - `utils/`
-      - `synthesisStrategies.js` - Стратегии синтеза
-      - `compatibilityAnalyzer.js` - Анализ совместимости
-    - `config/`
-      - `index.js` - Основная конфигурация
-  - `tests/` - Тесты
-  - `package.json` - Зависимости
-  - `Dockerfile` - Dockerfile для сервиса
-
-### 4.6. Сервис Claude (Claude Service)
+### 5.5. Сервис Claude (Claude Service)
 
 - `claude-service/`
   - `src/`
@@ -449,11 +628,65 @@
       - `index.js` - Основная конфигурация
       - `queues.js` - Конфигурация очередей
       - `claude.js` - Конфигурация Claude API
+    - `templates/` - Шаблоны для различных типов запросов
+      - `synthesisTemplates.js` - Шаблоны для синтеза
+      - `nameAnalysisTemplates.js` - Шаблоны для анализа названий
+      - `originDetectionTemplates.js` - Шаблоны для происхождения
+      - `historicalContextTemplates.js` - Шаблоны для исторического контекста
+      - `practicalApplicationTemplates.js` - Шаблоны для практического применения
+      - `dialogueTemplates.js` - Шаблоны для диалогов
+      - `evolutionTemplates.js` - Шаблоны для эволюции
   - `tests/` - Тесты
+    - `controllers/claudeController.test.js`
+    - `services/claudeService.test.js`
+    - `formatters/formatters.test.js`
   - `package.json` - Зависимости
   - `Dockerfile` - Dockerfile для сервиса
 
-### 4.7. Сервис анализа названий (Name Analysis Service)
+### 5.6. Сервис синтеза (Synthesis Service)
+
+- `synthesis-service/`
+  - `src/`
+    - `server.js` - Точка входа
+    - `controllers/`
+      - `synthesisController.js` - Управление синтезом
+      - `compatibilityController.js` - Анализ совместимости
+      - `critiqueController.js` - Критический анализ
+    - `services/`
+      - `synthesisService.js` - Бизнес-логика синтеза
+      - `compatibilityService.js` - Анализ совместимости
+      - `critiqueService.js` - Критический анализ
+      - `coordinationService.js` - Координация с другими сервисами
+      - `characteristicMergingService.js` - Слияние количественных характеристик
+    - `models/`
+      - `synthesisModel.js` - Модель синтеза
+      - `compatibilityModel.js` - Модель совместимости
+      - `critiqueModel.js` - Модель критического анализа
+    - `repositories/`
+      - `synthesisRepository.js` - Доступ к данным синтеза
+      - `compatibilityRepository.js` - Доступ к данным совместимости
+    - `routes/`
+      - `synthesisRoutes.js` - Маршруты синтеза
+      - `compatibilityRoutes.js` - Маршруты совместимости
+      - `critiqueRoutes.js` - Маршруты критики
+    - `clients/`
+      - `graphServiceClient.js` - Клиент сервиса графов
+      - `thesisServiceClient.js` - Клиент сервиса тезисов
+      - `claudeServiceClient.js` - Клиент сервиса Claude
+    - `utils/`
+      - `synthesisStrategies.js` - Стратегии синтеза
+      - `compatibilityAnalyzer.js` - Анализ совместимости
+    - `config/`
+      - `index.js` - Основная конфигурация
+  - `tests/` - Тесты
+    - `controllers/synthesisController.test.js`
+    - `services/synthesisService.test.js`
+    - `repositories/synthesisRepository.test.js`
+    - `utils/synthesisStrategies.test.js`
+  - `package.json` - Зависимости
+  - `Dockerfile` - Dockerfile для сервиса
+
+### 5.7. Сервис анализа названий (Name Analysis Service)
 
 - `name-analysis-service/`
   - `src/`
@@ -479,10 +712,13 @@
     - `config/`
       - `index.js` - Основная конфигурация
   - `tests/` - Тесты
+    - `controllers/nameAnalysisController.test.js`
+    - `services/nameAnalysisService.test.js`
+    - `repositories/nameAnalysisRepository.test.js`
   - `package.json` - Зависимости
   - `Dockerfile` - Dockerfile для сервиса
 
-### 4.8. Сервис определения происхождения (Origin Detection Service)
+### 5.8. Сервис определения происхождения (Origin Detection Service)
 
 - `origin-detection-service/`
   - `src/`
@@ -510,10 +746,14 @@
     - `config/`
       - `index.js` - Основная конфигурация
   - `tests/` - Тесты
+    - `controllers/originController.test.js`
+    - `services/originService.test.js`
+    - `repositories/originRepository.test.js`
+    - `utils/originAnalyzer.test.js`
   - `package.json` - Зависимости
   - `Dockerfile` - Dockerfile для сервиса
 
-### 4.9. Сервис исторической контекстуализации (Historical Context Service)
+### 5.9. Сервис исторической контекстуализации (Historical Context Service)
 
 - `historical-context-service/`
   - `src/`
@@ -548,10 +788,13 @@
     - `config/`
       - `index.js` - Основная конфигурация
   - `tests/` - Тесты
+    - `controllers/historicalContextController.test.js`
+    - `services/historicalContextService.test.js`
+    - `repositories/historicalContextRepository.test.js`
   - `package.json` - Зависимости
   - `Dockerfile` - Dockerfile для сервиса
 
-### 4.10. Сервис практического применения (Practical Application Service)
+### 5.10. Сервис практического применения (Practical Application Service)
 
 - `practical-application-service/`
   - `src/`
@@ -586,10 +829,13 @@
     - `config/`
       - `index.js` - Основная конфигурация
   - `tests/` - Тесты
+    - `controllers/practicalApplicationController.test.js`
+    - `services/practicalApplicationService.test.js`
+    - `repositories/practicalApplicationRepository.test.js`
   - `package.json` - Зависимости
   - `Dockerfile` - Dockerfile для сервиса
 
-### 4.11. Сервис диалогической интерпретации (Dialogue Service)
+### 5.11. Сервис диалогической интерпретации (Dialogue Service)
 
 - `dialogue-service/`
   - `src/`
@@ -624,10 +870,13 @@
     - `config/`
       - `index.js` - Основная конфигурация
   - `tests/` - Тесты
+    - `controllers/dialogueController.test.js`
+    - `services/dialogueService.test.js`
+    - `repositories/dialogueRepository.test.js`
   - `package.json` - Зависимости
   - `Dockerfile` - Dockerfile для сервиса
 
-### 4.12. Сервис эволюции концепций (Evolution Service)
+### 5.12. Сервис эволюции концепций (Evolution Service)
 
 - `evolution-service/`
   - `src/`
@@ -662,10 +911,13 @@
     - `config/`
       - `index.js` - Основная конфигурация
   - `tests/` - Тесты
+    - `controllers/evolutionController.test.js`
+    - `services/evolutionService.test.js`
+    - `repositories/evolutionRepository.test.js`
   - `package.json` - Зависимости
   - `Dockerfile` - Dockerfile для сервиса
 
-## 5. Общие библиотеки и утилиты
+## 6. Общие библиотеки и утилиты
 
 - `shared/`
   - `lib/` - Общие библиотеки
@@ -725,9 +977,9 @@
     - `roles.js` - Роли
     - `philosophyConstants.js` - Константы для философских понятий
 
-## 6. Базы данных
+## 7. Базы данных
 
-### 6.1. PostgreSQL
+### 7.1. PostgreSQL
 
 - `db/postgres/`
   - `migrations/` - Миграции
@@ -757,7 +1009,7 @@
     - `restore.sh` - Восстановление из резервной копии
     - `migrate.sh` - Выполнение миграций
 
-### 6.2. Neo4j
+### 7.2. Neo4j
 
 - `db/neo4j/`
   - `migrations/` - Миграции
@@ -773,7 +1025,7 @@
     - `restore.sh` - Восстановление из резервной копии
     - `init.sh` - Инициализация базы данных
 
-### 6.3. MongoDB
+### 7.3. MongoDB
 
 - `db/mongodb/`
   - `migrations/` - Миграции
@@ -795,3 +1047,53 @@
     - `backup.sh` - Создание резервной копии
     - `restore.sh` - Восстановление из резервной копии
     - `init.sh` - Инициализация базы данных
+
+## 8. Документация
+
+### 8.1. Документация по развертыванию
+- `docs/deployment/README.md` - Общая информация о развертывании
+- `docs/deployment/kubernetes.md` - Развертывание в Kubernetes
+- `docs/deployment/docker-compose.md` - Развертывание с помощью Docker Compose
+- `docs/deployment/scaling.md` - Масштабирование системы
+- `docs/deployment/monitoring.md` - Настройка мониторинга и логирования
+- `docs/deployment/backup-restore.md` - Резервное копирование и восстановление
+
+### 8.2. Документация по архитектуре
+- `docs/architecture/README.md` - Общая информация об архитектуре
+- `docs/architecture/microservices.md` - Описание микросервисов
+- `docs/architecture/communication.md` - Коммуникация между сервисами
+- `docs/architecture/databases.md` - Структура баз данных
+- `docs/architecture/caching.md` - Стратегии кэширования
+- `docs/architecture/messaging.md` - Обмен сообщениями
+
+### 8.3. Документация по API
+- `docs/api/README.md` - Общая информация об API
+- `docs/api/user-service.md` - API сервиса пользователей
+- `docs/api/concept-service.md` - API сервиса концепций
+- `docs/api/graph-service.md` - API сервиса графов
+- `docs/api/thesis-service.md` - API сервиса тезисов
+- `docs/api/synthesis-service.md` - API сервиса синтеза
+- `docs/api/claude-service.md` - API сервиса Claude
+- `docs/api/name-service.md` - API сервиса анализа названий
+- `docs/api/origin-service.md` - API сервиса определения происхождения
+- `docs/api/historical-service.md` - API сервиса исторической контекстуализации
+- `docs/api/practical-service.md` - API сервиса практического применения
+- `docs/api/dialogue-service.md` - API сервиса диалогической интерпретации
+- `docs/api/evolution-service.md` - API сервиса эволюции концепций
+
+### 8.4. Руководства для разработчиков
+- `docs/development/README.md` - Общая информация для разработчиков
+- `docs/development/setup.md` - Настройка окружения разработки
+- `docs/development/coding-standards.md` - Стандарты кодирования
+- `docs/development/testing.md` - Тестирование
+- `docs/development/debugging.md` - Отладка
+- `docs/development/contributing.md` - Руководство по вкладу в проект
+
+### 8.5. Руководства для пользователей
+- `docs/user-guides/README.md` - Общая информация для пользователей
+- `docs/user-guides/getting-started.md` - Начало работы
+- `docs/user-guides/concept-creation.md` - Создание концепций
+- `docs/user-guides/graph-editing.md` - Редактирование графов
+- `docs/user-guides/thesis-generation.md` - Генерация тезисов
+- `docs/user-guides/synthesis.md` - Синтез концепций
+- `docs/user-guides/advanced-features.md` - Продвинутые функции
