@@ -1,0 +1,117 @@
+version: '3.8'
+
+# This file contains overrides for local development
+# It will be automatically picked up by docker-compose
+
+services:
+  postgres:
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: philosophy
+      
+  neo4j:
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      NEO4J_AUTH: neo4j/password
+      # Enable APOC plugin for development
+      NEO4J_dbms_security_procedures_unrestricted: apoc.*
+      
+  mongodb:
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: mongo
+      MONGO_INITDB_ROOT_PASSWORD: mongo
+      
+  redis:
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass ""
+      
+  rabbitmq:
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: rabbit
+      RABBITMQ_DEFAULT_PASS: rabbit
+      # Enable management plugin for development UI
+      RABBITMQ_PLUGINS: rabbitmq_management
+
+  # When services are developed, they will use these development configurations
+  # user-service:
+  #   volumes:
+  #     - ./user-service:/app
+  #     - /app/node_modules
+  #   command: npm run dev
+  #   environment:
+  #     NODE_ENV: development
+  #     DEBUG: "philosophy:user-service:*"
+  #     LOG_LEVEL: debug
+
+  # concept-service:
+  #   volumes:
+  #     - ./concept-service:/app
+  #     - /app/node_modules
+  #   command: npm run dev
+  #   environment:
+  #     NODE_ENV: development
+  #     DEBUG: "philosophy:concept-service:*"
+  #     LOG_LEVEL: debug
+
+  # graph-service:
+  #   volumes:
+  #     - ./graph-service:/app
+  #     - /app/node_modules
+  #   command: npm run dev
+  #   environment:
+  #     NODE_ENV: development
+  #     DEBUG: "philosophy:graph-service:*"
+  #     LOG_LEVEL: debug
+
+  # thesis-service:
+  #   volumes:
+  #     - ./thesis-service:/app
+  #     - /app/node_modules
+  #   command: npm run dev
+  #   environment:
+  #     NODE_ENV: development
+  #     DEBUG: "philosophy:thesis-service:*"
+  #     LOG_LEVEL: debug
+
+  # claude-service:
+  #   volumes:
+  #     - ./claude-service:/app
+  #     - /app/node_modules
+  #   command: npm run dev
+  #   environment:
+  #     NODE_ENV: development
+  #     DEBUG: "philosophy:claude-service:*"
+  #     LOG_LEVEL: debug
+  #     # Use mock API for development to avoid API costs
+  #     USE_MOCK_CLAUDE: "true"
+
+  # api-gateway:
+  #   volumes:
+  #     - ./api-gateway:/app
+  #     - /app/node_modules
+  #   command: npm run dev
+  #   environment:
+  #     NODE_ENV: development
+  #     DEBUG: "philosophy:api-gateway:*"
+  #     LOG_LEVEL: debug
+
+  # frontend:
+  #   volumes:
+  #     - ./frontend:/app
+  #     - /app/node_modules
+  #   command: npm start
+  #   environment:
+  #     NODE_ENV: development
+  #     REACT_APP_API_URL: http://localhost:3000
+  #     REACT_APP_DEBUG: "true"

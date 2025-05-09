@@ -1,0 +1,330 @@
+version: '3.8'
+
+services:
+  # Database Services
+  postgres:
+    image: postgres:14
+    container_name: philosophy-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: philosophy
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init/postgres:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - philosophy-network
+
+  neo4j:
+    image: neo4j:4.4
+    container_name: philosophy-neo4j
+    environment:
+      NEO4J_AUTH: neo4j/password
+      NEO4J_apoc_export_file_enabled: true
+      NEO4J_apoc_import_file_enabled: true
+      NEO4J_apoc_import_file_use__neo4j__config: true
+    ports:
+      - "7474:7474"  # HTTP
+      - "7687:7687"  # Bolt
+    volumes:
+      - neo4j-data:/data
+      - neo4j-logs:/logs
+      - neo4j-import:/var/lib/neo4j/import
+      - neo4j-plugins:/plugins
+      - ./init/neo4j:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "password", "MATCH () RETURN count(*) as count"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - philosophy-network
+
+  mongodb:
+    image: mongo:5.0
+    container_name: philosophy-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: mongo
+      MONGO_INITDB_ROOT_PASSWORD: mongo
+      MONGO_INITDB_DATABASE: philosophy
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data/db
+      - ./init/mongo:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongo localhost:27017/philosophy --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - philosophy-network
+
+  # Cache and Message Queue
+  redis:
+    image: redis:6.2-alpine
+    container_name: philosophy-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - philosophy-network
+
+  rabbitmq:
+    image: rabbitmq:3.9-management
+    container_name: philosophy-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: rabbit
+      RABBITMQ_DEFAULT_PASS: rabbit
+    ports:
+      - "5672:5672"    # AMQP
+      - "15672:15672"  # Management UI
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - philosophy-network
+
+  # Core Services
+  # These services will be uncommented and configured as they are developed
+  
+  # user-service:
+  #   build:
+  #     context: ./user-service
+  #     dockerfile: Dockerfile.dev
+  #   container_name: philosophy-user-service
+  #   environment:
+  #     NODE_ENV: development
+  #     PORT: 3001
+  #     DB_HOST: postgres
+  #     DB_PORT: 5432
+  #     DB_USER: postgres
+  #     DB_PASSWORD: postgres
+  #     DB_NAME: philosophy
+  #     REDIS_HOST: redis
+  #     REDIS_PORT: 6379
+  #     JWT_SECRET: secret
+  #   ports:
+  #     - "3001:3001"
+  #   volumes:
+  #     - ./user-service:/app
+  #     - /app/node_modules
+  #   depends_on:
+  #     - postgres
+  #     - redis
+  #   networks:
+  #     - philosophy-network
+
+  # concept-service:
+  #   build:
+  #     context: ./concept-service
+  #     dockerfile: Dockerfile.dev
+  #   container_name: philosophy-concept-service
+  #   environment:
+  #     NODE_ENV: development
+  #     PORT: 3002
+  #     DB_HOST: postgres
+  #     DB_PORT: 5432
+  #     DB_USER: postgres
+  #     DB_PASSWORD: postgres
+  #     DB_NAME: philosophy
+  #     REDIS_HOST: redis
+  #     REDIS_PORT: 6379
+  #   ports:
+  #     - "3002:3002"
+  #   volumes:
+  #     - ./concept-service:/app
+  #     - /app/node_modules
+  #   depends_on:
+  #     - postgres
+  #     - redis
+  #   networks:
+  #     - philosophy-network
+
+  # graph-service:
+  #   build:
+  #     context: ./graph-service
+  #     dockerfile: Dockerfile.dev
+  #   container_name: philosophy-graph-service
+  #   environment:
+  #     NODE_ENV: development
+  #     PORT: 3003
+  #     NEO4J_URI: bolt://neo4j:7687
+  #     NEO4J_USER: neo4j
+  #     NEO4J_PASSWORD: password
+  #     REDIS_HOST: redis
+  #     REDIS_PORT: 6379
+  #   ports:
+  #     - "3003:3003"
+  #   volumes:
+  #     - ./graph-service:/app
+  #     - /app/node_modules
+  #   depends_on:
+  #     - neo4j
+  #     - redis
+  #   networks:
+  #     - philosophy-network
+
+  # thesis-service:
+  #   build:
+  #     context: ./thesis-service
+  #     dockerfile: Dockerfile.dev
+  #   container_name: philosophy-thesis-service
+  #   environment:
+  #     NODE_ENV: development
+  #     PORT: 3004
+  #     MONGODB_URI: mongodb://mongo:mongo@mongodb:27017/philosophy
+  #     REDIS_HOST: redis
+  #     REDIS_PORT: 6379
+  #   ports:
+  #     - "3004:3004"
+  #   volumes:
+  #     - ./thesis-service:/app
+  #     - /app/node_modules
+  #   depends_on:
+  #     - mongodb
+  #     - redis
+  #   networks:
+  #     - philosophy-network
+
+  # claude-service:
+  #   build:
+  #     context: ./claude-service
+  #     dockerfile: Dockerfile.dev
+  #   container_name: philosophy-claude-service
+  #   environment:
+  #     NODE_ENV: development
+  #     PORT: 3005
+  #     CLAUDE_API_KEY: your-claude-api-key
+  #     RABBITMQ_URI: amqp://rabbit:rabbit@rabbitmq:5672
+  #     DB_HOST: postgres
+  #     DB_PORT: 5432
+  #     DB_USER: postgres
+  #     DB_PASSWORD: postgres
+  #     DB_NAME: philosophy
+  #   ports:
+  #     - "3005:3005"
+  #   volumes:
+  #     - ./claude-service:/app
+  #     - /app/node_modules
+  #   depends_on:
+  #     - postgres
+  #     - rabbitmq
+  #   networks:
+  #     - philosophy-network
+
+  # api-gateway:
+  #   build:
+  #     context: ./api-gateway
+  #     dockerfile: Dockerfile.dev
+  #   container_name: philosophy-api-gateway
+  #   environment:
+  #     NODE_ENV: development
+  #     PORT: 3000
+  #     USER_SERVICE_URL: http://user-service:3001
+  #     CONCEPT_SERVICE_URL: http://concept-service:3002
+  #     GRAPH_SERVICE_URL: http://graph-service:3003
+  #     THESIS_SERVICE_URL: http://thesis-service:3004
+  #     CLAUDE_SERVICE_URL: http://claude-service:3005
+  #     JWT_SECRET: secret
+  #   ports:
+  #     - "3000:3000"
+  #   volumes:
+  #     - ./api-gateway:/app
+  #     - /app/node_modules
+  #   depends_on:
+  #     - user-service
+  #     - concept-service
+  #     - graph-service
+  #     - thesis-service
+  #     - claude-service
+  #   networks:
+  #     - philosophy-network
+
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile.dev
+  #   container_name: philosophy-frontend
+  #   environment:
+  #     NODE_ENV: development
+  #     PORT: 8080
+  #     REACT_APP_API_URL: http://localhost:3000
+  #   ports:
+  #     - "8080:8080"
+  #   volumes:
+  #     - ./frontend:/app
+  #     - /app/node_modules
+  #   depends_on:
+  #     - api-gateway
+  #   networks:
+  #     - philosophy-network
+
+  # Monitoring Stack
+  # prometheus:
+  #   image: prom/prometheus:v2.34.0
+  #   container_name: philosophy-prometheus
+  #   volumes:
+  #     - ./monitoring/prometheus:/etc/prometheus
+  #     - prometheus-data:/prometheus
+  #   command:
+  #     - '--config.file=/etc/prometheus/prometheus.yml'
+  #     - '--storage.tsdb.path=/prometheus'
+  #     - '--web.console.libraries=/etc/prometheus/console_libraries'
+  #     - '--web.console.templates=/etc/prometheus/consoles'
+  #   ports:
+  #     - "9090:9090"
+  #   networks:
+  #     - philosophy-network
+
+  # grafana:
+  #   image: grafana/grafana:8.4.3
+  #   container_name: philosophy-grafana
+  #   volumes:
+  #     - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+  #     - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+  #     - grafana-data:/var/lib/grafana
+  #   environment:
+  #     - GF_SECURITY_ADMIN_USER=admin
+  #     - GF_SECURITY_ADMIN_PASSWORD=admin
+  #     - GF_USERS_ALLOW_SIGN_UP=false
+  #   ports:
+  #     - "3001:3000"
+  #   depends_on:
+  #     - prometheus
+  #   networks:
+  #     - philosophy-network
+
+networks:
+  philosophy-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  neo4j-data:
+  neo4j-logs:
+  neo4j-import:
+  neo4j-plugins:
+  mongodb-data:
+  redis-data:
+  rabbitmq-data:
+  prometheus-data:
+  grafana-data:

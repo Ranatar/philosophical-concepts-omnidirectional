@@ -1,0 +1,18 @@
+# Development Dockerfile for Node.js microservices
+FROM node:16-alpine
+
+# Set working directory
+WORKDIR /app
+
+# Install dependencies
+COPY package*.json ./
+RUN npm install
+
+# Copy source files
+COPY . .
+
+# Expose port (to be overridden in docker-compose)
+EXPOSE 3000
+
+# Start in development mode with hot reloading
+CMD ["npm", "run", "dev"]

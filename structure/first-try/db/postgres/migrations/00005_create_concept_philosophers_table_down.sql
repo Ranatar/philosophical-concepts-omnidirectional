@@ -1,2 +1,0 @@
-DROP TRIGGER IF EXISTS update_concept_philosophers_updated_at ON concept_philosophers;
-DROP TABLE IF EXISTS concept_philosophers

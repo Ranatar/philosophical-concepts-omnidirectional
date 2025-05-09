@@ -1,0 +1,37 @@
+# Production Dockerfile for Node.js microservices
+FROM node:16-alpine AS builder
+
+# Set working directory
+WORKDIR /app
+
+# Install dependencies
+COPY package*.json ./
+RUN npm ci
+
+# Copy source files
+COPY . .
+
+# Build if needed (e.g., TypeScript)
+RUN npm run build
+
+# Production image
+FROM node:16-alpine
+
+# Set working directory
+WORKDIR /app
+
+# Set node environment to production
+ENV NODE_ENV=production
+
+# Copy package files and install production dependencies
+COPY package*.json ./
+RUN npm ci --production
+
+# Copy built files from builder stage
+COPY --from=builder /app/dist ./dist
+
+# Expose port (to be overridden in docker-compose)
+EXPOSE 3000
+
+# Start in production mode
+CMD ["npm", "start"]
