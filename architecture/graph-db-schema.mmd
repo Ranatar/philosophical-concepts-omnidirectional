@@ -1,0 +1,53 @@
+graph LR
+    %% Node types with their properties
+    subgraph "Node Types"
+        direction TB
+        Concept["<b>Concept</b><br/>- concept_id: UUID<br/>- name: string"]
+        Category["<b>Category</b><br/>- category_id: UUID<br/>- concept_id: UUID<br/>- name: string<br/>- definition: text<br/>- centrality: float<br/>- certainty: float<br/>- historical_significance: float<br/>- traditions: array<br/>- philosophers: array"]
+    end
+    
+    %% Relationships with properties
+    subgraph "Relationship Types"
+        direction TB
+        INCLUDES["<b>INCLUDES</b><br/>Direction: Concept → Category"]
+        RELATED_TO["<b>RELATED_TO</b><br/>- relationship_id: UUID<br/>- type: string<br/>- direction: string<br/>- strength: float<br/>- certainty: float<br/>- source: string<br/>- traditions: array<br/>- philosophers: array"]
+    end
+    
+    %% Actual graph structure
+    subgraph "Graph Structure"
+        direction TB
+        Concept1[Concept] --> |INCLUDES| Category1[Category]
+        Concept1 --> |INCLUDES| Category2[Category]
+        Concept1 --> |INCLUDES| Category3[Category]
+        
+        Category1 --> |RELATED_TO| Category2
+        Category2 --> |RELATED_TO| Category3
+        Category1 --> |RELATED_TO| Category3
+    end
+    
+    %% Relationship types enumeration
+    subgraph "Relationship Type Values"
+        direction TB
+        RT["<b>type</b> can be:<br/>• hierarchical<br/>• causal<br/>• dialectical<br/>• correlative<br/>• analogical<br/>• oppositional<br/>• metaphorical<br/>• functional"]
+    end
+    
+    %% Relationship directions enumeration
+    subgraph "Relationship Direction Values"
+        direction TB
+        RD["<b>direction</b> can be:<br/>• unidirectional<br/>• bidirectional"]
+    end
+    
+    %% Indexes and constraints
+    subgraph "Indexes & Constraints"
+        direction TB
+        INDEXES["<b>Indexes:</b><br/>- Concept(concept_id)<br/>- Category(category_id)<br/>- Category(concept_id)<br/>- Relationship(relationship_id)"]
+        CONSTRAINTS["<b>Constraints:</b><br/>- UNIQUE Concept.concept_id<br/>- UNIQUE Category.category_id<br/>- UNIQUE Relationship.relationship_id"]
+    end
+    
+    %% Example queries
+    subgraph "Example Cypher Queries"
+        direction TB
+        Q1["<b>Get all categories of a concept:</b><br/>MATCH (c:Concept {concept_id: $id})-[:INCLUDES]->(cat:Category)<br/>RETURN cat"]
+        Q2["<b>Get categories and their relationships:</b><br/>MATCH (c:Concept {concept_id: $id})-[:INCLUDES]->(cat:Category)<br/>OPTIONAL MATCH (cat)-[r:RELATED_TO]-(other:Category)<br/>RETURN cat, r, other"]
+        Q3["<b>Find dialectical relationships:</b><br/>MATCH (cat1:Category)-[r:RELATED_TO {type: 'dialectical'}]-(cat2:Category)<br/>RETURN cat1, r, cat2"]
+    end
