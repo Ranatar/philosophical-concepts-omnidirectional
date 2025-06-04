@@ -1,0 +1,51 @@
+flowchart TB
+    subgraph "Источники новых элементов"
+        THESIS_TO_GRAPH[Генерация из тезисов]
+        SYNTHESIS[Синтез концепций]
+        EVOLUTION[Эволюция концепций]
+    end
+    
+    subgraph "Процесс валидации"
+        RECEIVE[Получение графа от Claude]
+        CHECK_DB[(Проверка в БД)]
+        IDENTIFY_NEW[Выявление новых]
+        SAVE_TEMP[(Сохранение во временное хранилище)]
+    end
+    
+    subgraph "Процесс одобрения"
+        SHOW_USER[Показ пользователю]
+        EDIT[Редактирование определений]
+        APPROVE{Одобрить?}
+        ADD_TO_DB[(Добавить в БД шаблонов)]
+        REJECT[Отклонить]
+    end
+    
+    subgraph "Базы данных"
+        CATEGORY_TEMPLATES[(category_templates)]
+        REL_TYPE_TEMPLATES[(relationship_type_templates)]
+        GENERATED_ELEMENTS[(GeneratedElements)]
+    end
+    
+    THESIS_TO_GRAPH --> RECEIVE
+    SYNTHESIS --> RECEIVE
+    EVOLUTION --> RECEIVE
+    
+    RECEIVE --> CHECK_DB
+    CHECK_DB --> CATEGORY_TEMPLATES
+    CHECK_DB --> REL_TYPE_TEMPLATES
+    CHECK_DB --> IDENTIFY_NEW
+    
+    IDENTIFY_NEW --> SAVE_TEMP
+    SAVE_TEMP --> GENERATED_ELEMENTS
+    SAVE_TEMP --> SHOW_USER
+    
+    SHOW_USER --> EDIT
+    EDIT --> APPROVE
+    APPROVE -->|Да| ADD_TO_DB
+    APPROVE -->|Нет| REJECT
+    
+    ADD_TO_DB --> CATEGORY_TEMPLATES
+    ADD_TO_DB --> REL_TYPE_TEMPLATES
+    
+    style IDENTIFY_NEW fill:#f9f,stroke:#333,stroke-width:4px
+    style ADD_TO_DB fill:#9f9,stroke:#333,stroke-width:2px

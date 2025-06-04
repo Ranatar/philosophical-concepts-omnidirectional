@@ -121,6 +121,8 @@
 - `db/postgres/migrations/00014_create_practical_applications_table.sql`
 - `db/postgres/migrations/00015_create_dialogue_interpretations_table.sql`
 - `db/postgres/migrations/00016_create_dialogue_participants_table.sql`
+- `db/postgres/migrations/00017_create_category_templates_table.sql`
+- `db/postgres/migrations/00018_create_relationship_type_templates_table.sql`
 
 ### PostgreSQL скрипты
 - `db/postgres/scripts/backup.sh` - Скрипт резервного копирования
@@ -143,6 +145,7 @@
 - `db/mongodb/migrations/00001_create_collections.js`
 - `db/mongodb/migrations/00002_create_indexes.js`
 - `db/mongodb/migrations/00003_add_validations.js`
+- `db/mongodb/schemas/generatedElements.js`
 - `db/mongodb/schemas/theses.js`
 - `db/mongodb/schemas/categoryDescriptions.js`
 - `db/mongodb/schemas/relationshipDescriptions.js`
@@ -162,6 +165,8 @@
 - `db/postgres/seeds/00002_traditions.sql`
 - `db/postgres/seeds/00003_test_users.sql`
 - `db/postgres/seeds/00004_test_concepts.sql`
+- `db/postgres/seeds/00005_system_categories.sql`
+- `db/postgres/seeds/00006_system_relationship_types.sql`
 - `db/neo4j/seeds/00001_test_graphs.cypher`
 - `db/mongodb/seeds/00001_test_theses.js`
 
@@ -318,6 +323,7 @@
 - `graph-service/src/services/graphService.js` - Бизнес-логика графов
 - `graph-service/src/services/categoryService.js` - Управление категориями
 - `graph-service/src/services/relationshipService.js` - Управление связями
+- `graph-service/src/services/elementValidationService.js` - Валидация и обработка новых элементов
 - `graph-service/src/services/characteristicService.js` - Управление количественными характеристиками
 - `graph-service/src/services/validationService.js` - Валидация графов
 - `graph-service/src/services/enrichmentService.js` - Обогащение графов
@@ -332,6 +338,9 @@
 - `graph-service/src/repositories/graphRepository.js` - Доступ к данным графов
 - `graph-service/src/repositories/categoryRepository.js` - Доступ к данным категорий
 - `graph-service/src/repositories/relationshipRepository.js` - Доступ к данным связей
+- `graph-service/src/repositories/categoryTemplateRepository.js` - Доступ к шаблонам категорий
+- `graph-service/src/repositories/relationshipTypeRepository.js` - Доступ к типам связей
+- `graph-service/src/repositories/generatedElementsRepository.js` - Доступ к сгенерированным элементам
 
 ### Маршруты
 - `graph-service/src/routes/graphRoutes.js` - Маршруты графов
@@ -356,6 +365,7 @@
 - `graph-service/tests/controllers/graphController.test.js`
 - `graph-service/tests/services/graphService.test.js`
 - `graph-service/tests/repositories/graphRepository.test.js`
+- `graph-service/tests/services/elementValidationService.test.js`
 
 ## Сервис тезисов (Thesis Service)
 
@@ -503,6 +513,7 @@
 - `frontend/src/components/conceptGraph/GraphControls.tsx`
 - `frontend/src/components/conceptGraph/NodeDetails.tsx`
 - `frontend/src/components/conceptGraph/EdgeDetails.tsx`
+- `frontend/src/components/conceptGraph/NewElementsApproval.tsx`
 
 ### Компоненты для работы с тезисами
 - `frontend/src/components/theses/ThesisList.tsx`

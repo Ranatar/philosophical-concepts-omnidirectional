@@ -114,6 +114,28 @@
         { "key": { "created_at": -1 }, "name": "created_at_index" }
       ]
     },
+
+    "GeneratedElements": {
+      "schema": {
+        "element_id": { "bsonType": "objectId", "description": "Уникальный идентификатор сгенерированного элемента" },
+        "concept_id": { "bsonType": "string", "description": "UUID связи с Concepts в PostgreSQL" },
+        "generation_context": { "bsonType": "string", "description": "Контекст генерации (thesis_to_graph, synthesis, evolution)" },
+        "element_type": { "bsonType": "string", "description": "Тип элемента (category, relationship_type)" },
+        "element_name": { "bsonType": "string", "description": "Название элемента" },
+        "element_definition": { "bsonType": "string", "description": "Определение/описание элемента" },
+        "is_new": { "bsonType": "bool", "description": "Флаг нового элемента, отсутствующего в базе" },
+        "is_approved": { "bsonType": "bool", "description": "Флаг одобрения для добавления в базу" },
+        "claude_generation_id": { "bsonType": "string", "description": "UUID связи с ClaudeInteraction в PostgreSQL" },
+        "created_at": { "bsonType": "date", "description": "Дата создания" },
+        "approved_at": { "bsonType": "date", "description": "Дата одобрения" },
+        "approved_by": { "bsonType": "string", "description": "UUID пользователя, одобрившего элемент" }
+      },
+      "indexes": [
+        { "key": { "concept_id": 1 }, "name": "concept_id_index" },
+        { "key": { "is_new": 1, "is_approved": 1 }, "name": "new_approved_index" },
+        { "key": { "element_type": 1 }, "name": "element_type_index" }
+      ]
+    },
     
     "ConceptAnalyses": {
       "schema": {

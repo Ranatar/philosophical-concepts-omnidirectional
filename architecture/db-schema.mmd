@@ -32,6 +32,43 @@ flowchart TD
     traditions (array)
     philosophers (array)"]
     Category2 --> |has properties| RelProps
+
+    %% Новые узлы для шаблонов
+    CategoryTemplate["Шаблон категории
+    template_id
+    name
+    default_definition
+    is_system"]
+    
+    RelationshipTypeTemplate["Шаблон типа связи
+    template_id
+    type_name
+    default_direction
+    is_system"]
+    
+    %% Новая коллекция MongoDB
+    GeneratedElements["Сгенерированные элементы
+    element_id
+    concept_id
+    element_type
+    element_name
+    is_new
+    is_approved"]
+    
+    %% Связи
+    CategoryTemplate --> |DEFINES| Category1
+    CategoryTemplate --> |DEFINES| Category2
+    RelationshipTypeTemplate --> |DEFINES| RelProps
+    
+    Concept --> |GENERATES| GeneratedElements
+    GeneratedElements --> |BECOMES| CategoryTemplate
+    GeneratedElements --> |BECOMES| RelationshipTypeTemplate
+    
+    %% Связи с пользователями для одобрения
+    User["Пользователь
+    user_id"] --> |APPROVES| GeneratedElements
+    User --> |CREATES| CategoryTemplate
+    User --> |CREATES| RelationshipTypeTemplate
     
     %% Тезисы и их взаимодействие с категориями
     Thesis["Тезисы

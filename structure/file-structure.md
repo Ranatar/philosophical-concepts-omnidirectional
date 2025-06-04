@@ -193,6 +193,7 @@
         - `ConceptGraphVisualization.tsx` - Визуализация графа
         - `CategoryManager.tsx` - Управление категориями
         - `RelationshipManager.tsx` - Управление связями
+        - `NewElementsApproval.tsx` - Одобрение новых элементов
         - `GraphControls.tsx` - Элементы управления графом
         - `NodeDetails.tsx` - Детали узла
         - `EdgeDetails.tsx` - Детали связи
@@ -498,6 +499,7 @@
       - `graphService.js` - Бизнес-логика графов
       - `categoryService.js` - Управление категориями
       - `relationshipService.js` - Управление связями
+      - `elementValidationService.js` - Валидация новых элементов
       - `characteristicService.js` - Управление количественными характеристиками
       - `validationService.js` - Валидация графов
       - `enrichmentService.js` - Обогащение графов
@@ -529,6 +531,7 @@
     - `controllers/graphController.test.js`
     - `services/graphService.test.js`
     - `repositories/graphRepository.test.js`
+    - `elementValidationService.test.js`
   - `package.json` - Зависимости
   - `Dockerfile` - Dockerfile для сервиса
 
@@ -999,11 +1002,15 @@
     - `00014_create_practical_applications_table.sql`
     - `00015_create_dialogue_interpretations_table.sql`
     - `00016_create_dialogue_participants_table.sql`
+    - `00017_create_category_templates_table.sql`
+    - `00018_create_relationship_type_templates_table.sql`
   - `seeds/` - Начальные данные
     - `00001_philosophers.sql`
     - `00002_traditions.sql`
     - `00003_test_users.sql`
     - `00004_test_concepts.sql`
+    - `00005_system_categories.sql`
+    - `00006_system_relationship_types.sql`
   - `scripts/` - Скрипты для работы с БД
     - `backup.sh` - Создание резервной копии
     - `restore.sh` - Восстановление из резервной копии
@@ -1036,6 +1043,7 @@
     - `theses.js` - Схема тезисов
     - `categoryDescriptions.js` - Схема описаний категорий
     - `relationshipDescriptions.js` - Схема описаний связей
+    - `generatedElements.js` - Схема описаний новых элементов
     - `conceptAnalyses.js` - Схема анализов концепций
     - `dialogues.js` - Схема диалогов
     - `historicalContexts.js` - Схема исторических контекстов

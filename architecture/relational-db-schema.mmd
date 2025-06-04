@@ -172,3 +172,28 @@ erDiagram
         string role
         json key_theses
     }
+
+    CategoryTemplates ||--o{ Category : defines
+    RelationshipTypeTemplates ||--o{ Relationship : defines
+    Users ||--o{ CategoryTemplates : creates
+    Users ||--o{ RelationshipTypeTemplates : creates
+    
+    CategoryTemplates {
+        uuid template_id PK
+        string name
+        text description
+        text default_definition
+        datetime created_at
+        uuid created_by FK
+        boolean is_system
+    }
+    
+    RelationshipTypeTemplates {
+        uuid template_id PK
+        string type_name
+        text description
+        string default_direction
+        datetime created_at
+        uuid created_by FK
+        boolean is_system
+    }

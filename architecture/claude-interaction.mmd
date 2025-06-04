@@ -70,3 +70,57 @@ sequenceDiagram
     OS->>DB: Сохранение результатов
     OS->>UI: Результаты
     UI->>U: Отображение происхождения
+
+    sequenceDiagram
+    participant GS as Сервис графов
+    participant CS as Сервис Claude
+    participant VS as Сервис валидации элементов
+    participant RDB as PostgreSQL
+    participant DDB as MongoDB
+    participant Claude as Claude API
+    
+    Note over GS,Claude: Процесс генерации графа с валидацией
+    
+    GS->>CS: Запрос на генерацию графа
+    CS->>Claude: Форматированный запрос
+    Claude->>CS: Граф с новыми элементами
+    CS->>GS: Обработанный граф
+    
+    GS->>VS: Валидация элементов графа
+    
+    par Проверка категорий
+        VS->>RDB: SELECT FROM category_templates
+        RDB->>VS: Существующие категории
+    and Проверка типов связей
+        VS->>RDB: SELECT FROM relationship_type_templates
+        RDB->>VS: Существующие типы
+    end
+    
+    VS->>VS: Сравнение и выявление новых
+    
+    alt Есть новые элементы
+        VS->>DDB: INSERT INTO GeneratedElements
+        DDB->>VS: Подтверждение
+        VS->>GS: ValidationResult с новыми элементами
+        GS->>UI: requiresApproval: true
+        
+        Note over UI,VS: Процесс одобрения
+        UI->>GS: approveNewElements(elementIds)
+        GS->>VS: Одобрить элементы
+        
+        par Создание категорий
+            VS->>RDB: INSERT INTO category_templates
+            RDB->>VS: OK
+        and Создание типов связей
+            VS->>RDB: INSERT INTO relationship_type_templates  
+            RDB->>VS: OK
+        and Обновление статуса
+            VS->>DDB: UPDATE GeneratedElements
+            DDB->>VS: OK
+        end
+        
+        VS->>GS: Элементы одобрены
+    else Все элементы существуют
+        VS->>GS: ValidationResult без новых
+        GS->>UI: requiresApproval: false
+    end
