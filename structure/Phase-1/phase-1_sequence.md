@@ -151,7 +151,7 @@
 ### MongoDB миграции и схемы
 99. `db/mongodb/migrations/00001_create_collections.js`
 100. `db/mongodb/migrations/00002_create_indexes.js`
-191. `db/mongodb/migrations/00003_add_validations.js`
+101. `db/mongodb/migrations/00003_add_validations.js`
 102. `db/mongodb/schemas/theses.js`
 103. `db/mongodb/schemas/categoryDescriptions.js`
 104. `db/mongodb/schemas/relationshipDescriptions.js`
