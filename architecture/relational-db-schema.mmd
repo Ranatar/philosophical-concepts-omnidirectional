@@ -23,6 +23,11 @@ erDiagram
         datetime created_at
         datetime last_login
         json user_settings
+        string claude_api_key_encrypted
+        boolean use_own_api_key
+        datetime api_key_added_at
+        datetime api_key_last_used
+}
     }
     
     Concepts {
@@ -197,3 +202,23 @@ erDiagram
         uuid created_by FK
         boolean is_system
     }
+
+    SharedApiKeys {
+    uuid share_id PK
+    uuid owner_id FK -> Users
+    uuid shared_with_id FK -> Users
+    datetime shared_at
+    datetime expires_at
+    boolean is_active
+    json permissions
+}
+
+ApiKeyUsage {
+    uuid usage_id PK
+    uuid user_id FK -> Users
+    datetime usage_date
+    string operation_type
+    int tokens_used
+    float estimated_cost
+    uuid concept_id FK -> Concepts
+}

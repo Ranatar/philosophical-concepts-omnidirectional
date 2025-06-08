@@ -124,3 +124,38 @@ sequenceDiagram
         VS->>GS: ValidationResult без новых
         GS->>UI: requiresApproval: false
     end
+
+    Note over U,DB: Управление ключами API Claude
+
+    U->>UI: Переход в настройки API
+    UI->>US: Запрос текущего статуса ключа
+    US->>DB: SELECT FROM users WHERE user_id = ?
+    DB->>US: Данные о ключе (зашифрованные)
+    US->>UI: Статус ключа (есть/нет)
+    UI->>U: Отображение статуса
+
+    U->>UI: Ввод нового ключа API
+    UI->>US: POST /users/{id}/api-key
+    US->>US: Шифрование ключа
+    US->>DB: UPDATE users SET claude_api_key_encrypted = ?
+    DB->>US: Подтверждение
+    US->>UI: Успешное сохранение
+    UI->>U: Уведомление об успехе
+
+    Note over CS,Claude: Использование пользовательского ключа
+
+    CS->>US: Запрос ключа API для user_id
+    US->>DB: SELECT claude_api_key_encrypted FROM users
+    DB->>US: Зашифрованный ключ
+    US->>US: Дешифрование ключа
+    US->>CS: Ключ API (или null)
+
+    alt Пользовательский ключ доступен
+        CS->>Claude: Запрос с пользовательским ключом
+        Claude->>CS: Ответ
+        CS->>US: Записать использование
+        US->>DB: INSERT INTO api_key_usage
+    else Пользовательский ключ недоступен
+        CS->>Claude: Запрос с системным ключом
+        Claude->>CS: Ответ
+    end

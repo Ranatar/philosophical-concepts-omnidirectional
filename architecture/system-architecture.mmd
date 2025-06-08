@@ -13,6 +13,7 @@ flowchart TB
 
     subgraph "Микросервисы"
         USER_SERVICE[Сервис пользователей]
+        API_KEY_SERVICE[Сервис управления ключами API]
         CONCEPT_SERVICE[Сервис концепций]
         GRAPH_SERVICE[Сервис графов]
         ELEMENT_VALIDATION_SERVICE[Сервис валидации элементов]
@@ -47,6 +48,11 @@ flowchart TB
     VIS --> GATEWAY
     FORMS --> GATEWAY
     BIDIR --> GATEWAY
+
+    USER_SERVICE --> API_KEY_SERVICE
+    CLAUDE_SERVICE --> API_KEY_SERVICE
+    API_KEY_SERVICE --> RELATIONAL_DB
+    API_KEY_SERVICE -.-> CACHE
 
     GATEWAY --> AUTH
     GATEWAY --> USER_SERVICE

@@ -127,6 +127,7 @@
     - `monitoring/grafana/dashboards/overview.json` - Дашборд общего обзора
     - `monitoring/grafana/dashboards/frontend.json` - Дашборд фронтенда
     - `monitoring/grafana/dashboards/api-gateway.json` - Дашборд API Gateway
+    - `monitoring/grafana/dashboards/api-keys.json` - Дашборд ключей
     - `monitoring/grafana/dashboards/services.json` - Дашборд сервисов
     - `monitoring/grafana/dashboards/databases.json` - Дашборд баз данных
     - `monitoring/grafana/dashboards/rabbitmq.json` - Дашборд RabbitMQ
@@ -189,6 +190,12 @@
         - `Sidebar.tsx`
         - `Footer.tsx`
         - `MainLayout.tsx`
+      - `apiKey/` - Компоненты для работы с ключами
+        - `ApiKeyManager.tsx` - Управление ключом API
+        - `ApiKeyInput.tsx` - Форма ввода ключа
+        - `ApiKeyUsageStats.tsx` - Статистика использования
+        - `SharedKeysManager.tsx` - Управление общими ключами
+        - `ApiKeyShareDialog.tsx` - Диалог для совместного использования
       - `conceptGraph/` - Компоненты для работы с графом
         - `ConceptGraphVisualization.tsx` - Визуализация графа
         - `CategoryManager.tsx` - Управление категориями
@@ -248,6 +255,8 @@
     - `pages/` - Страницы приложения
       - `home/` 
         - `HomePage.tsx`
+      - `settings/`
+        - `ApiKeySettingsPage.tsx`
       - `concepts/`
         - `ConceptsListPage.tsx`
         - `ConceptEditorPage.tsx`
@@ -284,6 +293,7 @@
       - `EvolutionContext.tsx`
     - `hooks/` - Пользовательские хуки
       - `useApi.ts` - Хук для работы с API
+      - `useApiKey.ts` - Хук для работы с ключами API
       - `useAuth.ts` - Хук для аутентификации
       - `useGraph.ts` - Хук для работы с графом
       - `useThesis.ts` - Хук для работы с тезисами
@@ -297,6 +307,7 @@
       - `useEvolution.ts` - Хук для работы с эволюцией
     - `services/` - Сервисы для работы с API
       - `api.ts` - Базовый API-клиент
+      - `apiKeyService.ts` - Сервис для управления ключами API
       - `authService.ts` - Сервис аутентификации
       - `conceptService.ts` - Сервис концепций
       - `graphService.ts` - Сервис графов
@@ -347,11 +358,15 @@
   - `tests/` - Тесты
     - `components/` - Тесты компонентов
       - `common/Button.test.tsx`
+      - `apiKey/ApiKeyManager.test.tsx`
       - `synthesis/ConceptSelector.test.tsx`
       - `names/NameAnalyzer.test.tsx`
-    - `hooks/useAuth.test.ts`
+    - `hooks/`
+      - `useAuth.test.ts`
+      - `useApiKey.test.ts`
     - `services/`
       - `api.test.ts`
+      - `apiKeyService.test.ts`
       - `synthesisService.test.ts`
       - `nameService.test.ts`
       - `originService.test.ts`
@@ -407,6 +422,9 @@
       - `authController.js` - Аутентификация
       - `profileController.js` - Управление профилями
       - `activityController.js` - Управление активностью
+      - `apiKeyController.js` - Управление ключами
+      - `apiKeyService.js` - Бизнес-логика ключей
+      - `encryptionService.js` - Бизнес-логика шифрования
     - `services/`
       - `userService.js` - Бизнес-логика пользователей
       - `authService.js` - Бизнес-логика аутентификации
@@ -438,6 +456,9 @@
     - `services/userService.test.js`
     - `repositories/userRepository.test.js`
     - `routes/userRoutes.test.js`
+    - `apiKeyController.test.js`
+    - `apiKeyService.test.js`
+    - `encryptionService.test.js`
   - `package.json` - Зависимости
   - `Dockerfile` - Dockerfile для сервиса
 
@@ -596,6 +617,8 @@
       - `responseProcessorService.js` - Обработка ответов
       - `taskQueueService.js` - Управление очередью задач
       - `templateService.js` - Управление шаблонами
+      - `apiKeyResolverService.js` - Управление разрешениями
+      - `usageTrackingService.js` - Управление отслеживанием
     - `models/`
       - `interactionModel.js` - Модель взаимодействия
       - `taskModel.js` - Модель задачи
@@ -643,6 +666,8 @@
     - `controllers/claudeController.test.js`
     - `services/claudeService.test.js`
     - `formatters/formatters.test.js`
+    - `apiKeyResolverService.test.js`
+    - `usageTrackingService.test.js`
   - `package.json` - Зависимости
   - `Dockerfile` - Dockerfile для сервиса
 
@@ -944,6 +969,9 @@
     - `auth/` - Аутентификация
       - `jwtHelper.js` - Утилиты для работы с JWT
       - `roleHelper.js` - Утилиты для работы с ролями
+    - `security/` - Безопасность
+      - `apiKeyEncryption.js` - Утилиты для шифрования ключей
+      - `apiKeyValidator.js` - Валидация ключей API 
     - `db/` - Работа с БД
       - `postgres/` - Утилиты для PostgreSQL
         - `client.js` - Клиент PostgreSQL
@@ -1004,6 +1032,9 @@
     - `00016_create_dialogue_participants_table.sql`
     - `00017_create_category_templates_table.sql`
     - `00018_create_relationship_type_templates_table.sql`
+    - `00019_add_api_key_to_users.sql`
+    - `00020_create_shared_api_keys_table.sql`
+    - `00021_create_api_key_usage_table.sql`
   - `seeds/` - Начальные данные
     - `00001_philosophers.sql`
     - `00002_traditions.sql`
@@ -1068,6 +1099,7 @@
 
 ### 8.2. Документация по архитектуре
 - `docs/architecture/README.md` - Общая информация об архитектуре
+- `docs/architecture/api-key-architecture.md` - Архитектура управления ключами
 - `docs/architecture/microservices.md` - Описание микросервисов
 - `docs/architecture/communication.md` - Коммуникация между сервисами
 - `docs/architecture/databases.md` - Структура баз данных
@@ -1077,6 +1109,7 @@
 ### 8.3. Документация по API
 - `docs/api/README.md` - Общая информация об API
 - `docs/api/user-service.md` - API сервиса пользователей
+- `docs/api/api-key-endpoints.md` - Документация API для ключей
 - `docs/api/concept-service.md` - API сервиса концепций
 - `docs/api/graph-service.md` - API сервиса графов
 - `docs/api/thesis-service.md` - API сервиса тезисов
@@ -1100,6 +1133,7 @@
 ### 8.5. Руководства для пользователей
 - `docs/user-guides/README.md` - Общая информация для пользователей
 - `docs/user-guides/getting-started.md` - Начало работы
+- `docs/user-guides/api-key-management.md` - Руководство по управлению ключами API
 - `docs/user-guides/concept-creation.md` - Создание концепций
 - `docs/user-guides/graph-editing.md` - Редактирование графов
 - `docs/user-guides/thesis-generation.md` - Генерация тезисов

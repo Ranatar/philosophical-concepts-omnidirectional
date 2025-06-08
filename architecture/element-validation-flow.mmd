@@ -25,6 +25,23 @@ flowchart TB
         REL_TYPE_TEMPLATES[(relationship_type_templates)]
         GENERATED_ELEMENTS[(GeneratedElements)]
     end
+
+    subgraph "Валидация доступа к Claude"
+        CHECK_USER_KEY{Есть ключ пользователя?}
+        VALIDATE_KEY[Валидация ключа]
+        USE_USER_KEY[Использовать ключ пользователя]
+        USE_SYSTEM_KEY[Использовать системный ключ]
+        TRACK_USAGE[Отследить использование]
+    end
+
+    RECEIVE --> CHECK_USER_KEY
+    CHECK_USER_KEY -->|Да| VALIDATE_KEY
+    CHECK_USER_KEY -->|Нет| USE_SYSTEM_KEY
+    VALIDATE_KEY -->|Валидный| USE_USER_KEY
+    VALIDATE_KEY -->|Невалидный| USE_SYSTEM_KEY
+    USE_USER_KEY --> TRACK_USAGE
+    USE_SYSTEM_KEY --> TRACK_USAGE
+    TRACK_USAGE --> CHECK_DB
     
     THESIS_TO_GRAPH --> RECEIVE
     SYNTHESIS --> RECEIVE

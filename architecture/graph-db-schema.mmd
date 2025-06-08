@@ -1,53 +1,65 @@
 graph LR
-    %% Node types with their properties
-    subgraph "Node Types"
+    %% Типы узлов с их свойствами
+    subgraph "Типы узлов"
         direction TB
-        Concept["<b>Concept</b><br/>- concept_id: UUID<br/>- name: string"]
-        Category["<b>Category</b><br/>- category_id: UUID<br/>- concept_id: UUID<br/>- name: string<br/>- definition: text<br/>- centrality: float<br/>- certainty: float<br/>- historical_significance: float<br/>- traditions: array<br/>- philosophers: array"]
+        Concept["<b>Концепция</b><br/>- concept_id: UUID<br/>- name: строка"]
+        Category["<b>Категория</b><br/>- category_id: UUID<br/>- concept_id: UUID<br/>- name: строка<br/>- type: строка (тип категории)<br/>- definition: текст<br/>- centrality: число с плавающей точкой<br/>- certainty: число с плавающей точкой<br/>- historical_significance: число с плавающей точкой<br/>- innovation_degree: число с плавающей точкой<br/>- clarity: число с плавающей точкой<br/>- breadth: число с плавающей точкой<br/>- depth: число с плавающей точкой<br/>- applicability: число с плавающей точкой<br/>- traditions: массив<br/>- philosophers: массив"]
     end
     
-    %% Relationships with properties
-    subgraph "Relationship Types"
+    %% Связи с их свойствами
+    subgraph "Типы связей"
         direction TB
-        INCLUDES["<b>INCLUDES</b><br/>Direction: Concept → Category"]
-        RELATED_TO["<b>RELATED_TO</b><br/>- relationship_id: UUID<br/>- type: string<br/>- direction: string<br/>- strength: float<br/>- certainty: float<br/>- source: string<br/>- traditions: array<br/>- philosophers: array"]
+        INCLUDES["<b>ВКЛЮЧАЕТ</b><br/>Направление: Концепция → Категория"]
+        RELATED_TO["<b>СВЯЗАН_С</b><br/>- relationship_id: UUID<br/>- type: строка<br/>- direction: строка<br/>- strength: число с плавающей точкой<br/>- certainty: число с плавающей точкой<br/>- innovation_degree: число с плавающей точкой<br/>- historical_support: число с плавающей точкой<br/>- logical_necessity: число с плавающей точкой<br/>- context_dependence: число с плавающей точкой<br/>- source: строка<br/>- traditions: массив<br/>- philosophers: массив"]
     end
     
-    %% Actual graph structure
-    subgraph "Graph Structure"
+    %% Фактическая структура графа
+    subgraph "Структура графа"
         direction TB
-        Concept1[Concept] --> |INCLUDES| Category1[Category]
-        Concept1 --> |INCLUDES| Category2[Category]
-        Concept1 --> |INCLUDES| Category3[Category]
+        Concept1[Концепция] --> |ВКЛЮЧАЕТ| Category1[Категория]
+        Concept1 --> |ВКЛЮЧАЕТ| Category2[Категория]
+        Concept1 --> |ВКЛЮЧАЕТ| Category3[Категория]
         
-        Category1 --> |RELATED_TO| Category2
-        Category2 --> |RELATED_TO| Category3
-        Category1 --> |RELATED_TO| Category3
+        Category1 --> |СВЯЗАН_С| Category2
+        Category2 --> |СВЯЗАН_С| Category3
+        Category1 --> |СВЯЗАН_С| Category3
     end
     
-    %% Relationship types enumeration
-    subgraph "Relationship Type Values"
+    %% Перечисление типов связей
+    subgraph "Значения типов связей"
         direction TB
-        RT["<b>type</b> can be:<br/>• hierarchical<br/>• causal<br/>• dialectical<br/>• correlative<br/>• analogical<br/>• oppositional<br/>• metaphorical<br/>• functional"]
+        RT["<b>type</b> может быть:<br/>• hierarchical (иерархическая)<br/>• causal (причинно-следственная)<br/>• dialectical (диалектическая)<br/>• correlational (корреляционная)<br/>• disjunctive (дизъюнктивная)<br/>• conjunctive (конъюнктивная)<br/>• contradiction (противоречие)<br/>• complementary (дополнительность)<br/>• emergence (эмерджентность)<br/>• necessary_condition (необходимое условие)<br/>• sufficient_condition (достаточное условие)<br/>• identity (тождество)<br/>• analogy (аналогия)<br/>• implementation (реализация)<br/>• instantiation (конкретизация)<br/>• generalization (обобщение)<br/>• part_whole (часть-целое)<br/>• means_end (средство-цель)<br/>• deductive (дедуктивная)<br/>• inductive (индуктивная)<br/>• abductive (абдуктивная)<br/>• temporal (временная)<br/>• conceptual (концептуальная)<br/>• definitional (определяющая)<br/>• manifestation (выражение)<br/>• foundational (основание)<br/>• recognition (понимание)<br/>• reflexion (мышление)<br/>• development (развитие)"]
     end
     
-    %% Relationship directions enumeration
-    subgraph "Relationship Direction Values"
+    %% Перечисление направлений связей
+    subgraph "Значения направлений связей"
         direction TB
-        RD["<b>direction</b> can be:<br/>• unidirectional<br/>• bidirectional"]
+        RD["<b>direction</b> может быть:<br/>• unidirectional (однонаправленная)<br/>• bidirectional (двунаправленная)<br/>• circular (циклическая)<br/>]
     end
     
-    %% Indexes and constraints
-    subgraph "Indexes & Constraints"
+    %% Уровни инновационности
+    subgraph "Уровни инновационности"
         direction TB
-        INDEXES["<b>Indexes:</b><br/>- Concept(concept_id)<br/>- Category(category_id)<br/>- Category(concept_id)<br/>- Relationship(relationship_id)"]
-        CONSTRAINTS["<b>Constraints:</b><br/>- UNIQUE Concept.concept_id<br/>- UNIQUE Category.category_id<br/>- UNIQUE Relationship.relationship_id"]
+        IL["<b>innovation_degree</b> может быть:<br/>• 1 - Традиционное понимание<br/>• 2 - Переосмысленное понимание<br/>• 3 - Расширенное понимание<br/>• 4 - Новое понимание<br/>• 5 - Революционное понимание"]
     end
     
-    %% Example queries
-    subgraph "Example Cypher Queries"
+    %% Типы категорий
+    subgraph "Типы категорий"
         direction TB
-        Q1["<b>Get all categories of a concept:</b><br/>MATCH (c:Concept {concept_id: $id})-[:INCLUDES]->(cat:Category)<br/>RETURN cat"]
-        Q2["<b>Get categories and their relationships:</b><br/>MATCH (c:Concept {concept_id: $id})-[:INCLUDES]->(cat:Category)<br/>OPTIONAL MATCH (cat)-[r:RELATED_TO]-(other:Category)<br/>RETURN cat, r, other"]
-        Q3["<b>Find dialectical relationships:</b><br/>MATCH (cat1:Category)-[r:RELATED_TO {type: 'dialectical'}]-(cat2:Category)<br/>RETURN cat1, r, cat2"]
+        CT["<b>Тип категории</b> может быть:<br/>• ontological (онтологическая)<br/>• epistemological (эпистемологическая)<br/>• axiological (аксиологическая)<br/>• ethical (этическая)<br/>• aesthetic (эстетическая)<br/>• metaphysical (метафизическая)<br/>• logical (логическая)<br/>• practical (практическая)<br/>• political (политическая)<br/>• theological (теологическая)<br/>• anthropological (антропологическая)<br/>• social (социальная)<br/>• linguistic (лингвистическая)<br/>• phenomenological (феноменологическая)<br/>• existential (экзистенциальная)<br/>• analytical (аналитическая)<br/>• hermeneutical (герменевтическая)<br/>• cross_disciplinary (междисциплинарная)"]
+    end
+    
+    %% Индексы и ограничения
+    subgraph "Индексы и ограничения"
+        direction TB
+        INDEXES["<b>Индексы:</b><br/>- Concept(concept_id)<br/>- Category(category_id)<br/>- Category(concept_id)<br/>- Category(type)<br/>- Category(innovation_degree)<br/>- Relationship(relationship_id)<br/>- Relationship(type)<br/>- Relationship(innovation_degree)"]
+        CONSTRAINTS["<b>Ограничения:</b><br/>- UNIQUE Concept.concept_id<br/>- UNIQUE Category.category_id<br/>- UNIQUE Relationship.relationship_id<br/>- CHECK Category.innovation_degree BETWEEN 1 AND 5<br/>- CHECK Relationship.innovation_degree BETWEEN 1 AND 5"]
+    end
+    
+    %% Примеры запросов
+    subgraph "Примеры Cypher-запросов"
+        direction TB
+        Q1["<b>Получить все категории концепции:</b><br/>MATCH (c:Concept {concept_id: $id})-[:INCLUDES]->(cat:Category)<br/>RETURN cat"]
+        Q2["<b>Получить категории и их связи:</b><br/>MATCH (c:Concept {concept_id: $id})-[:INCLUDES]->(cat:Category)<br/>OPTIONAL MATCH (cat)-[r:RELATED_TO]-(other:Category)<br/>RETURN cat, r, other"]
+        Q3["<b>Найти диалектические связи:</b><br/>MATCH (cat1:Category)-[r:RELATED_TO {type: 'dialectical'}]-(cat2:Category)<br/>RETURN cat1, r, cat2"]
     end
