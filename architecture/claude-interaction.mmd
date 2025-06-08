@@ -71,7 +71,6 @@ sequenceDiagram
     OS->>UI: Результаты
     UI->>U: Отображение происхождения
 
-    sequenceDiagram
     participant GS as Сервис графов
     participant CS as Сервис Claude
     participant VS as Сервис валидации элементов
@@ -124,6 +123,7 @@ sequenceDiagram
         VS->>GS: ValidationResult без новых
         GS->>UI: requiresApproval: false
     end
+<<<<<<< HEAD
 
     Note over U,DB: Управление ключами API Claude
 
