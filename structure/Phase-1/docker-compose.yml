@@ -1,0 +1,510 @@
+version: '3.8'
+
+services:
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../Dockerfile.dev
+    container_name: philosophy-frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - REACT_APP_API_URL=http://localhost:8080
+    networks:
+      - philosophy-network
+    depends_on:
+      - api-gateway
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: ../Dockerfile.dev
+    container_name: philosophy-api-gateway
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./api-gateway:/app
+      - ./shared:/shared
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - PORT=8080
+    networks:
+      - philosophy-network
+    depends_on:
+      - user-service
+      - concept-service
+      - graph-service
+      - thesis-service
+      - synthesis-service
+      - claude-service
+
+  # Microservices
+  user-service:
+    build:
+      context: ./user-service
+      dockerfile: ../Dockerfile.dev
+    container_name: philosophy-user-service
+    volumes:
+      - ./user-service:/app
+      - ./shared:/shared
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=philosophy_db
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres123
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=your-jwt-secret-key
+      - ENCRYPTION_KEY=your-32-character-encryption-key!!
+    networks:
+      - philosophy-network
+    depends_on:
+      - postgres
+      - redis
+
+  concept-service:
+    build:
+      context: ./concept-service
+      dockerfile: ../Dockerfile.dev
+    container_name: philosophy-concept-service
+    volumes:
+      - ./concept-service:/app
+      - ./shared:/shared
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - PORT=3002
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=philosophy_db
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres123
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    networks:
+      - philosophy-network
+    depends_on:
+      - postgres
+      - redis
+
+  graph-service:
+    build:
+      context: ./graph-service
+      dockerfile: ../Dockerfile.dev
+    container_name: philosophy-graph-service
+    volumes:
+      - ./graph-service:/app
+      - ./shared:/shared
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - PORT=3003
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=neo4j123
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MONGODB_URI=mongodb://mongodb:27017/philosophy_db
+    networks:
+      - philosophy-network
+    depends_on:
+      - neo4j
+      - redis
+      - mongodb
+
+  thesis-service:
+    build:
+      context: ./thesis-service
+      dockerfile: ../Dockerfile.dev
+    container_name: philosophy-thesis-service
+    volumes:
+      - ./thesis-service:/app
+      - ./shared:/shared
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - PORT=3004
+      - MONGODB_URI=mongodb://mongodb:27017/philosophy_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    networks:
+      - philosophy-network
+    depends_on:
+      - mongodb
+      - redis
+
+  synthesis-service:
+    build:
+      context: ./synthesis-service
+      dockerfile: ../Dockerfile.dev
+    container_name: philosophy-synthesis-service
+    volumes:
+      - ./synthesis-service:/app
+      - ./shared:/shared
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - PORT=3005
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=philosophy_db
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres123
+      - MONGODB_URI=mongodb://mongodb:27017/philosophy_db
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=neo4j123
+    networks:
+      - philosophy-network
+    depends_on:
+      - postgres
+      - mongodb
+      - neo4j
+
+  claude-service:
+    build:
+      context: ./claude-service
+      dockerfile: ../Dockerfile.dev
+    container_name: philosophy-claude-service
+    volumes:
+      - ./claude-service:/app
+      - ./shared:/shared
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - PORT=3006
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=philosophy_db
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres123
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    networks:
+      - philosophy-network
+    depends_on:
+      - postgres
+      - rabbitmq
+      - redis
+
+  name-service:
+    build:
+      context: ./name-analysis-service
+      dockerfile: ../Dockerfile.dev
+    container_name: philosophy-name-service
+    volumes:
+      - ./name-analysis-service:/app
+      - ./shared:/shared
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - PORT=3007
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=philosophy_db
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres123
+      - MONGODB_URI=mongodb://mongodb:27017/philosophy_db
+    networks:
+      - philosophy-network
+    depends_on:
+      - postgres
+      - mongodb
+
+  origin-service:
+    build:
+      context: ./origin-detection-service
+      dockerfile: ../Dockerfile.dev
+    container_name: philosophy-origin-service
+    volumes:
+      - ./origin-detection-service:/app
+      - ./shared:/shared
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - PORT=3008
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=philosophy_db
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres123
+      - MONGODB_URI=mongodb://mongodb:27017/philosophy_db
+    networks:
+      - philosophy-network
+    depends_on:
+      - postgres
+      - mongodb
+
+  historical-service:
+    build:
+      context: ./historical-context-service
+      dockerfile: ../Dockerfile.dev
+    container_name: philosophy-historical-service
+    volumes:
+      - ./historical-context-service:/app
+      - ./shared:/shared
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - PORT=3009
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=philosophy_db
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres123
+      - MONGODB_URI=mongodb://mongodb:27017/philosophy_db
+    networks:
+      - philosophy-network
+    depends_on:
+      - postgres
+      - mongodb
+
+  practical-service:
+    build:
+      context: ./practical-application-service
+      dockerfile: ../Dockerfile.dev
+    container_name: philosophy-practical-service
+    volumes:
+      - ./practical-application-service:/app
+      - ./shared:/shared
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - PORT=3010
+      - MONGODB_URI=mongodb://mongodb:27017/philosophy_db
+    networks:
+      - philosophy-network
+    depends_on:
+      - mongodb
+
+  dialogue-service:
+    build:
+      context: ./dialogue-service
+      dockerfile: ../Dockerfile.dev
+    container_name: philosophy-dialogue-service
+    volumes:
+      - ./dialogue-service:/app
+      - ./shared:/shared
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - PORT=3011
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=philosophy_db
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres123
+      - MONGODB_URI=mongodb://mongodb:27017/philosophy_db
+    networks:
+      - philosophy-network
+    depends_on:
+      - postgres
+      - mongodb
+
+  evolution-service:
+    build:
+      context: ./evolution-service
+      dockerfile: ../Dockerfile.dev
+    container_name: philosophy-evolution-service
+    volumes:
+      - ./evolution-service:/app
+      - ./shared:/shared
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - PORT=3012
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=philosophy_db
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres123
+      - MONGODB_URI=mongodb://mongodb:27017/philosophy_db
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=neo4j123
+    networks:
+      - philosophy-network
+    depends_on:
+      - postgres
+      - mongodb
+      - neo4j
+
+  # Databases
+  postgres:
+    image: postgres:15-alpine
+    container_name: philosophy-postgres
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres123
+      - POSTGRES_DB=philosophy_db
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init/postgres:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    networks:
+      - philosophy-network
+
+  neo4j:
+    image: neo4j:5.12-community
+    container_name: philosophy-neo4j
+    environment:
+      - NEO4J_AUTH=neo4j/neo4j123
+      - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_apoc_export_file_enabled=true
+      - NEO4J_apoc_import_file_enabled=true
+      - NEO4J_apoc_import_file_use__neo4j__config=true
+    volumes:
+      - neo4j-data:/data
+      - neo4j-logs:/logs
+      - neo4j-import:/var/lib/neo4j/import
+      - neo4j-plugins:/plugins
+      - ./init/neo4j:/var/lib/neo4j/init
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    networks:
+      - philosophy-network
+
+  mongodb:
+    image: mongo:6.0
+    container_name: philosophy-mongodb
+    environment:
+      - MONGO_INITDB_DATABASE=philosophy_db
+    volumes:
+      - mongodb-data:/data/db
+      - ./init/mongo:/docker-entrypoint-initdb.d
+    ports:
+      - "27017:27017"
+    networks:
+      - philosophy-network
+
+  # Infrastructure services
+  redis:
+    image: redis:7-alpine
+    container_name: philosophy-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - philosophy-network
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: philosophy-rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=admin123
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - philosophy-network
+
+  # Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: philosophy-prometheus
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/prometheus/rules:/etc/prometheus/rules
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - "9090:9090"
+    networks:
+      - philosophy-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: philosophy-grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3333:3000"
+    networks:
+      - philosophy-network
+    depends_on:
+      - prometheus
+
+  # ELK Stack for logging
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.10.2
+    container_name: philosophy-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=false
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    networks:
+      - philosophy-network
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.10.2
+    container_name: philosophy-logstash
+    volumes:
+      - ./monitoring/logstash/pipeline:/usr/share/logstash/pipeline
+      - ./monitoring/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml
+    ports:
+      - "5044:5044"
+    networks:
+      - philosophy-network
+    depends_on:
+      - elasticsearch
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.10.2
+    container_name: philosophy-kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    networks:
+      - philosophy-network
+    depends_on:
+      - elasticsearch
+
+volumes:
+  postgres-data:
+  neo4j-data:
+  neo4j-logs:
+  neo4j-import:
+  neo4j-plugins:
+  mongodb-data:
+  redis-data:
+  rabbitmq-data:
+  prometheus-data:
+  grafana-data:
+  elasticsearch-data:
+
+networks:
+  philosophy-network:
+    driver: bridge

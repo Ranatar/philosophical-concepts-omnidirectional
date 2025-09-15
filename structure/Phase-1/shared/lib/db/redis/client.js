@@ -1,622 +1,551 @@
 /**
- * Redis client for the philosophy service
- * Provides a configured client instance and utility methods for caching
+ * Redis Client
+ * Централизованный клиент для работы с Redis
+ * Поддерживает connection pooling, автоматическое переподключение и метрики
  */
 
-const redis = require('redis');
-const { promisify } = require('util');
-const { defaultLogger } = require('../../logging/logger');
+const Redis = require('ioredis');
+const logger = require('../../logging/logger');
+const { incrementCounter } = require('../../metrics/counters');
+const config = require('./config');
 
-// Default configuration
-const DEFAULT_CONFIG = {
-  host: process.env.REDIS_HOST || 'localhost',
-  port: process.env.REDIS_PORT ? parseInt(process.env.REDIS_PORT, 10) : 6379,
-  password: process.env.REDIS_PASSWORD || undefined,
-  db: process.env.REDIS_DB ? parseInt(process.env.REDIS_DB, 10) : 0,
-  prefix: process.env.REDIS_PREFIX || 'philosophy:',
-  // Connection options
-  connect_timeout: 10000,
-  retry_strategy: function(options) {
-    if (options.error && options.error.code === 'ECONNREFUSED') {
-      // End reconnecting on a specific error and flush all commands with
-      // a individual error
-      return new Error('The server refused the connection');
-    }
-    if (options.total_retry_time > 1000 * 60 * 60) {
-      // End reconnecting after a specific timeout and flush all commands
-      // with a individual error
-      return new Error('Retry time exhausted');
-    }
-    if (options.attempt > 10) {
-      // End reconnecting with built in error
-      return undefined;
-    }
-    // Reconnect after
-    return Math.min(options.attempt * 100, 3000);
-  }
-};
-
-/**
- * Redis client class
- */
 class RedisClient {
-  /**
-   * Create a new Redis client
-   * @param {Object} [config] - Configuration options
-   * @param {Object} [logger=defaultLogger] - Logger instance
-   */
-  constructor(config = {}, logger = defaultLogger) {
-    this.config = { ...DEFAULT_CONFIG, ...config };
-    this.logger = logger;
+  constructor(options = {}) {
+    this.options = {
+      ...config.redis,
+      ...options,
+      retryStrategy: this._retryStrategy.bind(this),
+      reconnectOnError: this._reconnectOnError.bind(this)
+    };
+    
     this.client = null;
     this.isConnected = false;
-    this.asyncMethods = {};
+    this.connectionPromise = null;
   }
-  
+
   /**
-   * Initialize the Redis client
-   * @returns {redis.RedisClient} The Redis client instance
+   * Инициализация подключения к Redis
    */
-  initialize() {
-    if (!this.client) {
-      this.logger.info('Initializing Redis client', {
-        host: this.config.host,
-        port: this.config.port,
-        db: this.config.db,
-        prefix: this.config.prefix
+  async connect() {
+    if (this.isConnected) {
+      return this.client;
+    }
+
+    if (this.connectionPromise) {
+      return this.connectionPromise;
+    }
+
+    this.connectionPromise = this._createConnection();
+    
+    try {
+      this.client = await this.connectionPromise;
+      this.isConnected = true;
+      this.connectionPromise = null;
+      return this.client;
+    } catch (error) {
+      this.connectionPromise = null;
+      throw error;
+    }
+  }
+
+  /**
+   * Создание подключения с обработкой событий
+   */
+  async _createConnection() {
+    return new Promise((resolve, reject) => {
+      const client = new Redis(this.options);
+
+      // Таймаут подключения
+      const connectionTimeout = setTimeout(() => {
+        client.disconnect();
+        reject(new Error('Redis connection timeout'));
+      }, this.options.connectionTimeout || 10000);
+
+      // Обработчики событий
+      client.once('connect', () => {
+        clearTimeout(connectionTimeout);
+        logger.info('Redis client connected', {
+          host: this.options.host,
+          port: this.options.port
+        });
+        incrementCounter('redis_connections_total');
+        resolve(client);
       });
-      
-      try {
-        this.client = redis.createClient(this.config);
-        
-        // Promisify Redis methods
-        this.asyncMethods = {
-          get: promisify(this.client.get).bind(this.client),
-          set: promisify(this.client.set).bind(this.client),
-          setex: promisify(this.client.setex).bind(this.client),
-          del: promisify(this.client.del).bind(this.client),
-          exists: promisify(this.client.exists).bind(this.client),
-          expire: promisify(this.client.expire).bind(this.client),
-          ttl: promisify(this.client.ttl).bind(this.client),
-          incr: promisify(this.client.incr).bind(this.client),
-          decr: promisify(this.client.decr).bind(this.client),
-          incrby: promisify(this.client.incrby).bind(this.client),
-          decrby: promisify(this.client.decrby).bind(this.client),
-          hget: promisify(this.client.hget).bind(this.client),
-          hgetall: promisify(this.client.hgetall).bind(this.client),
-          hmget: promisify(this.client.hmget).bind(this.client),
-          hset: promisify(this.client.hset).bind(this.client),
-          hmset: promisify(this.client.hmset).bind(this.client),
-          hdel: promisify(this.client.hdel).bind(this.client),
-          hkeys: promisify(this.client.hkeys).bind(this.client),
-          hvals: promisify(this.client.hvals).bind(this.client),
-          hexists: promisify(this.client.hexists).bind(this.client),
-          lpush: promisify(this.client.lpush).bind(this.client),
-          rpush: promisify(this.client.rpush).bind(this.client),
-          lpop: promisify(this.client.lpop).bind(this.client),
-          rpop: promisify(this.client.rpop).bind(this.client),
-          llen: promisify(this.client.llen).bind(this.client),
-          lrange: promisify(this.client.lrange).bind(this.client),
-          ltrim: promisify(this.client.ltrim).bind(this.client),
-          sadd: promisify(this.client.sadd).bind(this.client),
-          srem: promisify(this.client.srem).bind(this.client),
-          smembers: promisify(this.client.smembers).bind(this.client),
-          sismember: promisify(this.client.sismember).bind(this.client),
-          scard: promisify(this.client.scard).bind(this.client),
-          zadd: promisify(this.client.zadd).bind(this.client),
-          zrange: promisify(this.client.zrange).bind(this.client),
-          zrevrange: promisify(this.client.zrevrange).bind(this.client),
-          zrangebyscore: promisify(this.client.zrangebyscore).bind(this.client),
-          zrevrangebyscore: promisify(this.client.zrevrangebyscore).bind(this.client),
-          zrem: promisify(this.client.zrem).bind(this.client),
-          zcard: promisify(this.client.zcard).bind(this.client),
-          zscore: promisify(this.client.zscore).bind(this.client),
-          keys: promisify(this.client.keys).bind(this.client),
-          scan: promisify(this.client.scan).bind(this.client),
-          flushdb: promisify(this.client.flushdb).bind(this.client),
-          flushall: promisify(this.client.flushall).bind(this.client),
-          publish: promisify(this.client.publish).bind(this.client),
-          subscribe: this.client.subscribe.bind(this.client),
-          unsubscribe: this.client.unsubscribe.bind(this.client),
-          multi: this.client.multi.bind(this.client),
-          exec: promisify(this.client.exec).bind(this.client)
-        };
-        
-        // Set up event listeners
-        this.client.on('connect', () => {
-          this.isConnected = true;
-          this.logger.info('Redis client connected');
-        });
-        
-        this.client.on('error', (err) => {
-          this.logger.error('Redis client error', {
-            error: err.message,
-            stack: err.stack
-          });
-        });
-        
-        this.client.on('end', () => {
-          this.isConnected = false;
-          this.logger.info('Redis client connection closed');
-        });
-        
-        this.client.on('reconnecting', (info) => {
-          this.logger.info('Redis client reconnecting', {
-            attempt: info.attempt,
-            delay: info.delay
-          });
-        });
-      } catch (err) {
-        this.logger.error('Failed to initialize Redis client', {
-          error: err.message,
-          stack: err.stack
-        });
-        throw err;
-      }
+
+      client.on('error', (error) => {
+        logger.error('Redis client error', { error: error.message });
+        incrementCounter('redis_errors_total');
+      });
+
+      client.on('close', () => {
+        logger.warn('Redis connection closed');
+        this.isConnected = false;
+      });
+
+      client.on('reconnecting', (delay) => {
+        logger.info('Redis reconnecting', { delay });
+        incrementCounter('redis_reconnections_total');
+      });
+
+      client.on('ready', () => {
+        logger.info('Redis client ready');
+        this.isConnected = true;
+      });
+    });
+  }
+
+  /**
+   * Стратегия переподключения
+   */
+  _retryStrategy(times) {
+    const maxRetryTime = this.options.maxRetryTime || 60000; // 1 минута
+    const baseDelay = this.options.retryDelay || 500;
+    
+    if (times > this.options.maxRetries || 10) {
+      logger.error('Max Redis reconnection attempts reached');
+      return null; // Прекратить попытки
+    }
+
+    const delay = Math.min(baseDelay * Math.pow(2, times), maxRetryTime);
+    logger.info(`Retrying Redis connection in ${delay}ms (attempt ${times})`);
+    
+    return delay;
+  }
+
+  /**
+   * Определяет, нужно ли переподключаться при ошибке
+   */
+  _reconnectOnError(error) {
+    const targetErrors = ['READONLY', 'ECONNRESET', 'ETIMEDOUT'];
+    
+    if (targetErrors.some(targetError => error.message.includes(targetError))) {
+      logger.warn('Reconnecting due to error', { error: error.message });
+      return true;
     }
     
-    return this.client;
+    return false;
   }
-  
+
   /**
-   * Get the Redis client instance
-   * @returns {redis.RedisClient} The Redis client instance
-   */
-  getClient() {
-    if (!this.client) {
-      return this.initialize();
-    }
-    return this.client;
-  }
-  
-  /**
-   * Get a value from Redis
-   * @param {string} key - Key to get
-   * @returns {Promise<string|null>} Value or null if not found
+   * Получение значения по ключу
    */
   async get(key) {
     try {
-      this.getClient();
-      const result = await this.asyncMethods.get(key);
-      return result;
-    } catch (err) {
-      this.logger.error('Redis get error', {
-        key,
-        error: err.message
-      });
-      return null;
+      const client = await this.getClient();
+      const value = await client.get(key);
+      incrementCounter('redis_operations_total', { operation: 'get' });
+      return value;
+    } catch (error) {
+      incrementCounter('redis_operation_errors_total', { operation: 'get' });
+      throw error;
     }
   }
-  
+
   /**
-   * Get a JSON value from Redis
-   * @param {string} key - Key to get
-   * @returns {Promise<Object|null>} Parsed JSON or null
+   * Установка значения
    */
-  async getJson(key) {
+  async set(key, value, ttl = null) {
     try {
-      const value = await this.get(key);
-      if (value) {
-        return JSON.parse(value);
-      }
-      return null;
-    } catch (err) {
-      this.logger.error('Redis getJson error', {
-        key,
-        error: err.message
-      });
-      return null;
-    }
-  }
-  
-  /**
-   * Set a value in Redis
-   * @param {string} key - Key to set
-   * @param {string} value - Value to set
-   * @param {number} [ttl] - Time to live in seconds
-   * @returns {Promise<boolean>} Whether the operation succeeded
-   */
-  async set(key, value, ttl) {
-    try {
-      this.getClient();
+      const client = await this.getClient();
+      
       if (ttl) {
-        await this.asyncMethods.setex(key, ttl, value);
+        await client.setex(key, ttl, value);
       } else {
-        await this.asyncMethods.set(key, value);
+        await client.set(key, value);
       }
+      
+      incrementCounter('redis_operations_total', { operation: 'set' });
       return true;
-    } catch (err) {
-      this.logger.error('Redis set error', {
-        key,
-        error: err.message
-      });
-      return false;
+    } catch (error) {
+      incrementCounter('redis_operation_errors_total', { operation: 'set' });
+      throw error;
     }
   }
-  
+
   /**
-   * Set a JSON value in Redis
-   * @param {string} key - Key to set
-   * @param {Object} value - Value to set (will be JSON-stringified)
-   * @param {number} [ttl] - Time to live in seconds
-   * @returns {Promise<boolean>} Whether the operation succeeded
+   * Установка значения с опциями
    */
-  async setJson(key, value, ttl) {
+  async setWithOptions(key, value, options = {}) {
     try {
-      const jsonValue = JSON.stringify(value);
-      return this.set(key, jsonValue, ttl);
-    } catch (err) {
-      this.logger.error('Redis setJson error', {
-        key,
-        error: err.message
-      });
-      return false;
+      const client = await this.getClient();
+      const args = [key, value];
+
+      if (options.ttl) {
+        args.push('EX', options.ttl);
+      }
+      
+      if (options.onlyIfNotExists) {
+        args.push('NX');
+      } else if (options.onlyIfExists) {
+        args.push('XX');
+      }
+
+      const result = await client.set(...args);
+      incrementCounter('redis_operations_total', { operation: 'set_with_options' });
+      
+      return result === 'OK';
+    } catch (error) {
+      incrementCounter('redis_operation_errors_total', { operation: 'set_with_options' });
+      throw error;
     }
   }
-  
+
   /**
-   * Delete a key from Redis
-   * @param {string|Array<string>} keys - Key(s) to delete
-   * @returns {Promise<number>} Number of keys deleted
+   * Удаление ключей
    */
-  async del(keys) {
+  async del(...keys) {
     try {
-      this.getClient();
-      const result = await this.asyncMethods.del(keys);
+      const client = await this.getClient();
+      const result = await client.del(...keys);
+      incrementCounter('redis_operations_total', { operation: 'del' });
       return result;
-    } catch (err) {
-      this.logger.error('Redis del error', {
-        keys,
-        error: err.message
-      });
-      return 0;
+    } catch (error) {
+      incrementCounter('redis_operation_errors_total', { operation: 'del' });
+      throw error;
     }
   }
-  
+
   /**
-   * Check if a key exists in Redis
-   * @param {string} key - Key to check
-   * @returns {Promise<boolean>} Whether the key exists
+   * Проверка существования ключа
    */
   async exists(key) {
     try {
-      this.getClient();
-      const result = await this.asyncMethods.exists(key);
+      const client = await this.getClient();
+      const result = await client.exists(key);
+      incrementCounter('redis_operations_total', { operation: 'exists' });
       return result === 1;
-    } catch (err) {
-      this.logger.error('Redis exists error', {
-        key,
-        error: err.message
-      });
-      return false;
+    } catch (error) {
+      incrementCounter('redis_operation_errors_total', { operation: 'exists' });
+      throw error;
     }
   }
-  
+
   /**
-   * Set a key's time to live
-   * @param {string} key - Key to set TTL
-   * @param {number} ttl - Time to live in seconds
-   * @returns {Promise<boolean>} Whether the operation succeeded
+   * Установка времени жизни ключа
    */
-  async expire(key, ttl) {
+  async expire(key, seconds) {
     try {
-      this.getClient();
-      const result = await this.asyncMethods.expire(key, ttl);
+      const client = await this.getClient();
+      const result = await client.expire(key, seconds);
+      incrementCounter('redis_operations_total', { operation: 'expire' });
       return result === 1;
-    } catch (err) {
-      this.logger.error('Redis expire error', {
-        key,
-        ttl,
-        error: err.message
-      });
-      return false;
+    } catch (error) {
+      incrementCounter('redis_operation_errors_total', { operation: 'expire' });
+      throw error;
     }
   }
-  
+
   /**
-   * Get a key's remaining time to live
-   * @param {string} key - Key to get TTL
-   * @returns {Promise<number>} TTL in seconds, -1 if no expiry, -2 if key doesn't exist
-   */
-  async ttl(key) {
-    try {
-      this.getClient();
-      const result = await this.asyncMethods.ttl(key);
-      return result;
-    } catch (err) {
-      this.logger.error('Redis ttl error', {
-        key,
-        error: err.message
-      });
-      return -2;
-    }
-  }
-  
-  /**
-   * Increment a key's value
-   * @param {string} key - Key to increment
-   * @returns {Promise<number>} New value
-   */
-  async incr(key) {
-    try {
-      this.getClient();
-      const result = await this.asyncMethods.incr(key);
-      return result;
-    } catch (err) {
-      this.logger.error('Redis incr error', {
-        key,
-        error: err.message
-      });
-      return null;
-    }
-  }
-  
-  /**
-   * Increment a key's value by a specific amount
-   * @param {string} key - Key to increment
-   * @param {number} amount - Amount to increment by
-   * @returns {Promise<number>} New value
-   */
-  async incrby(key, amount) {
-    try {
-      this.getClient();
-      const result = await this.asyncMethods.incrby(key, amount);
-      return result;
-    } catch (err) {
-      this.logger.error('Redis incrby error', {
-        key,
-        amount,
-        error: err.message
-      });
-      return null;
-    }
-  }
-  
-  /**
-   * Decrement a key's value
-   * @param {string} key - Key to decrement
-   * @returns {Promise<number>} New value
-   */
-  async decr(key) {
-    try {
-      this.getClient();
-      const result = await this.asyncMethods.decr(key);
-      return result;
-    } catch (err) {
-      this.logger.error('Redis decr error', {
-        key,
-        error: err.message
-      });
-      return null;
-    }
-  }
-  
-  /**
-   * Decrement a key's value by a specific amount
-   * @param {string} key - Key to decrement
-   * @param {number} amount - Amount to decrement by
-   * @returns {Promise<number>} New value
-   */
-  async decrby(key, amount) {
-    try {
-      this.getClient();
-      const result = await this.asyncMethods.decrby(key, amount);
-      return result;
-    } catch (err) {
-      this.logger.error('Redis decrby error', {
-        key,
-        amount,
-        error: err.message
-      });
-      return null;
-    }
-  }
-  
-  /**
-   * Get a field from a hash
-   * @param {string} key - Hash key
-   * @param {string} field - Field to get
-   * @returns {Promise<string|null>} Field value or null
+   * Работа с хэшами - получение поля
    */
   async hget(key, field) {
     try {
-      this.getClient();
-      const result = await this.asyncMethods.hget(key, field);
-      return result;
-    } catch (err) {
-      this.logger.error('Redis hget error', {
-        key,
-        field,
-        error: err.message
-      });
-      return null;
+      const client = await this.getClient();
+      const value = await client.hget(key, field);
+      incrementCounter('redis_operations_total', { operation: 'hget' });
+      return value;
+    } catch (error) {
+      incrementCounter('redis_operation_errors_total', { operation: 'hget' });
+      throw error;
     }
   }
-  
+
   /**
-   * Get all fields from a hash
-   * @param {string} key - Hash key
-   * @returns {Promise<Object|null>} Hash fields or null
-   */
-  async hgetall(key) {
-    try {
-      this.getClient();
-      const result = await this.asyncMethods.hgetall(key);
-      return result || null;
-    } catch (err) {
-      this.logger.error('Redis hgetall error', {
-        key,
-        error: err.message
-      });
-      return null;
-    }
-  }
-  
-  /**
-   * Set a field in a hash
-   * @param {string} key - Hash key
-   * @param {string} field - Field to set
-   * @param {string} value - Value to set
-   * @returns {Promise<boolean>} Whether the operation succeeded
+   * Работа с хэшами - установка поля
    */
   async hset(key, field, value) {
     try {
-      this.getClient();
-      const result = await this.asyncMethods.hset(key, field, value);
-      return result === 1;
-    } catch (err) {
-      this.logger.error('Redis hset error', {
-        key,
-        field,
-        error: err.message
-      });
-      return false;
-    }
-  }
-  
-  /**
-   * Set multiple fields in a hash
-   * @param {string} key - Hash key
-   * @param {Object} fields - Field-value pairs
-   * @returns {Promise<boolean>} Whether the operation succeeded
-   */
-  async hmset(key, fields) {
-    try {
-      this.getClient();
-      await this.asyncMethods.hmset(key, fields);
-      return true;
-    } catch (err) {
-      this.logger.error('Redis hmset error', {
-        key,
-        error: err.message
-      });
-      return false;
-    }
-  }
-  
-  /**
-   * Set a JSON field in a hash
-   * @param {string} key - Hash key
-   * @param {string} field - Field to set
-   * @param {Object} value - Value to set (will be JSON-stringified)
-   * @returns {Promise<boolean>} Whether the operation succeeded
-   */
-  async hsetJson(key, field, value) {
-    try {
-      const jsonValue = JSON.stringify(value);
-      return this.hset(key, field, jsonValue);
-    } catch (err) {
-      this.logger.error('Redis hsetJson error', {
-        key,
-        field,
-        error: err.message
-      });
-      return false;
-    }
-  }
-  
-  /**
-   * Get a JSON field from a hash
-   * @param {string} key - Hash key
-   * @param {string} field - Field to get
-   * @returns {Promise<Object|null>} Parsed JSON or null
-   */
-  async hgetJson(key, field) {
-    try {
-      const value = await this.hget(key, field);
-      if (value) {
-        return JSON.parse(value);
-      }
-      return null;
-    } catch (err) {
-      this.logger.error('Redis hgetJson error', {
-        key,
-        field,
-        error: err.message
-      });
-      return null;
-    }
-  }
-  
-  /**
-   * Delete fields from a hash
-   * @param {string} key - Hash key
-   * @param {string|Array<string>} fields - Field(s) to delete
-   * @returns {Promise<number>} Number of fields deleted
-   */
-  async hdel(key, fields) {
-    try {
-      this.getClient();
-      
-      if (!Array.isArray(fields)) {
-        fields = [fields];
-      }
-      
-      const result = await this.asyncMethods.hdel(key, ...fields);
+      const client = await this.getClient();
+      const result = await client.hset(key, field, value);
+      incrementCounter('redis_operations_total', { operation: 'hset' });
       return result;
-    } catch (err) {
-      this.logger.error('Redis hdel error', {
-        key,
-        fields,
-        error: err.message
-      });
-      return 0;
+    } catch (error) {
+      incrementCounter('redis_operation_errors_total', { operation: 'hset' });
+      throw error;
     }
   }
-  
+
   /**
-   * Check if the database connection is healthy
-   * @returns {Promise<boolean>} Whether the connection is healthy
+   * Работа с хэшами - получение всех полей
    */
-  async healthCheck() {
+  async hgetall(key) {
     try {
-      this.getClient();
+      const client = await this.getClient();
+      const result = await client.hgetall(key);
+      incrementCounter('redis_operations_total', { operation: 'hgetall' });
+      return result;
+    } catch (error) {
+      incrementCounter('redis_operation_errors_total', { operation: 'hgetall' });
+      throw error;
+    }
+  }
+
+  /**
+   * Работа со списками - добавление в начало
+   */
+  async lpush(key, ...values) {
+    try {
+      const client = await this.getClient();
+      const result = await client.lpush(key, ...values);
+      incrementCounter('redis_operations_total', { operation: 'lpush' });
+      return result;
+    } catch (error) {
+      incrementCounter('redis_operation_errors_total', { operation: 'lpush' });
+      throw error;
+    }
+  }
+
+  /**
+   * Работа со списками - добавление в конец
+   */
+  async rpush(key, ...values) {
+    try {
+      const client = await this.getClient();
+      const result = await client.rpush(key, ...values);
+      incrementCounter('redis_operations_total', { operation: 'rpush' });
+      return result;
+    } catch (error) {
+      incrementCounter('redis_operation_errors_total', { operation: 'rpush' });
+      throw error;
+    }
+  }
+
+  /**
+   * Работа со списками - получение диапазона
+   */
+  async lrange(key, start, stop) {
+    try {
+      const client = await this.getClient();
+      const result = await client.lrange(key, start, stop);
+      incrementCounter('redis_operations_total', { operation: 'lrange' });
+      return result;
+    } catch (error) {
+      incrementCounter('redis_operation_errors_total', { operation: 'lrange' });
+      throw error;
+    }
+  }
+
+  /**
+   * Работа с множествами - добавление
+   */
+  async sadd(key, ...members) {
+    try {
+      const client = await this.getClient();
+      const result = await client.sadd(key, ...members);
+      incrementCounter('redis_operations_total', { operation: 'sadd' });
+      return result;
+    } catch (error) {
+      incrementCounter('redis_operation_errors_total', { operation: 'sadd' });
+      throw error;
+    }
+  }
+
+  /**
+   * Работа с множествами - получение всех элементов
+   */
+  async smembers(key) {
+    try {
+      const client = await this.getClient();
+      const result = await client.smembers(key);
+      incrementCounter('redis_operations_total', { operation: 'smembers' });
+      return result;
+    } catch (error) {
+      incrementCounter('redis_operation_errors_total', { operation: 'smembers' });
+      throw error;
+    }
+  }
+
+  /**
+   * Работа с множествами - проверка наличия элемента
+   */
+  async sismember(key, member) {
+    try {
+      const client = await this.getClient();
+      const result = await client.sismember(key, member);
+      incrementCounter('redis_operations_total', { operation: 'sismember' });
+      return result === 1;
+    } catch (error) {
+      incrementCounter('redis_operation_errors_total', { operation: 'sismember' });
+      throw error;
+    }
+  }
+
+  /**
+   * Инкремент значения
+   */
+  async incr(key) {
+    try {
+      const client = await this.getClient();
+      const result = await client.incr(key);
+      incrementCounter('redis_operations_total', { operation: 'incr' });
+      return result;
+    } catch (error) {
+      incrementCounter('redis_operation_errors_total', { operation: 'incr' });
+      throw error;
+    }
+  }
+
+  /**
+   * Декремент значения
+   */
+  async decr(key) {
+    try {
+      const client = await this.getClient();
+      const result = await client.decr(key);
+      incrementCounter('redis_operations_total', { operation: 'decr' });
+      return result;
+    } catch (error) {
+      incrementCounter('redis_operation_errors_total', { operation: 'decr' });
+      throw error;
+    }
+  }
+
+  /**
+   * Выполнение транзакции
+   */
+  async transaction(operations) {
+    try {
+      const client = await this.getClient();
+      const pipeline = client.pipeline();
       
-      if (!this.isConnected) {
-        return false;
-      }
+      operations.forEach(op => {
+        pipeline[op.command](...op.args);
+      });
       
-      // Try to ping the server
-      return new Promise((resolve) => {
-        this.client.ping((err, result) => {
-          if (err || result !== 'PONG') {
-            resolve(false);
-          } else {
-            resolve(true);
-          }
-        });
+      const results = await pipeline.exec();
+      incrementCounter('redis_operations_total', { operation: 'transaction' });
+      
+      return results.map(([err, result]) => {
+        if (err) throw err;
+        return result;
       });
-    } catch (err) {
-      this.logger.error('Redis health check failed', {
-        error: err.message
-      });
+    } catch (error) {
+      incrementCounter('redis_operation_errors_total', { operation: 'transaction' });
+      throw error;
+    }
+  }
+
+  /**
+   * Очистка всех ключей (осторожно!)
+   */
+  async flushall() {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('flushall is not allowed in production');
+    }
+    
+    try {
+      const client = await this.getClient();
+      await client.flushall();
+      incrementCounter('redis_operations_total', { operation: 'flushall' });
+      logger.warn('Redis flushall executed');
+    } catch (error) {
+      incrementCounter('redis_operation_errors_total', { operation: 'flushall' });
+      throw error;
+    }
+  }
+
+  /**
+   * Получение информации о сервере
+   */
+  async info(section = null) {
+    try {
+      const client = await this.getClient();
+      const info = section ? await client.info(section) : await client.info();
+      return info;
+    } catch (error) {
+      logger.error('Failed to get Redis info', { error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Ping для проверки соединения
+   */
+  async ping() {
+    try {
+      const client = await this.getClient();
+      const result = await client.ping();
+      return result === 'PONG';
+    } catch (error) {
       return false;
     }
   }
-  
+
   /**
-   * Close the Redis client
-   * @returns {Promise<void>}
+   * Получение клиента с гарантией подключения
    */
-  async close() {
-    if (this.client) {
-      this.logger.info('Closing Redis client');
-      
-      return new Promise((resolve) => {
-        this.client.quit((err, res) => {
-          this.client = null;
-          this.isConnected = false;
-          resolve();
-        });
-      });
+  async getClient() {
+    if (!this.isConnected) {
+      await this.connect();
     }
+    return this.client;
+  }
+
+  /**
+   * Закрытие соединения
+   */
+  async disconnect() {
+    if (this.client) {
+      await this.client.quit();
+      this.client = null;
+      this.isConnected = false;
+      logger.info('Redis client disconnected');
+    }
+  }
+
+  /**
+   * Получение статистики использования
+   */
+  async getStats() {
+    try {
+      const client = await this.getClient();
+      const info = await client.info('stats');
+      const memory = await client.info('memory');
+      
+      return {
+        connected: this.isConnected,
+        stats: this._parseInfo(info),
+        memory: this._parseInfo(memory)
+      };
+    } catch (error) {
+      logger.error('Failed to get Redis stats', { error: error.message });
+      return null;
+    }
+  }
+
+  /**
+   * Парсинг информации Redis
+   */
+  _parseInfo(info) {
+    const lines = info.split('\r\n');
+    const result = {};
+    
+    lines.forEach(line => {
+      if (line && !line.startsWith('#')) {
+        const [key, value] = line.split(':');
+        if (key && value) {
+          result[key] = value;
+        }
+      }
+    });
+    
+    return result;
   }
 }
 
-// Create and export default instance
-const defaultClient = new RedisClient();
+// Создание singleton экземпляра
+const redisClient = new RedisClient();
 
-module.exports = {
-  RedisClient,
-  defaultClient
-};
+// Обработка завершения процесса
+process.on('SIGINT', async () => {
+  await redisClient.disconnect();
+});
+
+process.on('SIGTERM', async () => {
+  await redisClient.disconnect();
+});
+
+module.exports = redisClient;
+
+// Экспорт класса для создания дополнительных экземпляров
+module.exports.RedisClient = RedisClient;

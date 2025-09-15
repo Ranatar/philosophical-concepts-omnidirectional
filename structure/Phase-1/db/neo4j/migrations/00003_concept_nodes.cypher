@@ -1,87 +1,114 @@
-// Neo4j Migration: Concept Nodes
-// Description: Creates initial structure for Concept nodes
+// Neo4j Migration: Concept Nodes Structure
+// Description: Определение структуры и правил для узлов Concept
+// Date: 2024
+// Version: 00003
 
-// Create schema for Concept nodes with required properties
-// This is mostly documentational as Neo4j is schema-less but helps enforce consistency
-CREATE CONSTRAINT concept_structure IF NOT EXISTS
-FOR (c:Concept)
-REQUIRE c.concept_id IS NOT NULL
-AND c.name IS NOT NULL
-AND c.creation_date IS NOT NULL;
+// ==========================================
+// Структура узла Concept
+// ==========================================
 
-// Create schema lookup for Concept properties (to help application code)
-CALL apoc.meta.subGraph({
-  includeLabels: ["Concept"]
-}) YIELD nodes, relationships
-WITH nodes, relationships
-CALL apoc.log.info("Created concept schema with properties:
-  concept_id: UUID,
-  name: String,
-  description: String,
-  is_synthesis: Boolean,
-  parent_concepts: List,
-  focus: String,
-  creator_id: UUID,
-  creation_date: DateTime,
-  last_modified: DateTime,
-  status: String,
-  metadata: Map
-") RETURN 1 AS success;
+// Узел Concept представляет философскую концепцию
+// Свойства:
+// - concept_id: UUID (обязательное, уникальное) - идентификатор концепции
+// - name: String (обязательное) - название концепции
 
-// Create Concept label constraint (already defined in 00001, but reinforced here)
-CREATE CONSTRAINT concept_label IF NOT EXISTS
-FOR (c:Concept)
-REQUIRE c:Concept;
+// ==========================================
+// Создание вспомогательных процедур
+// ==========================================
 
-// Create relationship between Concept and Category (to be used later)
-CALL apoc.log.info("Defined INCLUDES relationship pattern:
-  (c:Concept)-[:INCLUDES]->(cat:Category)
-  Properties:
-    None (relationship is structural only)
-") RETURN 1 AS success;
+// Процедура для валидации узла Concept
+// Примечание: В Neo4j Community Edition нет встроенной поддержки пользовательских процедур,
+// поэтому валидация должна выполняться на уровне приложения
 
-// Create helper procedure for adding Concept nodes
-// This could be used by application code or other migrations
-CALL apoc.custom.asProcedure(
-  "createConcept",
-  "CALL apoc.periodic.iterate(
-    \"UNWIND $params AS param RETURN param\",
-    \"CREATE (c:Concept {
-      concept_id: param.concept_id,
-      name: param.name,
-      description: COALESCE(param.description, ''),
-      is_synthesis: COALESCE(param.is_synthesis, false),
-      parent_concepts: COALESCE(param.parent_concepts, []),
-      focus: param.focus,
-      creator_id: param.creator_id,
-      creation_date: datetime(COALESCE(param.creation_date, datetime())),
-      last_modified: datetime(COALESCE(param.last_modified, datetime())),
-      status: param.status,
-      metadata: COALESCE(param.metadata, {})
-    }) RETURN c\",
-    {batchSize:100, params: {params: $params}}
-  )",
-  "VOID",
-  [["params", "LIST OF MAP"]],
-  "Creates concept nodes in batches",
-  true
-);
+// ==========================================
+// Создание примеров узлов Concept (для тестирования)
+// ==========================================
 
-// Create procedure for connecting concepts to categories
-CALL apoc.custom.asProcedure(
-  "connectConceptToCategories",
-  "CALL apoc.periodic.iterate(
-    \"UNWIND $pairs AS pair RETURN pair\",
-    \"MATCH (c:Concept {concept_id: pair.concept_id})
-     MATCH (cat:Category {category_id: pair.category_id})
-     MERGE (c)-[:INCLUDES]->(cat)\",
-    {batchSize:1000, params: {pairs: $pairs}}
-  )",
-  "VOID",
-  [["pairs", "LIST OF MAP"]],
-  "Connects concepts to categories with INCLUDES relationships",
-  true
-);
+// Пример 1: Диалектический материализм
+MERGE (c1:Concept {concept_id: 'c1111111-1111-1111-1111-111111111111'})
+SET c1.name = 'Диалектический материализм';
 
-// Log migration completion
-CALL apoc.log.info("Migration 00003_concept_nodes completed successfully");
+// Пример 2: Экзистенциализм
+MERGE (c2:Concept {concept_id: 'c2222222-2222-2222-2222-222222222222'})
+SET c2.name = 'Экзистенциализм';
+
+// Пример 3: Феноменология
+MERGE (c3:Concept {concept_id: 'c3333333-3333-3333-3333-333333333333'})
+SET c3.name = 'Феноменология';
+
+// Пример 4: Структурализм
+MERGE (c4:Concept {concept_id: 'c4444444-4444-4444-4444-444444444444'})
+SET c4.name = 'Структурализм';
+
+// Пример 5: Прагматизм
+MERGE (c5:Concept {concept_id: 'c5555555-5555-5555-5555-555555555555'})
+SET c5.name = 'Прагматизм';
+
+// ==========================================
+// Создание метаданных для отслеживания концепций
+// ==========================================
+
+// Создаем узел для статистики концепций
+MERGE (stats:ConceptStats)
+SET stats.last_updated = datetime()
+WITH stats
+MATCH (c:Concept)
+WITH stats, count(c) as concept_count
+SET stats.total_concepts = concept_count;
+
+// ==========================================
+// Правила и триггеры (описание для реализации)
+// ==========================================
+
+// Правило 1: При создании концепции должен автоматически генерироваться UUID
+// Реализация: На уровне приложения при создании узла
+
+// Правило 2: Имя концепции не должно быть пустым
+// Реализация: Constraint уже создан в миграции 00001
+
+// Правило 3: При удалении концепции должны удаляться все связанные категории
+// Реализация: Каскадное удаление на уровне приложения
+
+// ==========================================
+// Вспомогательные запросы
+// ==========================================
+
+// Запрос для получения всех концепций с количеством категорий
+// MATCH (c:Concept)
+// OPTIONAL MATCH (c)<-[:INCLUDES]-(cat:Category)
+// RETURN c.concept_id as id, c.name as name, count(cat) as category_count
+// ORDER BY c.name;
+
+// Запрос для проверки целостности (концепции без категорий)
+// MATCH (c:Concept)
+// WHERE NOT EXISTS((c)<-[:INCLUDES]-(:Category))
+// RETURN c.concept_id as id, c.name as name;
+
+// ==========================================
+// Метаданные миграции
+// ==========================================
+
+MERGE (m:Migration {version: '00003'})
+SET m.name = 'concept_nodes',
+    m.description = 'Определение структуры узлов Concept и создание примеров',
+    m.applied_at = datetime(),
+    m.status = 'completed',
+    m.sample_concepts_created = 5;
+
+// ==========================================
+// Rollback инструкции (сохранить отдельно)
+// ==========================================
+
+// Удаление тестовых концепций:
+// MATCH (c:Concept) 
+// WHERE c.concept_id IN [
+//   'c1111111-1111-1111-1111-111111111111',
+//   'c2222222-2222-2222-2222-222222222222',
+//   'c3333333-3333-3333-3333-333333333333',
+//   'c4444444-4444-4444-4444-444444444444',
+//   'c5555555-5555-5555-5555-555555555555'
+// ]
+// DETACH DELETE c;
+// 
+// MATCH (stats:ConceptStats) DELETE stats;
+// MATCH (m:Migration {version: '00003'}) DELETE m;

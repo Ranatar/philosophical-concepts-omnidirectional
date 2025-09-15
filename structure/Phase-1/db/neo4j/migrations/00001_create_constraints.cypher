@@ -1,48 +1,124 @@
 // Neo4j Migration: Create Constraints
-// Description: Creates constraints for graph database to ensure uniqueness and indexing
+// Description: Создание ограничений уникальности и существования для узлов и связей
+// Date: 2024
+// Version: 00001
 
-// Create constraint for Concept nodes (uniqueness of concept_id)
-CREATE CONSTRAINT unique_concept_id IF NOT EXISTS
+// ==========================================
+// Ограничения для узла Concept
+// ==========================================
+
+// Уникальность concept_id для Concept
+CREATE CONSTRAINT constraint_concept_id_unique IF NOT EXISTS
 FOR (c:Concept)
 REQUIRE c.concept_id IS UNIQUE;
 
-// Create constraint for Category nodes (uniqueness of category_id)
-CREATE CONSTRAINT unique_category_id IF NOT EXISTS
-FOR (c:Category)
-REQUIRE c.category_id IS UNIQUE;
-
-// Add existence constraint on required Category properties
-CREATE CONSTRAINT category_name_exists IF NOT EXISTS
-FOR (c:Category)
-REQUIRE c.name IS NOT NULL;
-
-CREATE CONSTRAINT category_concept_id_exists IF NOT EXISTS
-FOR (c:Category)
+// Обязательность concept_id для Concept
+CREATE CONSTRAINT constraint_concept_id_exists IF NOT EXISTS
+FOR (c:Concept)
 REQUIRE c.concept_id IS NOT NULL;
 
-// Create constraint for relationship ID property (used in RELATED_TO relationships)
-CREATE CONSTRAINT unique_relationship_id IF NOT EXISTS
+// Обязательность name для Concept
+CREATE CONSTRAINT constraint_concept_name_exists IF NOT EXISTS
+FOR (c:Concept)
+REQUIRE c.name IS NOT NULL;
+
+// ==========================================
+// Ограничения для узла Category
+// ==========================================
+
+// Уникальность category_id для Category
+CREATE CONSTRAINT constraint_category_id_unique IF NOT EXISTS
+FOR (cat:Category)
+REQUIRE cat.category_id IS UNIQUE;
+
+// Обязательность category_id для Category
+CREATE CONSTRAINT constraint_category_id_exists IF NOT EXISTS
+FOR (cat:Category)
+REQUIRE cat.category_id IS NOT NULL;
+
+// Обязательность concept_id для Category
+CREATE CONSTRAINT constraint_category_concept_id_exists IF NOT EXISTS
+FOR (cat:Category)
+REQUIRE cat.concept_id IS NOT NULL;
+
+// Обязательность name для Category
+CREATE CONSTRAINT constraint_category_name_exists IF NOT EXISTS
+FOR (cat:Category)
+REQUIRE cat.name IS NOT NULL;
+
+// Обязательность type для Category
+CREATE CONSTRAINT constraint_category_type_exists IF NOT EXISTS
+FOR (cat:Category)
+REQUIRE cat.type IS NOT NULL;
+
+// ==========================================
+// Ограничения для связи RELATED_TO
+// ==========================================
+
+// Уникальность relationship_id для RELATED_TO
+// Neo4j 5.x поддерживает ограничения на свойства отношений
+CREATE CONSTRAINT constraint_related_to_id_unique IF NOT EXISTS
 FOR ()-[r:RELATED_TO]-()
 REQUIRE r.relationship_id IS UNIQUE;
 
-// Add existence constraint on required relationship properties
-CREATE CONSTRAINT relationship_type_exists IF NOT EXISTS
+// Обязательность relationship_id для RELATED_TO
+CREATE CONSTRAINT constraint_related_to_id_exists IF NOT EXISTS
+FOR ()-[r:RELATED_TO]-()
+REQUIRE r.relationship_id IS NOT NULL;
+
+// Обязательность type для RELATED_TO
+CREATE CONSTRAINT constraint_related_to_type_exists IF NOT EXISTS
 FOR ()-[r:RELATED_TO]-()
 REQUIRE r.type IS NOT NULL;
 
-CREATE CONSTRAINT relationship_concept_id_exists IF NOT EXISTS
+// Обязательность direction для RELATED_TO
+CREATE CONSTRAINT constraint_related_to_direction_exists IF NOT EXISTS
 FOR ()-[r:RELATED_TO]-()
-REQUIRE r.concept_id IS NOT NULL;
+REQUIRE r.direction IS NOT NULL;
 
-// Create constraint for Philosopher nodes (if used in the graph)
-CREATE CONSTRAINT unique_philosopher_id IF NOT EXISTS
-FOR (p:Philosopher)
-REQUIRE p.philosopher_id IS UNIQUE;
+// ==========================================
+// Дополнительные ограничения для валидации данных
+// ==========================================
 
-// Create constraint for Tradition nodes (if used in the graph)
-CREATE CONSTRAINT unique_tradition_id IF NOT EXISTS
-FOR (t:Tradition)
-REQUIRE t.tradition_id IS UNIQUE;
+// Ограничение на допустимые значения innovation_degree для Category
+// (Neo4j не поддерживает CHECK constraints напрямую, но можно использовать триггеры)
+// Это будет обрабатываться на уровне приложения
 
-// Log migration completion
-CALL apoc.log.info("Migration 00001_create_constraints completed successfully");
+// Ограничение на допустимые значения innovation_degree для RELATED_TO
+// Это будет обрабатываться на уровне приложения
+
+// ==========================================
+// Метаданные миграции
+// ==========================================
+
+// Создаем узел для отслеживания миграций
+MERGE (m:Migration {version: '00001'})
+SET m.name = 'create_constraints',
+    m.description = 'Создание ограничений уникальности и существования',
+    m.applied_at = datetime(),
+    m.status = 'completed';
+
+// ==========================================
+// Проверка созданных ограничений
+// ==========================================
+
+// Команда для просмотра всех ограничений (выполнить отдельно):
+// SHOW CONSTRAINTS;
+
+// ==========================================
+// Rollback инструкции (сохранить отдельно)
+// ==========================================
+
+// DROP CONSTRAINT constraint_concept_id_unique IF EXISTS;
+// DROP CONSTRAINT constraint_concept_id_exists IF EXISTS;
+// DROP CONSTRAINT constraint_concept_name_exists IF EXISTS;
+// DROP CONSTRAINT constraint_category_id_unique IF EXISTS;
+// DROP CONSTRAINT constraint_category_id_exists IF EXISTS;
+// DROP CONSTRAINT constraint_category_concept_id_exists IF EXISTS;
+// DROP CONSTRAINT constraint_category_name_exists IF EXISTS;
+// DROP CONSTRAINT constraint_category_type_exists IF EXISTS;
+// DROP CONSTRAINT constraint_related_to_id_unique IF EXISTS;
+// DROP CONSTRAINT constraint_related_to_id_exists IF EXISTS;
+// DROP CONSTRAINT constraint_related_to_type_exists IF EXISTS;
+// DROP CONSTRAINT constraint_related_to_direction_exists IF EXISTS;
+// MATCH (m:Migration {version: '00001'}) DELETE m;

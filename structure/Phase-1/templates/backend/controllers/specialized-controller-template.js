@@ -1,243 +1,493 @@
 /**
- * Template for specialized controllers (non-CRUD operations)
- * Replace all instances of `Feature` with the actual feature name
- * Replace all instances of `feature` with the lowercase feature name
- * Replace all references to featureService with the actual service
+ * Шаблон специализированного контроллера
+ * Базовый шаблон для создания контроллеров со специфичной бизнес-логикой
+ * 
+ * Использование:
+ * 1. Скопировать файл в нужную директорию
+ * 2. Заменить {{ServiceName}} на название сервиса (например, GraphValidation)
+ * 3. Заменить {{serviceName}} на название сервиса в camelCase (например, graphValidation)
+ * 4. Адаптировать методы под специфику сервиса
  */
 
-const { defaultLogger } = require('../../../shared/lib/logging/logger');
-const { validate } = require('../../../shared/lib/validation/validators');
-const { BadRequestError, NotFoundError } = require('../../../shared/lib/errors/HttpErrors');
-const { 
-  featureRequestSchema, 
-  featureAnalysisSchema 
-} = require('../validation/featureSchemas');
+const logger = require('../../../shared/lib/logging/logger');
+const { ValidationError, NotFoundError } = require('../../../shared/lib/errors');
+const { incrementCounter } = require('../../../shared/lib/metrics/counters');
+const { publishMessage } = require('../../../shared/lib/messaging/producers');
 
-/**
- * Specialized controller for specific feature operations
- */
-class FeatureController {
-  /**
-   * Create a new FeatureController
-   * @param {Object} featureService - Feature service instance
-   * @param {Object} [relatedService] - Related service instance (if needed)
-   * @param {Object} [logger=defaultLogger] - Logger instance
-   */
-  constructor(featureService, relatedService = null, logger = defaultLogger) {
-    this.featureService = featureService;
-    this.relatedService = relatedService;
-    this.logger = logger;
+class {{ServiceName}}Controller {
+  constructor({{serviceName}}Service, relatedServices = {}) {
+    this.{{serviceName}}Service = {{serviceName}}Service;
+    this.relatedServices = relatedServices;
   }
 
   /**
-   * Process feature request
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   * @param {function} next - Express next middleware function
-   * @returns {Promise<void>} Promise that resolves when the operation is complete
+   * Основной метод обработки
+   * POST /{{endpoint}}/process
    */
-  async processFeature(req, res, next) {
+  async process(req, res, next) {
     try {
-      const data = validate(req.body, featureRequestSchema);
-      
-      // Add user context if available
-      if (req.user) {
-        data.userId = req.user.id;
-      }
-      
-      // Process the feature request
-      const result = await this.featureService.process(data);
-      
-      res.sendSuccess(result, {}, 'Feature processed successfully');
-    } catch (error) {
-      next(error);
-    }
-  }
+      const { 
+        entityId,
+        options = {},
+        async = false 
+      } = req.body;
+      const userId = req.user?.id;
 
-  /**
-   * Analyze feature
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   * @param {function} next - Express next middleware function
-   * @returns {Promise<void>} Promise that resolves when the operation is complete
-   */
-  async analyzeFeature(req, res, next) {
-    try {
-      const { id } = req.params;
-      const data = validate(req.body, featureAnalysisSchema);
-      
-      // Check if the feature exists
-      const featureExists = await this.featureService.exists(id);
-      
-      if (!featureExists) {
-        throw new NotFoundError('Feature not found', null, { id });
-      }
-      
-      // Analyze the feature
-      const analysis = await this.featureService.analyze(id, data);
-      
-      res.sendSuccess(analysis, {}, 'Feature analyzed successfully');
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  /**
-   * Generate report for a feature
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   * @param {function} next - Express next middleware function
-   * @returns {Promise<void>} Promise that resolves when the operation is complete
-   */
-  async generateReport(req, res, next) {
-    try {
-      const { id } = req.params;
-      const { format = 'json', details = 'standard' } = req.query;
-      
-      // Validate format
-      const allowedFormats = ['json', 'pdf', 'csv'];
-      if (!allowedFormats.includes(format)) {
-        throw new BadRequestError(`Invalid format: ${format}. Allowed formats: ${allowedFormats.join(', ')}`);
-      }
-      
-      // Validate details level
-      const allowedDetails = ['minimal', 'standard', 'comprehensive'];
-      if (!allowedDetails.includes(details)) {
-        throw new BadRequestError(`Invalid details level: ${details}. Allowed levels: ${allowedDetails.join(', ')}`);
-      }
-      
-      // Generate the report
-      const report = await this.featureService.generateReport(id, { format, details });
-      
-      // Set the appropriate content type for the response
-      if (format === 'pdf') {
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename="feature-${id}-report.pdf"`);
-        res.send(report);
-      } else if (format === 'csv') {
-        res.setHeader('Content-Type', 'text/csv');
-        res.setHeader('Content-Disposition', `attachment; filename="feature-${id}-report.csv"`);
-        res.send(report);
-      } else {
-        // Default to JSON
-        res.sendSuccess(report, {}, 'Feature report generated successfully');
-      }
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  /**
-   * Submit feature for review
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   * @param {function} next - Express next middleware function
-   * @returns {Promise<void>} Promise that resolves when the operation is complete
-   */
-  async submitForReview(req, res, next) {
-    try {
-      const { id } = req.params;
-      const { comments } = req.body;
-      
-      // Check if the feature exists
-      const featureExists = await this.featureService.exists(id);
-      
-      if (!featureExists) {
-        throw new NotFoundError('Feature not found', null, { id });
-      }
-      
-      // Submit for review
-      const reviewRequest = await this.featureService.submitForReview(id, {
-        comments,
-        submittedBy: req.user ? req.user.id : null
+      logger.info('Processing {{serviceName}} request', {
+        entityId,
+        userId,
+        options,
+        async
       });
-      
-      res.sendSuccess(reviewRequest, {}, 'Feature submitted for review successfully');
+
+      // Валидация входных данных
+      this.validateProcessRequest({ entityId, options });
+
+      // Проверка прав доступа
+      await this.checkAccess(entityId, userId);
+
+      // Асинхронная обработка
+      if (async) {
+        const taskId = await this.processAsync(entityId, options, userId);
+        
+        res.status(202).json({
+          success: true,
+          taskId,
+          message: 'Processing started',
+          statusUrl: `/{{endpoint}}/status/${taskId}`
+        });
+        return;
+      }
+
+      // Синхронная обработка
+      const result = await this.{{serviceName}}Service.process({
+        entityId,
+        options,
+        userId
+      });
+
+      incrementCounter('{{serviceName}}_processed_total', {
+        status: 'success'
+      });
+
+      res.json({
+        success: true,
+        data: result,
+        message: '{{ServiceName}} completed successfully'
+      });
     } catch (error) {
+      incrementCounter('{{serviceName}}_processed_total', {
+        status: 'error'
+      });
       next(error);
     }
   }
 
   /**
-   * Compare features
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   * @param {function} next - Express next middleware function
-   * @returns {Promise<void>} Promise that resolves when the operation is complete
+   * Анализ данных
+   * POST /{{endpoint}}/analyze
    */
-  async compareFeatures(req, res, next) {
+  async analyze(req, res, next) {
     try {
-      const { ids } = req.body;
+      const { 
+        entityId,
+        analysisType = 'full',
+        parameters = {} 
+      } = req.body;
+      const userId = req.user?.id;
+
+      logger.info('Analyzing {{serviceName}} data', {
+        entityId,
+        analysisType,
+        userId
+      });
+
+      // Получаем данные для анализа
+      const entity = await this.getEntityForAnalysis(entityId);
       
-      if (!Array.isArray(ids) || ids.length < 2) {
-        throw new BadRequestError('At least two feature IDs are required for comparison');
+      if (!entity) {
+        throw new NotFoundError('Entity not found');
       }
-      
-      // Compare the features
-      const comparison = await this.featureService.compare(ids);
-      
-      res.sendSuccess(comparison, {}, 'Features compared successfully');
+
+      // Выполняем анализ
+      const analysis = await this.{{serviceName}}Service.analyze({
+        entity,
+        analysisType,
+        parameters,
+        userId
+      });
+
+      // Сохраняем результаты анализа
+      await this.saveAnalysisResults(entityId, analysis);
+
+      incrementCounter('{{serviceName}}_analyzed_total', {
+        type: analysisType
+      });
+
+      res.json({
+        success: true,
+        data: analysis,
+        metadata: {
+          entityId,
+          analysisType,
+          timestamp: new Date().toISOString()
+        }
+      });
     } catch (error) {
+      incrementCounter('{{serviceName}}_analysis_errors_total');
       next(error);
     }
   }
 
   /**
-   * Handle asynchronous feature operation
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   * @param {function} next - Express next middleware function
-   * @returns {Promise<void>} Promise that resolves when the operation is complete
+   * Валидация данных
+   * POST /{{endpoint}}/validate
    */
-  async handleAsyncOperation(req, res, next) {
+  async validate(req, res, next) {
     try {
-      const { id } = req.params;
-      const { operation } = req.body;
-      
-      // Check if the feature exists
-      const featureExists = await this.featureService.exists(id);
-      
-      if (!featureExists) {
-        throw new NotFoundError('Feature not found', null, { id });
-      }
-      
-      // Start the asynchronous operation
-      const operationId = await this.featureService.startAsyncOperation(id, operation);
-      
-      // Return the operation ID for polling
-      res.sendSuccess(
-        { operationId },
-        {},
-        `Asynchronous operation '${operation}' started successfully`
-      );
+      const { data, validationType = 'standard' } = req.body;
+
+      logger.info('Validating {{serviceName}} data', {
+        validationType,
+        dataSize: JSON.stringify(data).length
+      });
+
+      const validationResult = await this.{{serviceName}}Service.validate({
+        data,
+        validationType
+      });
+
+      const isValid = validationResult.errors.length === 0;
+
+      incrementCounter('{{serviceName}}_validated_total', {
+        valid: isValid
+      });
+
+      res.json({
+        success: true,
+        valid: isValid,
+        errors: validationResult.errors,
+        warnings: validationResult.warnings,
+        suggestions: validationResult.suggestions
+      });
     } catch (error) {
+      incrementCounter('{{serviceName}}_validation_errors_total');
       next(error);
     }
   }
-  
+
   /**
-   * Check status of asynchronous feature operation
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   * @param {function} next - Express next middleware function
-   * @returns {Promise<void>} Promise that resolves when the operation is complete
+   * Преобразование данных
+   * POST /{{endpoint}}/transform
    */
-  async checkAsyncOperationStatus(req, res, next) {
+  async transform(req, res, next) {
     try {
-      const { operationId } = req.params;
-      
-      // Get the operation status
-      const status = await this.featureService.getAsyncOperationStatus(operationId);
-      
+      const { 
+        sourceData,
+        targetFormat,
+        transformOptions = {} 
+      } = req.body;
+
+      logger.info('Transforming {{serviceName}} data', {
+        sourceFormat: this.detectFormat(sourceData),
+        targetFormat,
+        options: transformOptions
+      });
+
+      const transformed = await this.{{serviceName}}Service.transform({
+        sourceData,
+        targetFormat,
+        options: transformOptions
+      });
+
+      incrementCounter('{{serviceName}}_transformed_total', {
+        format: targetFormat
+      });
+
+      res.json({
+        success: true,
+        data: transformed,
+        metadata: {
+          sourceFormat: this.detectFormat(sourceData),
+          targetFormat,
+          timestamp: new Date().toISOString()
+        }
+      });
+    } catch (error) {
+      incrementCounter('{{serviceName}}_transformation_errors_total');
+      next(error);
+    }
+  }
+
+  /**
+   * Сравнение данных
+   * POST /{{endpoint}}/compare
+   */
+  async compare(req, res, next) {
+    try {
+      const { 
+        entities,
+        comparisonType = 'full',
+        options = {} 
+      } = req.body;
+
+      if (!Array.isArray(entities) || entities.length < 2) {
+        throw new ValidationError('At least 2 entities required for comparison');
+      }
+
+      logger.info('Comparing {{serviceName}} entities', {
+        count: entities.length,
+        comparisonType
+      });
+
+      const comparison = await this.{{serviceName}}Service.compare({
+        entities,
+        comparisonType,
+        options
+      });
+
+      incrementCounter('{{serviceName}}_compared_total', {
+        count: entities.length
+      });
+
+      res.json({
+        success: true,
+        data: comparison,
+        metadata: {
+          entityCount: entities.length,
+          comparisonType,
+          timestamp: new Date().toISOString()
+        }
+      });
+    } catch (error) {
+      incrementCounter('{{serviceName}}_comparison_errors_total');
+      next(error);
+    }
+  }
+
+  /**
+   * Получение статуса асинхронной задачи
+   * GET /{{endpoint}}/status/:taskId
+   */
+  async getTaskStatus(req, res, next) {
+    try {
+      const { taskId } = req.params;
+
+      logger.info('Getting task status', { taskId });
+
+      const status = await this.{{serviceName}}Service.getTaskStatus(taskId);
+
       if (!status) {
-        throw new NotFoundError('Operation not found', null, { operationId });
+        throw new NotFoundError('Task not found');
       }
-      
-      res.sendSuccess(status);
+
+      res.json({
+        success: true,
+        data: status
+      });
     } catch (error) {
       next(error);
     }
+  }
+
+  /**
+   * Отмена асинхронной задачи
+   * POST /{{endpoint}}/cancel/:taskId
+   */
+  async cancelTask(req, res, next) {
+    try {
+      const { taskId } = req.params;
+      const userId = req.user?.id;
+
+      logger.info('Cancelling task', { taskId, userId });
+
+      const task = await this.{{serviceName}}Service.getTaskStatus(taskId);
+      
+      if (!task) {
+        throw new NotFoundError('Task not found');
+      }
+
+      if (task.userId !== userId && !req.user?.isAdmin) {
+        throw new ValidationError('You do not have permission to cancel this task');
+      }
+
+      await this.{{serviceName}}Service.cancelTask(taskId);
+
+      incrementCounter('{{serviceName}}_tasks_cancelled_total');
+
+      res.json({
+        success: true,
+        message: 'Task cancelled successfully'
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Получение статистики
+   * GET /{{endpoint}}/stats
+   */
+  async getStats(req, res, next) {
+    try {
+      const { 
+        period = '7d',
+        groupBy = 'day' 
+      } = req.query;
+
+      logger.info('Getting {{serviceName}} statistics', {
+        period,
+        groupBy
+      });
+
+      const stats = await this.{{serviceName}}Service.getStatistics({
+        period,
+        groupBy
+      });
+
+      res.json({
+        success: true,
+        data: stats,
+        metadata: {
+          period,
+          groupBy,
+          timestamp: new Date().toISOString()
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Webhook для внешних интеграций
+   * POST /{{endpoint}}/webhook
+   */
+  async webhook(req, res, next) {
+    try {
+      const { event, data } = req.body;
+      const signature = req.headers['x-webhook-signature'];
+
+      logger.info('Processing webhook', {
+        event,
+        hasSignature: !!signature
+      });
+
+      // Валидация подписи
+      if (!this.validateWebhookSignature(req.body, signature)) {
+        throw new ValidationError('Invalid webhook signature');
+      }
+
+      // Обработка события
+      await this.{{serviceName}}Service.processWebhook({
+        event,
+        data
+      });
+
+      incrementCounter('{{serviceName}}_webhooks_processed_total', {
+        event
+      });
+
+      res.json({
+        success: true,
+        message: 'Webhook processed successfully'
+      });
+    } catch (error) {
+      incrementCounter('{{serviceName}}_webhook_errors_total');
+      next(error);
+    }
+  }
+
+  // Вспомогательные методы
+
+  /**
+   * Валидация запроса на обработку
+   */
+  validateProcessRequest({ entityId, options }) {
+    if (!entityId) {
+      throw new ValidationError('Entity ID is required');
+    }
+
+    // Дополнительная валидация в зависимости от специфики сервиса
+    // ...
+  }
+
+  /**
+   * Проверка прав доступа
+   */
+  async checkAccess(entityId, userId) {
+    // Реализация проверки прав доступа
+    // Может включать проверку владельца, роли пользователя и т.д.
+    // ...
+  }
+
+  /**
+   * Асинхронная обработка
+   */
+  async processAsync(entityId, options, userId) {
+    const taskId = `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    await publishMessage('{{serviceName}}.tasks', {
+      id: taskId,
+      type: 'process',
+      entityId,
+      options,
+      userId,
+      timestamp: new Date().toISOString()
+    });
+
+    // Сохраняем информацию о задаче
+    await this.{{serviceName}}Service.createTask({
+      taskId,
+      entityId,
+      userId,
+      status: 'pending'
+    });
+
+    return taskId;
+  }
+
+  /**
+   * Получение сущности для анализа
+   */
+  async getEntityForAnalysis(entityId) {
+    // Реализация получения данных из соответствующего сервиса
+    // Может использовать relatedServices
+    // ...
+  }
+
+  /**
+   * Сохранение результатов анализа
+   */
+  async saveAnalysisResults(entityId, analysis) {
+    // Реализация сохранения результатов
+    // ...
+  }
+
+  /**
+   * Определение формата данных
+   */
+  detectFormat(data) {
+    // Реализация определения формата
+    if (typeof data === 'string') {
+      try {
+        JSON.parse(data);
+        return 'json';
+      } catch {
+        return 'text';
+      }
+    }
+    return typeof data;
+  }
+
+  /**
+   * Валидация подписи webhook
+   */
+  validateWebhookSignature(payload, signature) {
+    // Реализация валидации подписи
+    // Обычно используется HMAC с секретным ключом
+    return true; // Заглушка
   }
 }
 
-module.exports = FeatureController;
+module.exports = {{ServiceName}}Controller;

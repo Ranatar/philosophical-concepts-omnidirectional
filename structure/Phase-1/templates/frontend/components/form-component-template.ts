@@ -1,537 +1,549 @@
-import React, { useState, useEffect } from 'react';
+/**
+ * Шаблон компонента формы
+ * Базовый шаблон для создания форм с валидацией и управлением состоянием
+ * 
+ * Использование:
+ * 1. Скопировать файл в нужную директорию компонентов
+ * 2. Заменить {{FormName}} на название формы (например, UserRegistrationForm)
+ * 3. Заменить {{formName}} на название в camelCase (например, userRegistration)
+ * 4. Заменить {{EntityName}} на название сущности (например, User)
+ * 5. Адаптировать поля и валидацию под специфику формы
+ */
+
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import { useForm, Controller, SubmitHandler } from 'react-hook-form';
+import { yupResolver } from '@hookform/resolvers/yup';
+import * as yup from 'yup';
+import classNames from 'classnames';
+
+// UI компоненты
+import { Button } from '../common/Button';
+import { Input } from '../common/Input';
+import { Select } from '../common/Select';
+import { Loader } from '../common/Loader';
+import { ErrorBoundary } from '../common/ErrorBoundary';
+
+// Хуки
+import { useApi } from '../../hooks/useApi';
+
+// Типы
+import { {{EntityName}}, {{FormName}}Data } from '../../types/{{formName}}.types';
+
+// Утилиты
+import { formatError, sanitizeInput } from '../../utils/validators';
+
+// Стили
+import styles from './{{FormName}}.module.css';
 
 /**
- * Field configuration for form fields
+ * Интерфейс пропсов формы
  */
-interface FieldConfig {
-  /** Field name (used as key and form field name) */
-  name: string;
-  /** Field label */
-  label: string;
-  /** Field type (text, email, password, etc.) */
-  type?: string;
-  /** Whether the field is required */
-  required?: boolean;
-  /** Placeholder text */
-  placeholder?: string;
-  /** Default value */
-  defaultValue?: any;
-  /** Help text to display below the field */
-  helpText?: string;
-  /** Custom validation function */
-  validate?: (value: any, formData: Record<string, any>) => string | null;
-  /** Options for select fields */
-  options?: Array<{
-    label: string;
-    value: any;
-  }>;
-  /** Optional render function for custom field rendering */
-  render?: (field: FieldConfig, value: any, onChange: (value: any) => void, error?: string) => React.ReactNode;
-  /** Additional props to pass to the input element */
-  inputProps?: Record<string, any>;
-}
-
-/**
- * Props for FormComponent
- */
-interface FormComponentProps {
-  /** Form title */
-  title?: string;
-  /** Form fields configuration */
-  fields: FieldConfig[];
-  /** Initial values for the form */
-  initialValues?: Record<string, any>;
-  /** Callback for form submission */
-  onSubmit: (values: Record<string, any>) => void | Promise<void>;
-  /** Text for the submit button */
-  submitText?: string;
-  /** Whether the form is currently submitting */
-  isSubmitting?: boolean;
-  /** Form-level error message */
-  error?: string;
-  /** Whether to show the form in a horizontal layout */
-  horizontal?: boolean;
-  /** Optional callback when form is reset */
-  onReset?: () => void;
-  /** Optional success message */
-  successMessage?: string;
-  /** Optional custom class name */
+interface {{FormName}}Props {
   className?: string;
-  /** Content to render after the form */
-  children?: React.ReactNode;
+  initialData?: Partial<{{FormName}}Data>;
+  onSubmit: (data: {{FormName}}Data) => Promise<void> | void;
+  onCancel?: () => void;
+  onChange?: (data: Partial<{{FormName}}Data>, isValid: boolean) => void;
+  mode?: 'create' | 'edit';
+  submitLabel?: string;
+  cancelLabel?: string;
+  showCancel?: boolean;
+  disabled?: boolean;
+  autoSave?: boolean;
+  autoSaveDelay?: number;
 }
 
 /**
- * FormComponent - A reusable form component with validation
+ * Схема валидации формы
+ */
+const validationSchema = yup.object().shape({
+  name: yup
+    .string()
+    .trim()
+    .required('Name is required')
+    .min(3, 'Name must be at least 3 characters')
+    .max(100, 'Name must not exceed 100 characters'),
+  
+  email: yup
+    .string()
+    .trim()
+    .required('Email is required')
+    .email('Invalid email format'),
+  
+  phone: yup
+    .string()
+    .trim()
+    .matches(/^[+]?[(]?[0-9]{3}[)]?[-\s.]?[0-9]{3}[-\s.]?[0-9]{4,6}$/, 'Invalid phone format')
+    .nullable(),
+  
+  status: yup
+    .string()
+    .oneOf(['active', 'inactive', 'pending'], 'Invalid status')
+    .required('Status is required'),
+  
+  description: yup
+    .string()
+    .trim()
+    .max(500, 'Description must not exceed 500 characters')
+    .nullable(),
+  
+  tags: yup
+    .array()
+    .of(yup.string().trim())
+    .max(10, 'Maximum 10 tags allowed')
+    .nullable(),
+  
+  // Добавить специфичные поля валидации
+});
+
+// Тип для данных формы на основе схемы
+type FormData = yup.InferType<typeof validationSchema>;
+
+/**
+ * Компонент формы {{FormName}}
  * 
  * @example
  * ```tsx
- * <FormComponent
- *   title="Contact Form"
- *   fields={[
- *     { name: 'name', label: 'Name', required: true },
- *     { name: 'email', label: 'Email', type: 'email', required: true },
- *     { name: 'message', label: 'Message', type: 'textarea', required: true }
- *   ]}
- *   onSubmit={handleSubmit}
- *   submitText="Send Message"
+ * <{{FormName}}
+ *   initialData={{ name: 'Test' }}
+ *   onSubmit={async (data) => {
+ *     await saveData(data);
+ *   }}
+ *   onCancel={() => navigate(-1)}
  * />
  * ```
  */
-const FormComponent: React.FC<FormComponentProps> = ({
-  title,
-  fields,
-  initialValues = {},
+export const {{FormName}}: React.FC<{{FormName}}Props> = ({
+  className,
+  initialData,
   onSubmit,
-  submitText = 'Submit',
-  isSubmitting = false,
-  error,
-  horizontal = false,
-  onReset,
-  successMessage,
-  className = '',
-  children
+  onCancel,
+  onChange,
+  mode = 'create',
+  submitLabel,
+  cancelLabel = 'Cancel',
+  showCancel = true,
+  disabled = false,
+  autoSave = false,
+  autoSaveDelay = 2000,
 }) => {
-  // Form state
-  const [formData, setFormData] = useState<Record<string, any>>(initialValues);
-  const [touched, setTouched] = useState<Record<string, boolean>>({});
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [showSuccess, setShowSuccess] = useState(false);
+  // Состояние формы
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
   
-  // Update form data when initialValues change
+  // React Hook Form
+  const {
+    control,
+    handleSubmit,
+    formState: { errors, isDirty, isValid, dirtyFields },
+    reset,
+    watch,
+    setValue,
+    trigger,
+    getValues
+  } = useForm<FormData>({
+    resolver: yupResolver(validationSchema),
+    mode: 'onChange',
+    defaultValues: {
+      name: '',
+      email: '',
+      phone: '',
+      status: 'active',
+      description: '',
+      tags: [],
+      ...initialData
+    }
+  });
+  
+  // Загрузка дополнительных данных (например, опций для селектов)
+  const { data: statusOptions } = useApi<Array<{ value: string; label: string }>>(
+    '/api/options/statuses',
+    { initialData: [] }
+  );
+  
+  // Отслеживание изменений для onChange колбэка
+  const watchedValues = watch();
+  
   useEffect(() => {
-    setFormData(initialValues);
-  }, [initialValues]);
+    if (onChange) {
+      onChange(watchedValues, isValid);
+    }
+  }, [watchedValues, isValid, onChange]);
   
-  // Handle input change
-  const handleChange = (name: string, value: any) => {
-    // Update form data
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+  // Автосохранение
+  useEffect(() => {
+    if (!autoSave || !isDirty || !isValid) return;
     
-    // Mark field as touched
-    if (!touched[name]) {
-      setTouched(prev => ({
-        ...prev,
-        [name]: true
-      }));
-    }
-    
-    // Clear error for this field
-    if (errors[name]) {
-      setErrors(prev => ({
-        ...prev,
-        [name]: ''
-      }));
-    }
-    
-    // Hide success message when form changes
-    if (showSuccess) {
-      setShowSuccess(false);
-    }
-  };
-  
-  // Validate a single field
-  const validateField = (field: FieldConfig, value: any): string => {
-    // Required field validation
-    if (field.required && (value === undefined || value === null || value === '')) {
-      return `${field.label} is required`;
-    }
-    
-    // Email validation
-    if (field.type === 'email' && value && !/^\S+@\S+\.\S+$/.test(value)) {
-      return 'Please enter a valid email address';
-    }
-    
-    // URL validation
-    if (field.type === 'url' && value && !/^(ftp|http|https):\/\/[^ "]+$/.test(value)) {
-      return 'Please enter a valid URL';
-    }
-    
-    // Custom validation function
-    if (field.validate) {
-      const customError = field.validate(value, formData);
-      if (customError) {
-        return customError;
+    const timeoutId = setTimeout(async () => {
+      try {
+        await handleFormSubmit(getValues());
+        setLastSaved(new Date());
+      } catch (error) {
+        console.error('Auto-save failed:', error);
       }
-    }
+    }, autoSaveDelay);
     
-    return '';
-  };
+    return () => clearTimeout(timeoutId);
+  }, [watchedValues, autoSave, isDirty, isValid, autoSaveDelay]);
   
-  // Validate all fields
-  const validateForm = (): boolean => {
-    const newErrors: Record<string, string> = {};
-    let isValid = true;
-    
-    // Validate each field
-    fields.forEach(field => {
-      const value = formData[field.name];
-      const error = validateField(field, value);
-      
-      if (error) {
-        newErrors[field.name] = error;
-        isValid = false;
-      }
-    });
-    
-    setErrors(newErrors);
-    return isValid;
-  };
-  
-  // Handle form submission
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Mark all fields as touched
-    const allTouched: Record<string, boolean> = {};
-    fields.forEach(field => {
-      allTouched[field.name] = true;
-    });
-    setTouched(allTouched);
-    
-    // Validate form
-    if (!validateForm()) {
-      return;
-    }
+  // Обработчик отправки формы
+  const handleFormSubmit: SubmitHandler<FormData> = useCallback(async (data) => {
+    setIsSubmitting(true);
+    setSubmitError(null);
     
     try {
-      // Call onSubmit callback
-      await onSubmit(formData);
+      // Санитизация данных перед отправкой
+      const sanitizedData = sanitizeFormData(data);
       
-      // Show success message if provided
-      if (successMessage) {
-        setShowSuccess(true);
-        
-        // Hide success message after 5 seconds
-        setTimeout(() => {
-          setShowSuccess(false);
-        }, 5000);
+      // Вызов внешнего обработчика
+      await onSubmit(sanitizedData as {{FormName}}Data);
+      
+      // Сброс состояния формы после успешной отправки
+      if (mode === 'create') {
+        reset();
       }
-    } catch (err) {
-      // Error handling is done by the parent component
-      console.error('Form submission error:', err);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred';
+      setSubmitError(errorMessage);
+      console.error('Form submission error:', error);
+    } finally {
+      setIsSubmitting(false);
     }
-  };
+  }, [onSubmit, mode, reset]);
   
-  // Handle form reset
-  const handleReset = () => {
-    setFormData(initialValues);
-    setTouched({});
-    setErrors({});
-    setShowSuccess(false);
-    
-    if (onReset) {
-      onReset();
+  // Обработчик отмены
+  const handleCancel = useCallback(() => {
+    if (isDirty) {
+      const confirmed = window.confirm('You have unsaved changes. Are you sure you want to cancel?');
+      if (!confirmed) return;
     }
-  };
+    onCancel?.();
+  }, [isDirty, onCancel]);
   
-  // Render a field based on its configuration
-  const renderField = (field: FieldConfig) => {
-    const value = formData[field.name] !== undefined ? formData[field.name] : field.defaultValue || '';
-    const fieldError = touched[field.name] ? errors[field.name] : '';
-    
-    // Use custom render function if provided
-    if (field.render) {
-      return field.render(
-        field,
-        value,
-        (newValue) => handleChange(field.name, newValue),
-        fieldError
-      );
-    }
-    
-    // Default field rendering based on field type
-    switch (field.type) {
-      case 'textarea':
-        return (
-          <textarea
-            id={field.name}
-            name={field.name}
-            value={value}
-            onChange={(e) => handleChange(field.name, e.target.value)}
-            className={`form-textarea ${fieldError ? 'is-invalid' : ''}`}
-            placeholder={field.placeholder}
-            required={field.required}
-            {...field.inputProps}
-          />
-        );
-        
-      case 'select':
-        return (
-          <select
-            id={field.name}
-            name={field.name}
-            value={value}
-            onChange={(e) => handleChange(field.name, e.target.value)}
-            className={`form-select ${fieldError ? 'is-invalid' : ''}`}
-            required={field.required}
-            {...field.inputProps}
-          >
-            {!field.required && (
-              <option value="">-- Select {field.label} --</option>
-            )}
-            {field.options?.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        );
-        
-      case 'checkbox':
-        return (
-          <input
-            type="checkbox"
-            id={field.name}
-            name={field.name}
-            checked={!!value}
-            onChange={(e) => handleChange(field.name, e.target.checked)}
-            className={`form-checkbox ${fieldError ? 'is-invalid' : ''}`}
-            required={field.required}
-            {...field.inputProps}
-          />
-        );
-        
-      case 'radio':
-        return (
-          <div className="radio-group">
-            {field.options?.map((option) => (
-              <div key={option.value} className="radio-option">
-                <input
-                  type="radio"
-                  id={`${field.name}-${option.value}`}
-                  name={field.name}
-                  value={option.value}
-                  checked={value === option.value}
-                  onChange={() => handleChange(field.name, option.value)}
-                  className={fieldError ? 'is-invalid' : ''}
-                  required={field.required}
-                  {...field.inputProps}
-                />
-                <label htmlFor={`${field.name}-${option.value}`}>
-                  {option.label}
-                </label>
-              </div>
-            ))}
-          </div>
-        );
-        
-      default:
-        return (
-          <input
-            type={field.type || 'text'}
-            id={field.name}
-            name={field.name}
-            value={value}
-            onChange={(e) => handleChange(field.name, e.target.value)}
-            className={`form-input ${fieldError ? 'is-invalid' : ''}`}
-            placeholder={field.placeholder}
-            required={field.required}
-            {...field.inputProps}
-          />
-        );
-    }
-  };
+  // Обработчик сброса формы
+  const handleReset = useCallback(() => {
+    reset(initialData);
+    setSubmitError(null);
+  }, [reset, initialData]);
   
-  // Form layout classes
-  const formClasses = [
-    'form-component',
-    horizontal ? 'form-horizontal' : 'form-vertical',
-    className
-  ].filter(Boolean).join(' ');
+  // Вспомогательные функции
+  function sanitizeFormData(data: FormData): FormData {
+    return {
+      ...data,
+      name: sanitizeInput(data.name),
+      email: data.email.toLowerCase().trim(),
+      phone: data.phone?.trim() || null,
+      description: sanitizeInput(data.description || ''),
+      tags: data.tags?.map(tag => sanitizeInput(tag)) || []
+    };
+  }
+  
+  // Функция для получения сообщения об ошибке поля
+  const getFieldError = useCallback((fieldName: keyof FormData) => {
+    const error = errors[fieldName];
+    return error ? formatError(error) : undefined;
+  }, [errors]);
+  
+  // Мемоизированные значения
+  const submitButtonLabel = useMemo(() => {
+    if (submitLabel) return submitLabel;
+    if (isSubmitting) return 'Saving...';
+    if (mode === 'create') return 'Create';
+    return 'Save';
+  }, [submitLabel, isSubmitting, mode]);
+  
+  const formTitle = useMemo(() => {
+    return mode === 'create' ? 'Create New {{EntityName}}' : 'Edit {{EntityName}}';
+  }, [mode]);
   
   return (
-    <div className={formClasses}>
-      {title && <h3 className="form-title">{title}</h3>}
-      
-      {/* Form-level error message */}
-      {error && (
-        <div className="form-error">
-          <div className="error-message">
-            <span className="error-icon">⚠️</span> {error}
-          </div>
-        </div>
-      )}
-      
-      {/* Success message */}
-      {showSuccess && successMessage && (
-        <div className="form-success">
-          <div className="success-message">
-            <span className="success-icon">✓</span> {successMessage}
-          </div>
-        </div>
-      )}
-      
-      <form onSubmit={handleSubmit} onReset={handleReset} noValidate>
-        <div className="form-fields">
-          {fields.map((field) => (
-            <div
-              key={field.name}
-              className={`form-field ${
-                field.type === 'checkbox' ? 'form-field-checkbox' : ''
-              } ${touched[field.name] && errors[field.name] ? 'has-error' : ''}`}
-            >
-              <label htmlFor={field.name} className="field-label">
-                {field.label}
-                {field.required && <span className="required-indicator">*</span>}
-              </label>
-              
-              <div className="field-input">
-                {renderField(field)}
-                
-                {/* Field error message */}
-                {touched[field.name] && errors[field.name] && (
-                  <div className="field-error">{errors[field.name]}</div>
-                )}
-                
-                {/* Help text */}
-                {field.helpText && (
-                  <div className="field-help-text">{field.helpText}</div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-        
-        <div className="form-actions">
-          <button
-            type="submit"
-            className="btn btn-primary submit-button"
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? 'Submitting...' : submitText}
-          </button>
+    <ErrorBoundary fallback={<div>Form error occurred</div>}>
+      <div className={classNames(styles.container, className)}>
+        <form 
+          className={styles.form}
+          onSubmit={handleSubmit(handleFormSubmit)}
+          noValidate
+        >
+          <h2 className={styles.title}>{formTitle}</h2>
           
-          <button
-            type="reset"
-            className="btn btn-secondary reset-button"
-            onClick={handleReset}
-          >
-            Reset
-          </button>
-        </div>
-      </form>
-      
-      {children}
-    </div>
+          {/* Сообщение об ошибке отправки */}
+          {submitError && (
+            <div className={styles.errorAlert}>
+              <span className={styles.errorIcon}>⚠️</span>
+              <span>{submitError}</span>
+            </div>
+          )}
+          
+          {/* Индикатор автосохранения */}
+          {autoSave && lastSaved && (
+            <div className={styles.autoSaveIndicator}>
+              Last saved: {lastSaved.toLocaleTimeString()}
+            </div>
+          )}
+          
+          {/* Поля формы */}
+          <div className={styles.formGrid}>
+            {/* Имя */}
+            <div className={styles.formGroup}>
+              <label htmlFor="name" className={styles.label}>
+                Name <span className={styles.required}>*</span>
+              </label>
+              <Controller
+                name="name"
+                control={control}
+                render={({ field }) => (
+                  <Input
+                    {...field}
+                    id="name"
+                    type="text"
+                    placeholder="Enter name"
+                    error={getFieldError('name')}
+                    disabled={disabled || isSubmitting}
+                    className={styles.input}
+                  />
+                )}
+              />
+            </div>
+            
+            {/* Email */}
+            <div className={styles.formGroup}>
+              <label htmlFor="email" className={styles.label}>
+                Email <span className={styles.required}>*</span>
+              </label>
+              <Controller
+                name="email"
+                control={control}
+                render={({ field }) => (
+                  <Input
+                    {...field}
+                    id="email"
+                    type="email"
+                    placeholder="user@example.com"
+                    error={getFieldError('email')}
+                    disabled={disabled || isSubmitting}
+                    className={styles.input}
+                  />
+                )}
+              />
+            </div>
+            
+            {/* Телефон */}
+            <div className={styles.formGroup}>
+              <label htmlFor="phone" className={styles.label}>
+                Phone
+              </label>
+              <Controller
+                name="phone"
+                control={control}
+                render={({ field }) => (
+                  <Input
+                    {...field}
+                    id="phone"
+                    type="tel"
+                    placeholder="+1 (555) 123-4567"
+                    error={getFieldError('phone')}
+                    disabled={disabled || isSubmitting}
+                    className={styles.input}
+                  />
+                )}
+              />
+            </div>
+            
+            {/* Статус */}
+            <div className={styles.formGroup}>
+              <label htmlFor="status" className={styles.label}>
+                Status <span className={styles.required}>*</span>
+              </label>
+              <Controller
+                name="status"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    {...field}
+                    id="status"
+                    options={statusOptions || [
+                      { value: 'active', label: 'Active' },
+                      { value: 'inactive', label: 'Inactive' },
+                      { value: 'pending', label: 'Pending' }
+                    ]}
+                    placeholder="Select status"
+                    error={getFieldError('status')}
+                    disabled={disabled || isSubmitting}
+                    className={styles.select}
+                  />
+                )}
+              />
+            </div>
+          </div>
+          
+          {/* Описание */}
+          <div className={styles.formGroup}>
+            <label htmlFor="description" className={styles.label}>
+              Description
+            </label>
+            <Controller
+              name="description"
+              control={control}
+              render={({ field }) => (
+                <textarea
+                  {...field}
+                  id="description"
+                  placeholder="Enter description"
+                  rows={4}
+                  disabled={disabled || isSubmitting}
+                  className={classNames(styles.textarea, {
+                    [styles.error]: errors.description
+                  })}
+                />
+              )}
+            />
+            {errors.description && (
+              <span className={styles.errorMessage}>
+                {formatError(errors.description)}
+              </span>
+            )}
+          </div>
+          
+          {/* Теги */}
+          <div className={styles.formGroup}>
+            <label htmlFor="tags" className={styles.label}>
+              Tags
+            </label>
+            <Controller
+              name="tags"
+              control={control}
+              render={({ field }) => (
+                <TagInput
+                  {...field}
+                  id="tags"
+                  placeholder="Add tags"
+                  error={getFieldError('tags')}
+                  disabled={disabled || isSubmitting}
+                  maxTags={10}
+                />
+              )}
+            />
+          </div>
+          
+          {/* Кнопки действий */}
+          <div className={styles.formActions}>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={disabled || isSubmitting || !isValid}
+              loading={isSubmitting}
+              className={styles.submitButton}
+            >
+              {submitButtonLabel}
+            </Button>
+            
+            {showCancel && (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleCancel}
+                disabled={isSubmitting}
+                className={styles.cancelButton}
+              >
+                {cancelLabel}
+              </Button>
+            )}
+            
+            {mode === 'create' && isDirty && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={handleReset}
+                disabled={isSubmitting}
+                className={styles.resetButton}
+              >
+                Reset
+              </Button>
+            )}
+          </div>
+          
+          {/* Информация о состоянии формы (для отладки) */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className={styles.debugInfo}>
+              <p>Dirty: {isDirty ? 'Yes' : 'No'}</p>
+              <p>Valid: {isValid ? 'Yes' : 'No'}</p>
+              <p>Dirty fields: {Object.keys(dirtyFields).join(', ') || 'None'}</p>
+            </div>
+          )}
+        </form>
+      </div>
+    </ErrorBoundary>
   );
 };
-
-export default FormComponent;
 
 /**
- * SearchForm - A simplified form for search operations
- * 
- * @example
- * ```tsx
- * <SearchForm
- *   onSearch={handleSearch}
- *   fields={[
- *     { name: 'query', label: 'Search', placeholder: 'Search by name...' },
- *     { name: 'type', label: 'Type', type: 'select', options: typeOptions }
- *   ]}
- * />
- * ```
+ * Компонент для ввода тегов
  */
-export const SearchForm: React.FC<{
-  /** Form fields configuration */
-  fields: FieldConfig[];
-  /** Callback for search submission */
-  onSearch: (values: Record<string, any>) => void;
-  /** Initial search values */
-  initialValues?: Record<string, any>;
-  /** Search button text */
-  searchText?: string;
-  /** Custom class name */
-  className?: string;
-}> = ({
-  fields,
-  onSearch,
-  initialValues = {},
-  searchText = 'Search',
-  className = ''
-}) => {
-  const [searchValues, setSearchValues] = useState<Record<string, any>>(initialValues);
+const TagInput: React.FC<{
+  value?: string[];
+  onChange: (value: string[]) => void;
+  placeholder?: string;
+  error?: string;
+  disabled?: boolean;
+  maxTags?: number;
+  id?: string;
+}> = ({ value = [], onChange, placeholder, error, disabled, maxTags = 10, id }) => {
+  const [inputValue, setInputValue] = useState('');
   
-  // Handle input change
-  const handleChange = (name: string, value: any) => {
-    setSearchValues(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
+  const handleAddTag = useCallback((tag: string) => {
+    const trimmedTag = tag.trim();
+    if (trimmedTag && !value.includes(trimmedTag) && value.length < maxTags) {
+      onChange([...value, trimmedTag]);
+      setInputValue('');
+    }
+  }, [value, onChange, maxTags]);
   
-  // Handle form submission
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSearch(searchValues);
-  };
+  const handleRemoveTag = useCallback((index: number) => {
+    onChange(value.filter((_, i) => i !== index));
+  }, [value, onChange]);
   
-  // Handle form reset
-  const handleReset = () => {
-    setSearchValues(initialValues);
-    onSearch(initialValues);
-  };
-  
-  const formClasses = ['search-form', className].filter(Boolean).join(' ');
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      handleAddTag(inputValue);
+    }
+  }, [inputValue, handleAddTag]);
   
   return (
-    <div className={formClasses}>
-      <form onSubmit={handleSubmit} onReset={handleReset}>
-        <div className="search-fields">
-          {fields.map((field) => (
-            <div key={field.name} className="search-field">
-              {field.label && (
-                <label htmlFor={field.name}>{field.label}</label>
-              )}
-              
-              {field.type === 'select' ? (
-                <select
-                  id={field.name}
-                  name={field.name}
-                  value={searchValues[field.name] || ''}
-                  onChange={(e) => handleChange(field.name, e.target.value)}
-                  placeholder={field.placeholder}
-                  {...field.inputProps}
-                >
-                  <option value="">All</option>
-                  {field.options?.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  type={field.type || 'text'}
-                  id={field.name}
-                  name={field.name}
-                  value={searchValues[field.name] || ''}
-                  onChange={(e) => handleChange(field.name, e.target.value)}
-                  placeholder={field.placeholder}
-                  {...field.inputProps}
-                />
-              )}
-            </div>
-          ))}
-        </div>
-        
-        <div className="search-actions">
-          <button type="submit" className="btn btn-primary search-button">
-            {searchText}
-          </button>
-          <button 
-            type="reset" 
-            className="btn btn-secondary clear-button"
-            onClick={handleReset}
-          >
-            Clear
-          </button>
-        </div>
-      </form>
+    <div className={styles.tagInput}>
+      <div className={styles.tags}>
+        {value.map((tag, index) => (
+          <span key={index} className={styles.tag}>
+            {tag}
+            <button
+              type="button"
+              onClick={() => handleRemoveTag(index)}
+              disabled={disabled}
+              className={styles.tagRemove}
+              aria-label={`Remove ${tag}`}
+            >
+              ×
+            </button>
+          </span>
+        ))}
+      </div>
+      <input
+        id={id}
+        type="text"
+        value={inputValue}
+        onChange={(e) => setInputValue(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onBlur={() => handleAddTag(inputValue)}
+        placeholder={value.length < maxTags ? placeholder : `Maximum ${maxTags} tags`}
+        disabled={disabled || value.length >= maxTags}
+        className={classNames(styles.input, {
+          [styles.error]: error
+        })}
+      />
+      {error && <span className={styles.errorMessage}>{error}</span>}
     </div>
   );
 };
+
+export default {{FormName}};

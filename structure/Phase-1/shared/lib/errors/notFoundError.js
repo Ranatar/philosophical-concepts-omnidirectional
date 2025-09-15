@@ -1,130 +1,240 @@
 /**
- * Specialized error class for resource not found errors
- * Extends the basic AppError to provide specific functionality
- * for handling and formatting not found errors
+ * NotFoundError class with extended functionality
+ * Provides comprehensive handling for resource not found errors
  */
 
 const AppError = require('./AppError');
-const errorCodes = require('../../constants/errorCodes');
+const { ERROR_CODES } = require('../../constants/errorCodes');
 
 class NotFoundError extends AppError {
   /**
-   * Create a new NotFoundError
-   * @param {string} message - Human-readable error message
-   * @param {string} [resource] - Type of resource that was not found
-   * @param {string|number} [identifier] - Identifier that was used to look up the resource
-   * @param {number} [code=errorCodes.NOT_FOUND] - Error code
-   * @param {Error} [originalError=null] - Original error if this is a wrapper
+   * Create a not found error
+   * @param {string} resource - Resource type
+   * @param {string|Object} identifier - Resource identifier (ID, name, or criteria)
+   * @param {string} message - Custom error message (optional)
    */
-  constructor(
-    message = 'Resource not found',
-    resource = null,
-    identifier = null,
-    code = errorCodes.NOT_FOUND,
-    originalError = null
-  ) {
-    const data = { resource, identifier };
-    super(message, code, 404, data, originalError);
+  constructor(resource = 'Resource', identifier = null, message = null) {
+    // Build details object
+    const details = { resource };
     
-    this.resource = resource;
-    this.identifier = identifier;
-  }
-  
-  /**
-   * Create a NotFoundError for a specific resource type
-   * @param {string} resource - Type of resource (e.g., 'user', 'concept')
-   * @param {string|number} identifier - Identifier used to look up the resource
-   * @param {number} [code] - Custom error code from errorCodes
-   * @returns {NotFoundError} New NotFoundError instance
-   */
-  static forResource(resource, identifier, code) {
-    // Get the appropriate error code for this resource
-    let errorCode = code;
-    if (!errorCode) {
-      // If no specific code is provided, try to find a resource-specific not found code
-      const resourceUpperCase = resource.toUpperCase();
-      const specificErrorCode = errorCodes[`${resourceUpperCase}_NOT_FOUND`];
-      errorCode = specificErrorCode || errorCodes.NOT_FOUND;
+    // Handle different identifier types
+    if (identifier !== null) {
+      if (typeof identifier === 'object') {
+        details.criteria = identifier;
+      } else {
+        details.id = identifier;
+      }
     }
     
-    // Construct a user-friendly message
-    const message = identifier
-      ? `${resource.charAt(0).toUpperCase() + resource.slice(1)} with identifier '${identifier}' not found`
-      : `${resource.charAt(0).toUpperCase() + resource.slice(1)} not found`;
-      
-    return new NotFoundError(message, resource, identifier, errorCode);
+    // Build default message if not provided
+    if (!message) {
+      if (typeof identifier === 'object') {
+        const criteriaStr = Object.entries(identifier)
+          .map(([key, value]) => `${key}=${value}`)
+          .join(', ');
+        message = `${resource} not found with criteria: ${criteriaStr}`;
+      } else if (identifier) {
+        message = `${resource} with id '${identifier}' not found`;
+      } else {
+        message = `${resource} not found`;
+      }
+    }
+    
+    // Determine specific error code based on resource type
+    const errorCode = NotFoundError.getErrorCodeForResource(resource);
+    
+    super(errorCode, message, details);
   }
-  
+
   /**
-   * Create a NotFoundError for a user
-   * @param {string|number} userId - User ID
-   * @returns {NotFoundError} New NotFoundError instance
+   * Get specific error code based on resource type
+   * @param {string} resource - Resource type
+   * @returns {Object} Error code object
    */
-  static forUser(userId) {
-    return NotFoundError.forResource('user', userId, errorCodes.USER_NOT_FOUND);
+  static getErrorCodeForResource(resource) {
+    const resourceLower = resource.toLowerCase();
+    
+    // Map resource types to specific error codes
+    const resourceErrorMap = {
+      'user': ERROR_CODES.USER_NOT_FOUND,
+      'concept': ERROR_CODES.CONCEPT_NOT_FOUND,
+      'graph': ERROR_CODES.GRAPH_NOT_FOUND,
+      'category': ERROR_CODES.CATEGORY_NOT_FOUND,
+      'relationship': ERROR_CODES.RELATIONSHIP_NOT_FOUND,
+      'thesis': ERROR_CODES.THESIS_NOT_FOUND,
+      'synthesis': ERROR_CODES.SYNTHESIS_NOT_FOUND,
+      'task': ERROR_CODES.TASK_NOT_FOUND
+    };
+    
+    return resourceErrorMap[resourceLower] || ERROR_CODES.NOT_FOUND;
   }
-  
+
   /**
-   * Create a NotFoundError for a concept
-   * @param {string|number} conceptId - Concept ID
-   * @returns {NotFoundError} New NotFoundError instance
+   * Create not found error for user
+   * @param {string} userId - User ID
+   * @returns {NotFoundError}
    */
-  static forConcept(conceptId) {
-    return NotFoundError.forResource('concept', conceptId, errorCodes.CONCEPT_NOT_FOUND);
+  static user(userId) {
+    return new NotFoundError('User', userId);
   }
-  
+
   /**
-   * Create a NotFoundError for a graph
-   * @param {string|number} graphId - Graph ID
-   * @returns {NotFoundError} New NotFoundError instance
+   * Create not found error for concept
+   * @param {string} conceptId - Concept ID
+   * @returns {NotFoundError}
    */
-  static forGraph(graphId) {
-    return NotFoundError.forResource('graph', graphId, errorCodes.GRAPH_NOT_FOUND);
+  static concept(conceptId) {
+    return new NotFoundError('Concept', conceptId);
   }
-  
+
   /**
-   * Create a NotFoundError for a category
-   * @param {string|number} categoryId - Category ID
-   * @returns {NotFoundError} New NotFoundError instance
+   * Create not found error for graph
+   * @param {string} graphId - Graph ID
+   * @returns {NotFoundError}
    */
-  static forCategory(categoryId) {
-    return NotFoundError.forResource('category', categoryId, errorCodes.CATEGORY_NOT_FOUND);
+  static graph(graphId) {
+    return new NotFoundError('Graph', graphId);
   }
-  
+
   /**
-   * Create a NotFoundError for a relationship
-   * @param {string|number} relationshipId - Relationship ID
-   * @returns {NotFoundError} New NotFoundError instance
+   * Create not found error for category
+   * @param {string} categoryId - Category ID
+   * @returns {NotFoundError}
    */
-  static forRelationship(relationshipId) {
-    return NotFoundError.forResource('relationship', relationshipId, errorCodes.RELATIONSHIP_NOT_FOUND);
+  static category(categoryId) {
+    return new NotFoundError('Category', categoryId);
   }
-  
+
   /**
-   * Create a NotFoundError for a thesis
-   * @param {string|number} thesisId - Thesis ID
-   * @returns {NotFoundError} New NotFoundError instance
+   * Create not found error for relationship
+   * @param {string} relationshipId - Relationship ID
+   * @returns {NotFoundError}
    */
-  static forThesis(thesisId) {
-    return NotFoundError.forResource('thesis', thesisId, errorCodes.THESIS_NOT_FOUND);
+  static relationship(relationshipId) {
+    return new NotFoundError('Relationship', relationshipId);
   }
-  
+
   /**
-   * Create a NotFoundError for a synthesis
-   * @param {string|number} synthesisId - Synthesis ID
-   * @returns {NotFoundError} New NotFoundError instance
+   * Create not found error for thesis
+   * @param {string} thesisId - Thesis ID
+   * @returns {NotFoundError}
    */
-  static forSynthesis(synthesisId) {
-    return NotFoundError.forResource('synthesis', synthesisId, errorCodes.SYNTHESIS_NOT_FOUND);
+  static thesis(thesisId) {
+    return new NotFoundError('Thesis', thesisId);
   }
-  
+
   /**
-   * Create a NotFoundError for a Claude task
-   * @param {string|number} taskId - Task ID
-   * @returns {NotFoundError} New NotFoundError instance
+   * Create not found error for synthesis
+   * @param {string} synthesisId - Synthesis ID
+   * @returns {NotFoundError}
    */
-  static forTask(taskId) {
-    return NotFoundError.forResource('task', taskId, errorCodes.TASK_NOT_FOUND);
+  static synthesis(synthesisId) {
+    return new NotFoundError('Synthesis', synthesisId);
+  }
+
+  /**
+   * Create not found error for task
+   * @param {string} taskId - Task ID
+   * @returns {NotFoundError}
+   */
+  static task(taskId) {
+    return new NotFoundError('Task', taskId);
+  }
+
+  /**
+   * Create not found error for multiple resources
+   * @param {string} resource - Resource type
+   * @param {string[]} ids - Array of IDs not found
+   * @returns {NotFoundError}
+   */
+  static multiple(resource, ids) {
+    const details = {
+      resource,
+      ids,
+      count: ids.length
+    };
+    
+    const message = `${ids.length} ${resource}(s) not found`;
+    
+    return new NotFoundError(resource, null, message).withDetails(details);
+  }
+
+  /**
+   * Create not found error with search criteria
+   * @param {string} resource - Resource type
+   * @param {Object} criteria - Search criteria used
+   * @returns {NotFoundError}
+   */
+  static withCriteria(resource, criteria) {
+    return new NotFoundError(resource, criteria);
+  }
+
+  /**
+   * Create not found error for a related resource
+   * @param {string} resource - Main resource type
+   * @param {string} resourceId - Main resource ID
+   * @param {string} relatedResource - Related resource type
+   * @returns {NotFoundError}
+   */
+  static related(resource, resourceId, relatedResource) {
+    const message = `No ${relatedResource} found for ${resource} '${resourceId}'`;
+    const details = {
+      resource: relatedResource,
+      parentResource: resource,
+      parentId: resourceId
+    };
+    
+    return new NotFoundError(relatedResource, null, message).withDetails(details);
+  }
+
+  /**
+   * Create not found error for association between resources
+   * @param {string} resource1 - First resource type
+   * @param {string} id1 - First resource ID
+   * @param {string} resource2 - Second resource type
+   * @param {string} id2 - Second resource ID
+   * @returns {NotFoundError}
+   */
+  static association(resource1, id1, resource2, id2) {
+    const message = `No association found between ${resource1} '${id1}' and ${resource2} '${id2}'`;
+    const details = {
+      resource: 'Association',
+      resource1: { type: resource1, id: id1 },
+      resource2: { type: resource2, id: id2 }
+    };
+    
+    return new NotFoundError('Association', null, message).withDetails(details);
+  }
+
+  /**
+   * Create not found error for file or document
+   * @param {string} filename - File name
+   * @param {string} path - File path (optional)
+   * @returns {NotFoundError}
+   */
+  static file(filename, path = null) {
+    const details = { filename };
+    if (path) {
+      details.path = path;
+    }
+    
+    const message = path 
+      ? `File '${filename}' not found at path '${path}'`
+      : `File '${filename}' not found`;
+    
+    return new NotFoundError('File', null, message).withDetails(details);
+  }
+
+  /**
+   * Create not found error for configuration
+   * @param {string} configKey - Configuration key
+   * @returns {NotFoundError}
+   */
+  static configuration(configKey) {
+    const message = `Configuration '${configKey}' not found`;
+    const details = { configKey };
+    
+    return new NotFoundError('Configuration', null, message).withDetails(details);
   }
 }
 

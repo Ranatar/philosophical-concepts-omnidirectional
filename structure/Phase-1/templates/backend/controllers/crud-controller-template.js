@@ -1,162 +1,497 @@
 /**
- * Template for CRUD controllers
- * Replace all instances of `Entity` with the actual entity name
- * Replace all instances of `entity` with the lowercase entity name
- * Replace all references to entityService with the actual service
+ * Шаблон CRUD контроллера
+ * Базовый шаблон для создания контроллеров с типовыми CRUD операциями
+ * 
+ * Использование:
+ * 1. Скопировать файл в нужную директорию
+ * 2. Заменить {{EntityName}} на название сущности (например, User)
+ * 3. Заменить {{entityName}} на название сущности в camelCase (например, user)
+ * 4. Заменить {{tableName}} на название таблицы в БД (например, users)
+ * 5. Адаптировать под специфику сущности
  */
 
-const { defaultLogger } = require('../../../shared/lib/logging/logger');
-const { NotFoundError } = require('../../../shared/lib/errors/HttpErrors');
-const { validate } = require('../../../shared/lib/validation/validators');
-const { createEntitySchema, updateEntitySchema } = require('../validation/entitySchemas');
+const logger = require('../../../shared/lib/logging/logger');
+const { ValidationError, NotFoundError } = require('../../../shared/lib/errors');
+const { incrementCounter } = require('../../../shared/lib/metrics/counters');
 
-/**
- * CRUD controller for Entity resources
- */
-class EntityController {
-  /**
-   * Create a new EntityController
-   * @param {Object} entityService - Entity service instance
-   * @param {Object} [logger=defaultLogger] - Logger instance
-   */
-  constructor(entityService, logger = defaultLogger) {
-    this.entityService = entityService;
-    this.logger = logger;
+class {{EntityName}}Controller {
+  constructor({{entityName}}Service) {
+    this.{{entityName}}Service = {{entityName}}Service;
   }
 
   /**
-   * Get all entities with pagination
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   * @param {function} next - Express next middleware function
-   * @returns {Promise<void>} Promise that resolves when the operation is complete
+   * Получение списка {{tableName}} с пагинацией и фильтрацией
+   * GET /{{tableName}}
    */
-  async getAll(req, res, next) {
+  async list(req, res, next) {
     try {
-      const { page = 1, pageSize = 20, sortBy, sortOrder, ...filters } = req.query;
-      
-      const options = {
-        page: parseInt(page, 10),
-        pageSize: parseInt(pageSize, 10),
-        sortBy,
-        sortOrder,
+      const {
+        page = 1,
+        limit = 20,
+        sort = 'created_at',
+        order = 'DESC',
+        ...filters
+      } = req.query;
+
+      logger.info('Fetching {{tableName}} list', {
+        page,
+        limit,
+        sort,
+        order,
         filters
-      };
-      
-      const result = await this.entityService.findAll(options);
-      
-      res.sendPaginated(
-        result.items,
-        {
+      });
+
+      const result = await this.{{entityName}}Service.list({
+        page: parseInt(page),
+        limit: parseInt(limit),
+        sort,
+        order: order.toUpperCase(),
+        filters
+      });
+
+      incrementCounter('api_requests_total', {
+        method: 'GET',
+        endpoint: '/{{tableName}}',
+        status: 'success'
+      });
+
+      res.json({
+        success: true,
+        data: result.items,
+        pagination: {
+          page: result.page,
+          limit: result.limit,
           total: result.total,
-          page: options.page,
-          pageSize: options.pageSize
-        },
-        { filters }
-      );
+          totalPages: result.totalPages
+        }
+      });
     } catch (error) {
+      incrementCounter('api_requests_total', {
+        method: 'GET',
+        endpoint: '/{{tableName}}',
+        status: 'error'
+      });
       next(error);
     }
   }
 
   /**
-   * Get a single entity by ID
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   * @param {function} next - Express next middleware function
-   * @returns {Promise<void>} Promise that resolves when the operation is complete
+   * Получение {{entityName}} по ID
+   * GET /{{tableName}}/:id
    */
   async getById(req, res, next) {
     try {
       const { id } = req.params;
-      
-      const entity = await this.entityService.findById(id);
-      
-      if (!entity) {
-        throw new NotFoundError('Entity not found', null, { id });
+
+      logger.info('Fetching {{entityName}} by id', { id });
+
+      const {{entityName}} = await this.{{entityName}}Service.getById(id);
+
+      if (!{{entityName}}) {
+        throw new NotFoundError('{{EntityName}} not found');
       }
-      
-      res.sendSuccess(entity);
+
+      incrementCounter('api_requests_total', {
+        method: 'GET',
+        endpoint: '/{{tableName}}/:id',
+        status: 'success'
+      });
+
+      res.json({
+        success: true,
+        data: {{entityName}}
+      });
     } catch (error) {
+      incrementCounter('api_requests_total', {
+        method: 'GET',
+        endpoint: '/{{tableName}}/:id',
+        status: 'error'
+      });
       next(error);
     }
   }
 
   /**
-   * Create a new entity
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   * @param {function} next - Express next middleware function
-   * @returns {Promise<void>} Promise that resolves when the operation is complete
+   * Создание нового {{entityName}}
+   * POST /{{tableName}}
    */
   async create(req, res, next) {
     try {
-      const data = validate(req.body, createEntitySchema);
-      
-      // Add creator/user info from auth if available
-      if (req.user) {
-        data.createdBy = req.user.id;
+      const data = req.body;
+      const userId = req.user?.id;
+
+      logger.info('Creating new {{entityName}}', {
+        userId,
+        dataKeys: Object.keys(data)
+      });
+
+      // Добавляем информацию о создателе, если есть
+      if (userId) {
+        data.creator_id = userId;
       }
-      
-      const entity = await this.entityService.create(data);
-      
-      res.status(201).sendSuccess(entity, {}, 'Entity created successfully');
+
+      const {{entityName}} = await this.{{entityName}}Service.create(data);
+
+      incrementCounter('api_requests_total', {
+        method: 'POST',
+        endpoint: '/{{tableName}}',
+        status: 'success'
+      });
+
+      incrementCounter('{{tableName}}_created_total');
+
+      res.status(201).json({
+        success: true,
+        data: {{entityName}},
+        message: '{{EntityName}} created successfully'
+      });
     } catch (error) {
+      incrementCounter('api_requests_total', {
+        method: 'POST',
+        endpoint: '/{{tableName}}',
+        status: 'error'
+      });
       next(error);
     }
   }
 
   /**
-   * Update an entity
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   * @param {function} next - Express next middleware function
-   * @returns {Promise<void>} Promise that resolves when the operation is complete
+   * Обновление {{entityName}}
+   * PUT /{{tableName}}/:id
    */
   async update(req, res, next) {
     try {
       const { id } = req.params;
-      const data = validate(req.body, updateEntitySchema);
-      
-      // Add updater info from auth if available
-      if (req.user) {
-        data.updatedBy = req.user.id;
+      const data = req.body;
+      const userId = req.user?.id;
+
+      logger.info('Updating {{entityName}}', {
+        id,
+        userId,
+        dataKeys: Object.keys(data)
+      });
+
+      // Проверяем существование
+      const existing = await this.{{entityName}}Service.getById(id);
+      if (!existing) {
+        throw new NotFoundError('{{EntityName}} not found');
       }
-      
-      const entity = await this.entityService.update(id, data);
-      
-      if (!entity) {
-        throw new NotFoundError('Entity not found', null, { id });
+
+      // Проверяем права доступа (если применимо)
+      if (existing.creator_id && existing.creator_id !== userId && !req.user?.isAdmin) {
+        throw new ValidationError('You do not have permission to update this {{entityName}}');
       }
-      
-      res.sendSuccess(entity, {}, 'Entity updated successfully');
+
+      const updated = await this.{{entityName}}Service.update(id, data);
+
+      incrementCounter('api_requests_total', {
+        method: 'PUT',
+        endpoint: '/{{tableName}}/:id',
+        status: 'success'
+      });
+
+      incrementCounter('{{tableName}}_updated_total');
+
+      res.json({
+        success: true,
+        data: updated,
+        message: '{{EntityName}} updated successfully'
+      });
     } catch (error) {
+      incrementCounter('api_requests_total', {
+        method: 'PUT',
+        endpoint: '/{{tableName}}/:id',
+        status: 'error'
+      });
       next(error);
     }
   }
 
   /**
-   * Delete an entity
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   * @param {function} next - Express next middleware function
-   * @returns {Promise<void>} Promise that resolves when the operation is complete
+   * Частичное обновление {{entityName}}
+   * PATCH /{{tableName}}/:id
+   */
+  async patch(req, res, next) {
+    try {
+      const { id } = req.params;
+      const data = req.body;
+      const userId = req.user?.id;
+
+      logger.info('Patching {{entityName}}', {
+        id,
+        userId,
+        dataKeys: Object.keys(data)
+      });
+
+      // Проверяем существование
+      const existing = await this.{{entityName}}Service.getById(id);
+      if (!existing) {
+        throw new NotFoundError('{{EntityName}} not found');
+      }
+
+      // Проверяем права доступа (если применимо)
+      if (existing.creator_id && existing.creator_id !== userId && !req.user?.isAdmin) {
+        throw new ValidationError('You do not have permission to update this {{entityName}}');
+      }
+
+      const patched = await this.{{entityName}}Service.patch(id, data);
+
+      incrementCounter('api_requests_total', {
+        method: 'PATCH',
+        endpoint: '/{{tableName}}/:id',
+        status: 'success'
+      });
+
+      res.json({
+        success: true,
+        data: patched,
+        message: '{{EntityName}} patched successfully'
+      });
+    } catch (error) {
+      incrementCounter('api_requests_total', {
+        method: 'PATCH',
+        endpoint: '/{{tableName}}/:id',
+        status: 'error'
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Удаление {{entityName}}
+   * DELETE /{{tableName}}/:id
    */
   async delete(req, res, next) {
     try {
       const { id } = req.params;
-      
-      const success = await this.entityService.delete(id);
-      
-      if (!success) {
-        throw new NotFoundError('Entity not found', null, { id });
+      const userId = req.user?.id;
+
+      logger.info('Deleting {{entityName}}', { id, userId });
+
+      // Проверяем существование
+      const existing = await this.{{entityName}}Service.getById(id);
+      if (!existing) {
+        throw new NotFoundError('{{EntityName}} not found');
       }
-      
-      res.sendSuccess({ id }, {}, 'Entity deleted successfully');
+
+      // Проверяем права доступа (если применимо)
+      if (existing.creator_id && existing.creator_id !== userId && !req.user?.isAdmin) {
+        throw new ValidationError('You do not have permission to delete this {{entityName}}');
+      }
+
+      await this.{{entityName}}Service.delete(id);
+
+      incrementCounter('api_requests_total', {
+        method: 'DELETE',
+        endpoint: '/{{tableName}}/:id',
+        status: 'success'
+      });
+
+      incrementCounter('{{tableName}}_deleted_total');
+
+      res.json({
+        success: true,
+        message: '{{EntityName}} deleted successfully'
+      });
     } catch (error) {
+      incrementCounter('api_requests_total', {
+        method: 'DELETE',
+        endpoint: '/{{tableName}}/:id',
+        status: 'error'
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Массовое удаление {{tableName}}
+   * DELETE /{{tableName}}
+   */
+  async bulkDelete(req, res, next) {
+    try {
+      const { ids } = req.body;
+      const userId = req.user?.id;
+
+      if (!Array.isArray(ids) || ids.length === 0) {
+        throw new ValidationError('IDs array is required');
+      }
+
+      logger.info('Bulk deleting {{tableName}}', {
+        userId,
+        count: ids.length
+      });
+
+      // Проверяем права доступа для каждого элемента
+      const items = await this.{{entityName}}Service.getByIds(ids);
+      
+      for (const item of items) {
+        if (item.creator_id && item.creator_id !== userId && !req.user?.isAdmin) {
+          throw new ValidationError(`You do not have permission to delete {{entityName}} ${item.id}`);
+        }
+      }
+
+      const deletedCount = await this.{{entityName}}Service.bulkDelete(ids);
+
+      incrementCounter('api_requests_total', {
+        method: 'DELETE',
+        endpoint: '/{{tableName}}/bulk',
+        status: 'success'
+      });
+
+      incrementCounter('{{tableName}}_deleted_total', deletedCount);
+
+      res.json({
+        success: true,
+        message: `${deletedCount} {{tableName}} deleted successfully`,
+        data: { deletedCount }
+      });
+    } catch (error) {
+      incrementCounter('api_requests_total', {
+        method: 'DELETE',
+        endpoint: '/{{tableName}}/bulk',
+        status: 'error'
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Поиск {{tableName}}
+   * POST /{{tableName}}/search
+   */
+  async search(req, res, next) {
+    try {
+      const {
+        query,
+        page = 1,
+        limit = 20,
+        ...options
+      } = req.body;
+
+      logger.info('Searching {{tableName}}', {
+        query,
+        page,
+        limit,
+        options
+      });
+
+      const result = await this.{{entityName}}Service.search({
+        query,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        ...options
+      });
+
+      incrementCounter('api_requests_total', {
+        method: 'POST',
+        endpoint: '/{{tableName}}/search',
+        status: 'success'
+      });
+
+      res.json({
+        success: true,
+        data: result.items,
+        pagination: {
+          page: result.page,
+          limit: result.limit,
+          total: result.total,
+          totalPages: result.totalPages
+        }
+      });
+    } catch (error) {
+      incrementCounter('api_requests_total', {
+        method: 'POST',
+        endpoint: '/{{tableName}}/search',
+        status: 'error'
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Экспорт {{tableName}}
+   * GET /{{tableName}}/export
+   */
+  async export(req, res, next) {
+    try {
+      const { format = 'json', ...filters } = req.query;
+
+      logger.info('Exporting {{tableName}}', {
+        format,
+        filters
+      });
+
+      const data = await this.{{entityName}}Service.export({
+        format,
+        filters
+      });
+
+      incrementCounter('api_requests_total', {
+        method: 'GET',
+        endpoint: '/{{tableName}}/export',
+        status: 'success'
+      });
+
+      // Устанавливаем заголовки для скачивания
+      const filename = `{{tableName}}_export_${Date.now()}.${format}`;
+      res.setHeader('Content-Type', format === 'csv' ? 'text/csv' : 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+      res.send(data);
+    } catch (error) {
+      incrementCounter('api_requests_total', {
+        method: 'GET',
+        endpoint: '/{{tableName}}/export',
+        status: 'error'
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Импорт {{tableName}}
+   * POST /{{tableName}}/import
+   */
+  async import(req, res, next) {
+    try {
+      const { data, format = 'json', options = {} } = req.body;
+      const userId = req.user?.id;
+
+      logger.info('Importing {{tableName}}', {
+        userId,
+        format,
+        itemCount: Array.isArray(data) ? data.length : 1
+      });
+
+      const result = await this.{{entityName}}Service.import({
+        data,
+        format,
+        userId,
+        ...options
+      });
+
+      incrementCounter('api_requests_total', {
+        method: 'POST',
+        endpoint: '/{{tableName}}/import',
+        status: 'success'
+      });
+
+      incrementCounter('{{tableName}}_imported_total', result.imported);
+
+      res.json({
+        success: true,
+        message: `${result.imported} {{tableName}} imported successfully`,
+        data: result
+      });
+    } catch (error) {
+      incrementCounter('api_requests_total', {
+        method: 'POST',
+        endpoint: '/{{tableName}}/import',
+        status: 'error'
+      });
       next(error);
     }
   }
 }
 
-module.exports = EntityController;
+module.exports = {{EntityName}}Controller;

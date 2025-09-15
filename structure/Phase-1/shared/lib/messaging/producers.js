@@ -1,395 +1,634 @@
 /**
- * Message producers for RabbitMQ
- * Provides standardized message producers for different services
+ * Message Producers
+ * Продюсеры для отправки сообщений в RabbitMQ
  */
 
 const { v4: uuidv4 } = require('uuid');
-const { defaultChannelManager } = require('./rabbitmq/channelManager');
-const { defaultLogger } = require('../logging/logger');
+const logger = require('../logging/logger');
+const { incrementCounter, observeHistogram } = require('../metrics/counters');
+const { getChannelManager } = require('./rabbitmq/channelManager');
+const { AppError } = require('../errors/AppError');
 
-/**
- * Base message producer class
- */
-class BaseProducer {
-  /**
-   * Create a new base producer
-   * @param {Object} options - Producer options
-   * @param {string} options.exchange - Exchange name
-   * @param {string} options.exchangeType - Exchange type ('direct', 'topic', 'fanout', etc.)
-   * @param {Object} [options.exchangeOptions={}] - Exchange options
-   * @param {Object} [options.channelManager=defaultChannelManager] - Channel manager instance
-   * @param {Object} [options.logger=defaultLogger] - Logger instance
-   */
-  constructor(options) {
-    this.exchange = options.exchange;
-    this.exchangeType = options.exchangeType;
-    this.exchangeOptions = options.exchangeOptions || { durable: true };
-    this.channelManager = options.channelManager || defaultChannelManager;
-    this.logger = options.logger || defaultLogger;
-    this.initialized = false;
+class MessageProducer {
+  constructor(options = {}) {
+    this.channelManager = options.channelManager || getChannelManager();
+    this.defaultExchange = options.defaultExchange || '';
+    this.defaultOptions = {
+      persistent: true,
+      contentType: 'application/json',
+      ...options.defaultOptions
+    };
+    
+    this.confirmTimeout = options.confirmTimeout || 5000;
+    this.retryOptions = {
+      maxRetries: 3,
+      initialDelay: 1000,
+      multiplier: 2,
+      ...options.retryOptions
+    };
   }
-  
+
   /**
-   * Initialize the producer
-   * @returns {Promise<void>} Promise that resolves when initialized
+   * Отправка сообщения в очередь
    */
-  async initialize() {
-    if (this.initialized) {
-      return;
-    }
+  async sendToQueue(queue, message, options = {}) {
+    const startTime = Date.now();
+    const messageId = options.messageId || uuidv4();
     
     try {
-      await this.channelManager.assertExchange(
-        this.exchange,
-        this.exchangeType,
-        this.exchangeOptions
+      const messageOptions = {
+        ...this.defaultOptions,
+        ...options,
+        messageId,
+        timestamp: Date.now(),
+        headers: {
+          ...this.defaultOptions.headers,
+          ...options.headers,
+          'x-message-id': messageId,
+          'x-timestamp': new Date().toISOString()
+        }
+      };
+
+      // Сериализуем сообщение
+      const content = Buffer.from(JSON.stringify(message));
+      
+      // Отправляем с retry логикой
+      await this._sendWithRetry(
+        async (channel) => {
+          await this._assertQueue(channel, queue, options.queueOptions);
+          return channel.sendToQueue(queue, content, messageOptions);
+        },
+        'sendToQueue',
+        { queue, messageId }
       );
       
-      this.initialized = true;
-      this.logger.info(`Producer for exchange ${this.exchange} initialized`);
-    } catch (err) {
-      this.logger.error(`Failed to initialize producer for exchange ${this.exchange}: ${err.message}`);
-      throw err;
+      const duration = Date.now() - startTime;
+      observeHistogram('message_send_duration_ms', duration, { 
+        operation: 'sendToQueue',
+        queue 
+      });
+      
+      incrementCounter('messages_sent_total', { queue });
+      
+      logger.debug('Message sent to queue', {
+        queue,
+        messageId,
+        size: content.length,
+        duration
+      });
+      
+      return messageId;
+    } catch (error) {
+      incrementCounter('message_send_errors_total', { 
+        queue,
+        errorType: error.name 
+      });
+      
+      logger.error('Failed to send message to queue', {
+        queue,
+        messageId,
+        error: error.message
+      });
+      
+      throw error;
     }
   }
-  
+
   /**
-   * Send a message to the exchange
-   * @param {string} routingKey - Routing key
-   * @param {Object} message - Message to send
-   * @param {Object} [options={}] - Message options
-   * @returns {Promise<boolean>} Promise that resolves to whether the message was sent
+   * Публикация сообщения в exchange
    */
-  async send(routingKey, message, options = {}) {
-    if (!this.initialized) {
-      await this.initialize();
-    }
+  async publish(exchange, routingKey, message, options = {}) {
+    const startTime = Date.now();
+    const messageId = options.messageId || uuidv4();
     
     try {
-      // Add default message properties
-      const enrichedMessage = this.enrichMessage(message);
-      
-      const defaultOptions = {
-        persistent: true,
-        contentType: 'application/json',
-        messageId: enrichedMessage.messageId,
-        timestamp: enrichedMessage.timestamp
+      const messageOptions = {
+        ...this.defaultOptions,
+        ...options,
+        messageId,
+        timestamp: Date.now(),
+        headers: {
+          ...this.defaultOptions.headers,
+          ...options.headers,
+          'x-message-id': messageId,
+          'x-routing-key': routingKey,
+          'x-timestamp': new Date().toISOString()
+        }
       };
+
+      // Сериализуем сообщение
+      const content = Buffer.from(JSON.stringify(message));
       
-      const messageOptions = { ...defaultOptions, ...options };
+      // Публикуем с retry логикой
+      await this._sendWithRetry(
+        async (channel) => {
+          await this._assertExchange(channel, exchange, options.exchangeOptions);
+          return channel.publish(exchange, routingKey, content, messageOptions);
+        },
+        'publish',
+        { exchange, routingKey, messageId }
+      );
       
-      const result = await this.channelManager.publish(
-        this.exchange,
+      const duration = Date.now() - startTime;
+      observeHistogram('message_send_duration_ms', duration, { 
+        operation: 'publish',
+        exchange,
+        routingKey 
+      });
+      
+      incrementCounter('messages_published_total', { exchange, routingKey });
+      
+      logger.debug('Message published', {
+        exchange,
         routingKey,
-        enrichedMessage,
-        messageOptions
+        messageId,
+        size: content.length,
+        duration
+      });
+      
+      return messageId;
+    } catch (error) {
+      incrementCounter('message_publish_errors_total', { 
+        exchange,
+        routingKey,
+        errorType: error.name 
+      });
+      
+      logger.error('Failed to publish message', {
+        exchange,
+        routingKey,
+        messageId,
+        error: error.message
+      });
+      
+      throw error;
+    }
+  }
+
+  /**
+   * Массовая отправка сообщений
+   */
+  async sendBatch(messages, options = {}) {
+    const startTime = Date.now();
+    const results = [];
+    const errors = [];
+    
+    try {
+      // Группируем сообщения по назначению
+      const grouped = this._groupMessages(messages);
+      
+      // Отправляем каждую группу
+      for (const [destination, group] of grouped) {
+        try {
+          await this.channelManager.withChannel(async (channel) => {
+            for (const msg of group) {
+              try {
+                const messageId = await this._sendMessage(channel, msg);
+                results.push({
+                  success: true,
+                  messageId,
+                  destination: msg.queue || `${msg.exchange}/${msg.routingKey}`
+                });
+              } catch (error) {
+                errors.push({
+                  success: false,
+                  error: error.message,
+                  message: msg
+                });
+              }
+            }
+          });
+        } catch (error) {
+          // Ошибка всей группы
+          group.forEach(msg => {
+            errors.push({
+              success: false,
+              error: error.message,
+              message: msg
+            });
+          });
+        }
+      }
+      
+      const duration = Date.now() - startTime;
+      
+      logger.info('Batch send completed', {
+        total: messages.length,
+        successful: results.length,
+        failed: errors.length,
+        duration
+      });
+      
+      incrementCounter('batch_sends_total', {
+        status: errors.length === 0 ? 'success' : 'partial'
+      });
+      
+      return {
+        results,
+        errors,
+        summary: {
+          total: messages.length,
+          successful: results.length,
+          failed: errors.length,
+          duration
+        }
+      };
+    } catch (error) {
+      logger.error('Batch send failed', { error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Отправка с подтверждением
+   */
+  async sendWithConfirmation(destination, message, options = {}) {
+    const startTime = Date.now();
+    const messageId = options.messageId || uuidv4();
+    
+    try {
+      await this.channelManager.withChannel(async (channel) => {
+        // Проверяем, что канал в confirm mode
+        if (!channel.waitForConfirms) {
+          throw new AppError('Channel is not in confirm mode');
+        }
+
+        // Отправляем сообщение
+        if (destination.queue) {
+          await this._assertQueue(channel, destination.queue, options.queueOptions);
+          await channel.sendToQueue(
+            destination.queue,
+            Buffer.from(JSON.stringify(message)),
+            { ...this.defaultOptions, ...options, messageId }
+          );
+        } else if (destination.exchange) {
+          await this._assertExchange(channel, destination.exchange, options.exchangeOptions);
+          await channel.publish(
+            destination.exchange,
+            destination.routingKey || '',
+            Buffer.from(JSON.stringify(message)),
+            { ...this.defaultOptions, ...options, messageId }
+          );
+        }
+
+        // Ждем подтверждения
+        const confirmed = await this._waitForConfirmation(channel);
+        
+        if (!confirmed) {
+          throw new AppError('Message delivery not confirmed');
+        }
+      });
+      
+      const duration = Date.now() - startTime;
+      
+      incrementCounter('confirmed_messages_total');
+      observeHistogram('confirmed_message_duration_ms', duration);
+      
+      logger.debug('Message sent with confirmation', {
+        messageId,
+        destination,
+        duration
+      });
+      
+      return messageId;
+    } catch (error) {
+      incrementCounter('confirmation_errors_total');
+      
+      logger.error('Failed to send message with confirmation', {
+        destination,
+        messageId,
+        error: error.message
+      });
+      
+      throw error;
+    }
+  }
+
+  /**
+   * Отправка отложенного сообщения
+   */
+  async sendDelayed(destination, message, delay, options = {}) {
+    const messageId = options.messageId || uuidv4();
+    
+    try {
+      // Используем dead letter exchange для реализации задержки
+      const delayedQueue = `delayed.${destination.queue || destination.routingKey}.${delay}`;
+      const delayedOptions = {
+        ...options,
+        queueOptions: {
+          arguments: {
+            'x-message-ttl': delay,
+            'x-dead-letter-exchange': destination.exchange || '',
+            'x-dead-letter-routing-key': destination.queue || destination.routingKey
+          }
+        }
+      };
+
+      await this.sendToQueue(delayedQueue, message, delayedOptions);
+      
+      logger.info('Delayed message scheduled', {
+        messageId,
+        destination,
+        delay
+      });
+      
+      incrementCounter('delayed_messages_total', { delay: delay.toString() });
+      
+      return messageId;
+    } catch (error) {
+      logger.error('Failed to send delayed message', {
+        destination,
+        delay,
+        error: error.message
+      });
+      
+      throw error;
+    }
+  }
+
+  /**
+   * Отправка приоритетного сообщения
+   */
+  async sendPriority(destination, message, priority, options = {}) {
+    if (priority < 0 || priority > 10) {
+      throw new ValidationError('Priority must be between 0 and 10');
+    }
+
+    const priorityOptions = {
+      ...options,
+      priority,
+      queueOptions: {
+        ...options.queueOptions,
+        arguments: {
+          ...options.queueOptions?.arguments,
+          'x-max-priority': 10
+        }
+      }
+    };
+
+    const messageId = await this._sendToDestination(destination, message, priorityOptions);
+    
+    incrementCounter('priority_messages_total', { priority: priority.toString() });
+    
+    return messageId;
+  }
+
+  /**
+   * RPC-style запрос с ожиданием ответа
+   */
+  async request(destination, message, options = {}) {
+    const correlationId = uuidv4();
+    const replyQueue = await this._createReplyQueue();
+    const timeout = options.timeout || 30000;
+    
+    try {
+      // Создаем промис для ожидания ответа
+      const responsePromise = this._waitForResponse(replyQueue, correlationId, timeout);
+      
+      // Отправляем запрос
+      await this._sendToDestination(destination, message, {
+        ...options,
+        correlationId,
+        replyTo: replyQueue
+      });
+      
+      // Ждем ответ
+      const response = await responsePromise;
+      
+      incrementCounter('rpc_requests_total', { status: 'success' });
+      
+      return response;
+    } catch (error) {
+      incrementCounter('rpc_requests_total', { status: 'error' });
+      
+      logger.error('RPC request failed', {
+        destination,
+        correlationId,
+        error: error.message
+      });
+      
+      throw error;
+    }
+  }
+
+  /**
+   * Вспомогательные методы
+   */
+  
+  async _sendWithRetry(operation, operationType, context) {
+    let lastError;
+    let retries = 0;
+    
+    while (retries <= this.retryOptions.maxRetries) {
+      try {
+        return await this.channelManager.withChannel(operation);
+      } catch (error) {
+        lastError = error;
+        
+        if (!this._isRetryableError(error) || retries >= this.retryOptions.maxRetries) {
+          break;
+        }
+        
+        const delay = this._calculateRetryDelay(retries);
+        
+        logger.warn('Retrying message send', {
+          operationType,
+          context,
+          attempt: retries + 1,
+          delay,
+          error: error.message
+        });
+        
+        await this._sleep(delay);
+        retries++;
+      }
+    }
+    
+    throw lastError;
+  }
+
+  _isRetryableError(error) {
+    const retryableErrors = [
+      'Channel closed',
+      'Connection closed',
+      'ECONNRESET',
+      'ETIMEDOUT'
+    ];
+    
+    return retryableErrors.some(msg => 
+      error.message && error.message.includes(msg)
+    );
+  }
+
+  _calculateRetryDelay(attempt) {
+    const { initialDelay, multiplier } = this.retryOptions;
+    return initialDelay * Math.pow(multiplier, attempt);
+  }
+
+  async _assertQueue(channel, queue, options = {}) {
+    const defaultOptions = {
+      durable: true,
+      ...options
+    };
+    
+    await channel.assertQueue(queue, defaultOptions);
+  }
+
+  async _assertExchange(channel, exchange, options = {}) {
+    const defaultOptions = {
+      durable: true,
+      type: 'topic',
+      ...options
+    };
+    
+    await channel.assertExchange(exchange, defaultOptions.type, defaultOptions);
+  }
+
+  async _waitForConfirmation(channel) {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Confirmation timeout'));
+      }, this.confirmTimeout);
+      
+      channel.waitForConfirms((error) => {
+        clearTimeout(timeout);
+        
+        if (error) {
+          reject(error);
+        } else {
+          resolve(true);
+        }
+      });
+    });
+  }
+
+  _groupMessages(messages) {
+    const grouped = new Map();
+    
+    messages.forEach(msg => {
+      const key = msg.queue || `${msg.exchange}:${msg.routingKey}`;
+      
+      if (!grouped.has(key)) {
+        grouped.set(key, []);
+      }
+      
+      grouped.get(key).push(msg);
+    });
+    
+    return grouped;
+  }
+
+  async _sendMessage(channel, message) {
+    if (message.queue) {
+      await this._assertQueue(channel, message.queue, message.queueOptions);
+      const sent = await channel.sendToQueue(
+        message.queue,
+        Buffer.from(JSON.stringify(message.content)),
+        message.options || this.defaultOptions
       );
       
-      if (result) {
-        this.logger.debug(
-          `Message ${enrichedMessage.messageId} sent to exchange ${this.exchange} with routing key ${routingKey}`
-        );
-      } else {
-        this.logger.warn(
-          `Failed to send message ${enrichedMessage.messageId} to exchange ${this.exchange} with routing key ${routingKey}`
-        );
+      if (!sent) {
+        throw new AppError('Failed to send message - queue full');
       }
       
-      return result;
-    } catch (err) {
-      this.logger.error(`Error sending message to exchange ${this.exchange}: ${err.message}`);
-      throw err;
+      return message.messageId || uuidv4();
+    } else if (message.exchange) {
+      await this._assertExchange(channel, message.exchange, message.exchangeOptions);
+      await channel.publish(
+        message.exchange,
+        message.routingKey || '',
+        Buffer.from(JSON.stringify(message.content)),
+        message.options || this.defaultOptions
+      );
+      
+      return message.messageId || uuidv4();
     }
-  }
-  
-  /**
-   * Enrich a message with standard properties
-   * @param {Object} message - Message to enrich
-   * @returns {Object} Enriched message
-   * @private
-   */
-  enrichMessage(message) {
-    const now = new Date();
     
-    return {
-      ...message,
-      messageId: message.messageId || uuidv4(),
-      timestamp: message.timestamp || now.getTime(),
-      datetime: message.datetime || now.toISOString()
-    };
+    throw new AppError('Message must have either queue or exchange specified');
   }
-}
 
-/**
- * Task producer for sending tasks to workers
- */
-class TaskProducer extends BaseProducer {
-  /**
-   * Create a new task producer
-   * @param {Object} [options={}] - Task producer options
-   * @param {string} [options.exchange='tasks'] - Exchange name
-   * @param {Object} [options.channelManager=defaultChannelManager] - Channel manager instance
-   * @param {Object} [options.logger=defaultLogger] - Logger instance
-   */
-  constructor(options = {}) {
-    super({
-      exchange: options.exchange || 'tasks',
-      exchangeType: 'direct',
-      exchangeOptions: { durable: true },
-      channelManager: options.channelManager,
-      logger: options.logger
+  async _sendToDestination(destination, message, options) {
+    if (destination.queue) {
+      return this.sendToQueue(destination.queue, message, options);
+    } else if (destination.exchange) {
+      return this.publish(
+        destination.exchange, 
+        destination.routingKey || '', 
+        message, 
+        options
+      );
+    }
+    
+    throw new AppError('Destination must have either queue or exchange specified');
+  }
+
+  async _createReplyQueue() {
+    return this.channelManager.withChannel(async (channel) => {
+      const q = await channel.assertQueue('', { exclusive: true });
+      return q.queue;
     });
   }
-  
-  /**
-   * Send a task for processing
-   * @param {string} taskType - Task type (used as routing key)
-   * @param {Object} taskData - Task data
-   * @param {Object} [options={}] - Task options
-   * @param {string} [options.priority] - Task priority
-   * @param {number} [options.delay] - Delay in milliseconds
-   * @returns {Promise<string>} Promise that resolves to task ID
-   */
-  async sendTask(taskType, taskData, options = {}) {
-    const taskId = options.taskId || uuidv4();
-    
-    const task = {
-      taskId,
-      taskType,
-      data: taskData,
-      priority: options.priority || 'normal',
-      createdAt: new Date().toISOString()
-    };
-    
-    // Apply delay if specified (using message TTL and dead letter exchange)
-    const messageOptions = {};
-    
-    if (options.delay && options.delay > 0) {
-      messageOptions.expiration = options.delay.toString();
-      messageOptions.headers = {
-        'x-delay': options.delay
-      };
-    }
-    
-    if (options.priority) {
-      switch (options.priority) {
-        case 'high':
-          messageOptions.priority = 10;
-          break;
-        case 'normal':
-          messageOptions.priority = 5;
-          break;
-        case 'low':
-          messageOptions.priority = 1;
-          break;
-        default:
-          if (typeof options.priority === 'number') {
-            messageOptions.priority = options.priority;
+
+  async _waitForResponse(replyQueue, correlationId, timeout) {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new Error('Response timeout'));
+      }, timeout);
+      
+      this.channelManager.withChannel(async (channel) => {
+        await channel.consume(replyQueue, (msg) => {
+          if (msg && msg.properties.correlationId === correlationId) {
+            clearTimeout(timer);
+            channel.ack(msg);
+            
+            try {
+              const response = JSON.parse(msg.content.toString());
+              resolve(response);
+            } catch (error) {
+              reject(new Error('Invalid response format'));
+            }
           }
-      }
-    }
-    
-    const result = await this.send(taskType, task, messageOptions);
-    
-    if (result) {
-      return taskId;
-    } else {
-      throw new Error(`Failed to send task ${taskId}`);
-    }
+        }, { noAck: false });
+      }).catch(reject);
+    });
+  }
+
+  _sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 }
 
-/**
- * Event producer for publishing events
- */
-class EventProducer extends BaseProducer {
-  /**
-   * Create a new event producer
-   * @param {Object} [options={}] - Event producer options
-   * @param {string} [options.exchange='events'] - Exchange name
-   * @param {Object} [options.channelManager=defaultChannelManager] - Channel manager instance
-   * @param {Object} [options.logger=defaultLogger] - Logger instance
-   */
-  constructor(options = {}) {
-    super({
-      exchange: options.exchange || 'events',
-      exchangeType: 'topic',
-      exchangeOptions: { durable: true },
-      channelManager: options.channelManager,
-      logger: options.logger
-    });
-  }
-  
-  /**
-   * Publish an event
-   * @param {string} eventType - Event type
-   * @param {string} subType - Event sub-type
-   * @param {Object} eventData - Event data
-   * @param {Object} [options={}] - Event options
-   * @returns {Promise<string>} Promise that resolves to event ID
-   */
-  async publishEvent(eventType, subType, eventData, options = {}) {
-    const eventId = options.eventId || uuidv4();
-    const routingKey = `${eventType}.${subType}`;
-    
-    const event = {
-      eventId,
-      eventType,
-      subType,
-      data: eventData,
-      source: options.source || 'unknown',
-      createdAt: new Date().toISOString()
-    };
-    
-    const result = await this.send(routingKey, event, options);
-    
-    if (result) {
-      return eventId;
-    } else {
-      throw new Error(`Failed to publish event ${eventId}`);
-    }
-  }
-  
-  /**
-   * Publish a domain event
-   * @param {string} entity - Entity type
-   * @param {string} action - Action type
-   * @param {Object} data - Event data
-   * @param {Object} [options={}] - Event options
-   * @returns {Promise<string>} Promise that resolves to event ID
-   */
-  async publishDomainEvent(entity, action, data, options = {}) {
-    return this.publishEvent('domain', `${entity}.${action}`, data, options);
-  }
-  
-  /**
-   * Publish a system event
-   * @param {string} component - System component
-   * @param {string} action - Action type
-   * @param {Object} data - Event data
-   * @param {Object} [options={}] - Event options
-   * @returns {Promise<string>} Promise that resolves to event ID
-   */
-  async publishSystemEvent(component, action, data, options = {}) {
-    return this.publishEvent('system', `${component}.${action}`, data, options);
-  }
-}
+// Создание экземпляров для различных типов сообщений
+const defaultProducer = new MessageProducer();
 
-/**
- * Notification producer for sending notifications
- */
-class NotificationProducer extends BaseProducer {
-  /**
-   * Create a new notification producer
-   * @param {Object} [options={}] - Notification producer options
-   * @param {string} [options.exchange='notifications'] - Exchange name
-   * @param {Object} [options.channelManager=defaultChannelManager] - Channel manager instance
-   * @param {Object} [options.logger=defaultLogger] - Logger instance
-   */
-  constructor(options = {}) {
-    super({
-      exchange: options.exchange || 'notifications',
-      exchangeType: 'topic',
-      exchangeOptions: { durable: true },
-      channelManager: options.channelManager,
-      logger: options.logger
-    });
+const taskProducer = new MessageProducer({
+  defaultExchange: 'tasks',
+  defaultOptions: {
+    persistent: true,
+    priority: 5
   }
-  
-  /**
-   * Send a notification
-   * @param {string} channel - Notification channel (email, sms, push, etc.)
-   * @param {string} type - Notification type
-   * @param {Object} data - Notification data
-   * @param {string|Array<string>} recipients - Recipient(s)
-   * @param {Object} [options={}] - Notification options
-   * @returns {Promise<string>} Promise that resolves to notification ID
-   */
-  async sendNotification(channel, type, data, recipients, options = {}) {
-    const notificationId = options.notificationId || uuidv4();
-    const routingKey = `${channel}.${type}`;
-    
-    // Convert single recipient to array
-    const recipientList = Array.isArray(recipients) ? recipients : [recipients];
-    
-    const notification = {
-      notificationId,
-      channel,
-      type,
-      data,
-      recipients: recipientList,
-      priority: options.priority || 'normal',
-      createdAt: new Date().toISOString()
-    };
-    
-    // Add optional properties
-    if (options.subject) {
-      notification.subject = options.subject;
-    }
-    
-    if (options.template) {
-      notification.template = options.template;
-    }
-    
-    if (options.sender) {
-      notification.sender = options.sender;
-    }
-    
-    if (options.expiresAt) {
-      notification.expiresAt = options.expiresAt;
-    }
-    
-    const result = await this.send(routingKey, notification, options);
-    
-    if (result) {
-      return notificationId;
-    } else {
-      throw new Error(`Failed to send notification ${notificationId}`);
-    }
-  }
-  
-  /**
-   * Send an email notification
-   * @param {Object} emailData - Email data
-   * @param {string} emailData.subject - Email subject
-   * @param {string} [emailData.body] - Email body
-   * @param {string} [emailData.template] - Email template
-   * @param {Object} [emailData.templateData] - Template data
-   * @param {string|Array<string>} recipients - Recipient(s)
-   * @param {Object} [options={}] - Email options
-   * @returns {Promise<string>} Promise that resolves to notification ID
-   */
-  async sendEmail(emailData, recipients, options = {}) {
-    return this.sendNotification('email', options.type || 'general', emailData, recipients, {
-      ...options,
-      subject: emailData.subject
-    });
-  }
-  
-  /**
-   * Send an in-app notification
-   * @param {string} type - Notification type
-   * @param {Object} data - Notification data
-   * @param {string|Array<string>} recipients - Recipient(s)
-   * @param {Object} [options={}] - Notification options
-   * @returns {Promise<string>} Promise that resolves to notification ID
-   */
-  async sendInApp(type, data, recipients, options = {}) {
-    return this.sendNotification('in-app', type, data, recipients, options);
-  }
-}
+});
 
-// Create default instances of producers
-const defaultTaskProducer = new TaskProducer();
-const defaultEventProducer = new EventProducer();
-const defaultNotificationProducer = new NotificationProducer();
+const eventProducer = new MessageProducer({
+  defaultExchange: 'events',
+  defaultOptions: {
+    persistent: false,
+    expiration: '3600000' // 1 час
+  }
+});
+
+const notificationProducer = new MessageProducer({
+  defaultExchange: 'notifications',
+  defaultOptions: {
+    persistent: true,
+    priority: 8
+  }
+});
 
 module.exports = {
-  BaseProducer,
-  TaskProducer,
-  EventProducer,
-  NotificationProducer,
-  defaultTaskProducer,
-  defaultEventProducer,
-  defaultNotificationProducer
+  MessageProducer,
+  defaultProducer,
+  taskProducer,
+  eventProducer,
+  notificationProducer
 };

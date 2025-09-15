@@ -1,456 +1,637 @@
 /**
- * Validation schemas for theses
+ * Thesis Validation Schemas
+ * Схемы валидации для тезисов и связанных операций
  */
 
-const Joi = require('joi');
-const { 
-  THESIS_DRAFT,
-  THESIS_GENERATED,
-  THESIS_EDITED,
-  THESIS_ELABORATED,
-  THESIS_PUBLISHED
-} = require('../../../constants/statuses');
 const {
-  THESIS_TYPES,
-  THESIS_STYLES
-} = require('../../../constants/philosophyConstants');
+  stringValidators,
+  numberValidators,
+  arrayValidators,
+  objectValidators,
+  specializedValidators,
+  philosophyValidators,
+  createSchemaValidator
+} = require('../validators');
 
-// Get valid thesis types
-const validThesisTypes = Object.values(THESIS_TYPES);
+/**
+ * Схема для создания тезиса
+ */
+const createThesisSchema = {
+  conceptId: {
+    required: true,
+    validators: [
+      (value) => specializedValidators.isUUID(value, 'conceptId')
+    ]
+  },
+  type: {
+    required: true,
+    validators: [
+      (value) => philosophyValidators.isThesisType(value, 'type')
+    ]
+  },
+  content: {
+    required: true,
+    validators: [
+      (value) => stringValidators.isNonEmptyString(value, 'content'),
+      (value) => stringValidators.hasLength(value, 10, 5000, 'content')
+    ]
+  },
+  style: {
+    required: false,
+    validators: [
+      (value) => philosophyValidators.isThesisStyle(value, 'style')
+    ]
+  },
+  relatedCategories: {
+    required: false,
+    validators: [
+      (value) => arrayValidators.isArray(value, 'relatedCategories'),
+      (value) => arrayValidators.hasArrayLength(value, 0, 20, 'relatedCategories'),
+      (value) => {
+        value.forEach((categoryId, index) => {
+          specializedValidators.isUUID(categoryId, `relatedCategories[${index}]`);
+        });
+      }
+    ]
+  },
+  language: {
+    required: false,
+    validators: [
+      (value) => specializedValidators.isLanguageCode(value, 'language')
+    ]
+  },
+  tags: {
+    required: false,
+    validators: [
+      (value) => arrayValidators.isArray(value, 'tags'),
+      (value) => arrayValidators.hasArrayLength(value, 0, 15, 'tags'),
+      (value) => {
+        value.forEach((tag, index) => {
+          stringValidators.isNonEmptyString(tag, `tags[${index}]`);
+          stringValidators.hasLength(tag, 1, 50, `tags[${index}]`);
+        });
+      }
+    ]
+  }
+};
 
-// Get valid thesis styles
-const validThesisStyles = Object.values(THESIS_STYLES);
+/**
+ * Схема для обновления тезиса
+ */
+const updateThesisSchema = {
+  content: {
+    required: false,
+    validators: createThesisSchema.content.validators
+  },
+  type: {
+    required: false,
+    validators: createThesisSchema.type.validators
+  },
+  style: {
+    required: false,
+    validators: createThesisSchema.style.validators
+  },
+  relatedCategories: {
+    required: false,
+    validators: createThesisSchema.relatedCategories.validators
+  },
+  status: {
+    required: false,
+    validators: [
+      (value) => stringValidators.isOneOf(
+        value,
+        ['draft', 'reviewed', 'published'],
+        'status'
+      )
+    ]
+  }
+};
 
-// Schema for creating a thesis manually
-const createThesisSchema = Joi.object({
-  type: Joi.string().valid(...validThesisTypes).required()
-    .messages({
-      'any.only': `Thesis type must be one of: ${validThesisTypes.join(', ')}`,
-      'any.required': 'Thesis type is required'
-    }),
-    
-  content: Joi.string().min(1).max(5000).required()
-    .messages({
-      'string.empty': 'Thesis content is required',
-      'string.min': 'Thesis content must be at least {{#limit}} characters',
-      'string.max': 'Thesis content cannot exceed {{#limit}} characters',
-      'any.required': 'Thesis content is required'
-    }),
-    
-  style: Joi.string().valid(...validThesisStyles).default(THESIS_STYLES.ACADEMIC)
-    .messages({
-      'any.only': `Thesis style must be one of: ${validThesisStyles.join(', ')}`
-    }),
-    
-  related_categories: Joi.array().items(Joi.string().uuid()).default([])
-    .messages({
-      'array.base': 'Related categories must be an array'
-    }),
-    
-  parent_theses: Joi.array().items(Joi.string().uuid()).default([])
-    .messages({
-      'array.base': 'Parent theses must be an array'
-    }),
-    
-  metadata: Joi.object().default({})
-});
+/**
+ * Схема для генерации тезисов
+ */
+const generateThesesSchema = {
+  conceptId: {
+    required: true,
+    validators: [
+      (value) => specializedValidators.isUUID(value, 'conceptId')
+    ]
+  },
+  types: {
+    required: false,
+    validators: [
+      (value) => arrayValidators.isArray(value, 'types'),
+      (value) => arrayValidators.hasArrayLength(value, 1, 10, 'types'),
+      (value) => {
+        value.forEach((type, index) => {
+          philosophyValidators.isThesisType(type, `types[${index}]`);
+        });
+      }
+    ]
+  },
+  count: {
+    required: false,
+    validators: [
+      (value) => numberValidators.isInteger(value, 'count'),
+      (value) => numberValidators.isInRange(value, 1, 20, 'count')
+    ]
+  },
+  style: {
+    required: false,
+    validators: [
+      (value) => philosophyValidators.isThesisStyle(value, 'style')
+    ]
+  },
+  language: {
+    required: false,
+    validators: [
+      (value) => specializedValidators.isLanguageCode(value, 'language')
+    ]
+  },
+  considerCharacteristics: {
+    required: false,
+    validators: [
+      (value) => {
+        if (typeof value !== 'boolean') {
+          throw new Error('considerCharacteristics must be a boolean');
+        }
+      }
+    ]
+  },
+  focusCategories: {
+    required: false,
+    validators: [
+      (value) => arrayValidators.isArray(value, 'focusCategories'),
+      (value) => arrayValidators.hasArrayLength(value, 0, 10, 'focusCategories'),
+      (value) => {
+        value.forEach((categoryId, index) => {
+          specializedValidators.isUUID(categoryId, `focusCategories[${index}]`);
+        });
+      }
+    ]
+  },
+  parameters: {
+    required: false,
+    validators: [
+      (value) => objectValidators.isObject(value, 'parameters'),
+      (value) => {
+        if ('creativity' in value) {
+          numberValidators.isPercentage(value.creativity, 'parameters.creativity');
+        }
+        if ('academicLevel' in value) {
+          numberValidators.isInRange(value.academicLevel, 1, 5, 'parameters.academicLevel');
+        }
+      }
+    ]
+  }
+};
 
-// Schema for updating a thesis
-const updateThesisSchema = Joi.object({
-  type: Joi.string().valid(...validThesisTypes)
-    .messages({
-      'any.only': `Thesis type must be one of: ${validThesisTypes.join(', ')}`
-    }),
-    
-  content: Joi.string().min(1).max(5000)
-    .messages({
-      'string.empty': 'Thesis content cannot be empty',
-      'string.min': 'Thesis content must be at least {{#limit}} characters',
-      'string.max': 'Thesis content cannot exceed {{#limit}} characters'
-    }),
-    
-  style: Joi.string().valid(...validThesisStyles)
-    .messages({
-      'any.only': `Thesis style must be one of: ${validThesisStyles.join(', ')}`
-    }),
-    
-  status: Joi.string().valid(
-    THESIS_DRAFT,
-    THESIS_GENERATED,
-    THESIS_EDITED,
-    THESIS_ELABORATED,
-    THESIS_PUBLISHED
-  ).messages({
-    'any.only': 'Status must be one of: draft, generated, edited, elaborated, published'
-  }),
-  
-  related_categories: Joi.array().items(Joi.string().uuid())
-    .messages({
-      'array.base': 'Related categories must be an array'
-    }),
-    
-  parent_theses: Joi.array().items(Joi.string().uuid())
-    .messages({
-      'array.base': 'Parent theses must be an array'
-    }),
-    
-  metadata: Joi.object()
-}).min(1).messages({
-  'object.min': 'At least one field must be provided'
-});
+/**
+ * Схема для добавления обоснования к тезису
+ */
+const addJustificationSchema = {
+  justification: {
+    required: true,
+    validators: [
+      (value) => stringValidators.isNonEmptyString(value, 'justification'),
+      (value) => stringValidators.hasLength(value, 20, 3000, 'justification')
+    ]
+  },
+  sources: {
+    required: false,
+    validators: [
+      (value) => arrayValidators.isArray(value, 'sources'),
+      (value) => arrayValidators.hasArrayLength(value, 0, 10, 'sources'),
+      (value) => {
+        value.forEach((source, index) => {
+          objectValidators.hasRequiredFields(
+            source,
+            ['type', 'reference'],
+            `sources[${index}]`
+          );
+          stringValidators.isOneOf(
+            source.type,
+            ['philosophical', 'empirical', 'logical', 'historical'],
+            `sources[${index}].type`
+          );
+        });
+      }
+    ]
+  }
+};
 
-// Schema for generating theses
-const generateThesesSchema = Joi.object({
-  types: Joi.alternatives()
-    .try(
-      Joi.string().valid(...validThesisTypes),
-      Joi.array().items(Joi.string().valid(...validThesisTypes))
-    ).required()
-    .messages({
-      'any.only': `Thesis types must be one of: ${validThesisTypes.join(', ')}`,
-      'any.required': 'Thesis types are required'
-    }),
-    
-  count: Joi.number().integer().min(1).max(20).default(5)
-    .messages({
-      'number.base': 'Count must be a number',
-      'number.integer': 'Count must be an integer',
-      'number.min': 'Count must be at least {{#limit}}',
-      'number.max': 'Count cannot exceed {{#limit}}'
-    }),
-    
-  style: Joi.string().valid(...validThesisStyles).default(THESIS_STYLES.ACADEMIC)
-    .messages({
-      'any.only': `Thesis style must be one of: ${validThesisStyles.join(', ')}`
-    }),
-    
-  category_ids: Joi.array().items(Joi.string().uuid())
-    .messages({
-      'array.base': 'Category IDs must be an array'
-    }),
-    
-  use_graph: Joi.boolean().default(true),
-  
-  use_existing_theses: Joi.boolean().default(false),
-  
-  focus_on_central_categories: Joi.boolean().default(true),
-  
-  detail_level: Joi.string().valid('basic', 'moderate', 'detailed').default('moderate')
-    .messages({
-      'any.only': 'Detail level must be one of: basic, moderate, detailed'
-    }),
-    
-  creativity_level: Joi.string().valid('low', 'moderate', 'high').default('moderate')
-    .messages({
-      'any.only': 'Creativity level must be one of: low, moderate, high'
-    }),
-    
-  focus: Joi.string().max(255).allow('').default('')
-    .messages({
-      'string.max': 'Focus cannot exceed {{#limit}} characters'
-    })
-});
+/**
+ * Схема для добавления контраргумента
+ */
+const addCounterargumentSchema = {
+  content: {
+    required: true,
+    validators: [
+      (value) => stringValidators.isNonEmptyString(value, 'content'),
+      (value) => stringValidators.hasLength(value, 10, 2000, 'content')
+    ]
+  },
+  strength: {
+    required: false,
+    validators: [
+      (value) => numberValidators.isPercentage(value, 'strength')
+    ]
+  }
+};
 
-// Schema for generating theses with characteristics
-const generateThesesWithCharacteristicsSchema = Joi.object({
-  types: Joi.alternatives()
-    .try(
-      Joi.string().valid(...validThesisTypes),
-      Joi.array().items(Joi.string().valid(...validThesisTypes))
-    ).required()
-    .messages({
-      'any.only': `Thesis types must be one of: ${validThesisTypes.join(', ')}`,
-      'any.required': 'Thesis types are required'
-    }),
-    
-  count: Joi.number().integer().min(1).max(20).default(5)
-    .messages({
-      'number.base': 'Count must be a number',
-      'number.integer': 'Count must be an integer',
-      'number.min': 'Count must be at least {{#limit}}',
-      'number.max': 'Count cannot exceed {{#limit}}'
-    }),
-    
-  style: Joi.string().valid(...validThesisStyles).default(THESIS_STYLES.ACADEMIC)
-    .messages({
-      'any.only': `Thesis style must be one of: ${validThesisStyles.join(', ')}`
-    }),
-    
-  category_ids: Joi.array().items(Joi.string().uuid())
-    .messages({
-      'array.base': 'Category IDs must be an array'
-    }),
-    
-  use_existing_theses: Joi.boolean().default(false),
-  
-  characteristic_weights: Joi.object({
-    centrality: Joi.number().min(0).max(1).default(0.7)
-      .messages({
-        'number.base': 'Centrality weight must be a number',
-        'number.min': 'Centrality weight must be at least {{#limit}}',
-        'number.max': 'Centrality weight cannot exceed {{#limit}}'
-      }),
-      
-    certainty: Joi.number().min(0).max(1).default(0.5)
-      .messages({
-        'number.base': 'Certainty weight must be a number',
-        'number.min': 'Certainty weight must be at least {{#limit}}',
-        'number.max': 'Certainty weight cannot exceed {{#limit}}'
-      }),
-      
-    historical_significance: Joi.number().min(0).max(1).default(0.3)
-      .messages({
-        'number.base': 'Historical significance weight must be a number',
-        'number.min': 'Historical significance weight must be at least {{#limit}}',
-        'number.max': 'Historical significance weight cannot exceed {{#limit}}'
-      }),
-      
-    relationship_strength: Joi.number().min(0).max(1).default(0.5)
-      .messages({
-        'number.base': 'Relationship strength weight must be a number',
-        'number.min': 'Relationship strength weight must be at least {{#limit}}',
-        'number.max': 'Relationship strength weight cannot exceed {{#limit}}'
-      })
-  }).default({
-    centrality: 0.7,
-    certainty: 0.5,
-    historical_significance: 0.3,
-    relationship_strength: 0.5
-  }),
-  
-  detail_level: Joi.string().valid('basic', 'moderate', 'detailed').default('moderate')
-    .messages({
-      'any.only': 'Detail level must be one of: basic, moderate, detailed'
-    }),
-    
-  creativity_level: Joi.string().valid('low', 'moderate', 'high').default('moderate')
-    .messages({
-      'any.only': 'Creativity level must be one of: low, moderate, high'
-    }),
-    
-  focus: Joi.string().max(255).allow('').default('')
-    .messages({
-      'string.max': 'Focus cannot exceed {{#limit}} characters'
-    })
-});
+/**
+ * Схема для добавления подтверждающего доказательства
+ */
+const addSupportingEvidenceSchema = {
+  content: {
+    required: true,
+    validators: [
+      (value) => stringValidators.isNonEmptyString(value, 'content'),
+      (value) => stringValidators.hasLength(value, 10, 2000, 'content')
+    ]
+  },
+  type: {
+    required: true,
+    validators: [
+      (value) => stringValidators.isOneOf(
+        value,
+        ['empirical', 'logical', 'historical', 'theoretical', 'experiential'],
+        'type'
+      )
+    ]
+  },
+  source: {
+    required: false,
+    validators: [
+      (value) => stringValidators.hasLength(value, 0, 500, 'source')
+    ]
+  },
+  reliability: {
+    required: false,
+    validators: [
+      (value) => numberValidators.isPercentage(value, 'reliability')
+    ]
+  }
+};
 
-// Schema for thesis elaboration
-const elaborateThesisSchema = Joi.object({
-  elaboration_type: Joi.string().valid(
-    'explanation',
-    'justification',
-    'critique',
-    'examples',
-    'counterarguments',
-    'implications',
-    'historical_context',
-    'comprehensive'
-  ).default('explanation')
-    .messages({
-      'any.only': 'Elaboration type must be one of: explanation, justification, critique, examples, counterarguments, implications, historical_context, comprehensive'
-    }),
-    
-  detail_level: Joi.string().valid('basic', 'moderate', 'detailed').default('moderate')
-    .messages({
-      'any.only': 'Detail level must be one of: basic, moderate, detailed'
-    }),
-    
-  focus: Joi.string().max(255).allow('').default('')
-    .messages({
-      'string.max': 'Focus cannot exceed {{#limit}} characters'
-    }),
-    
-  style: Joi.string().valid(...validThesisStyles)
-    .messages({
-      'any.only': `Style must be one of: ${validThesisStyles.join(', ')}`
-    })
-});
+/**
+ * Схема для оценки тезиса
+ */
+const scoreThesisSchema = {
+  clarity: {
+    required: false,
+    validators: [
+      (value) => numberValidators.isPercentage(value, 'clarity')
+    ]
+  },
+  originality: {
+    required: false,
+    validators: [
+      (value) => numberValidators.isPercentage(value, 'originality')
+    ]
+  },
+  validity: {
+    required: false,
+    validators: [
+      (value) => numberValidators.isPercentage(value, 'validity')
+    ]
+  },
+  relevance: {
+    required: false,
+    validators: [
+      (value) => numberValidators.isPercentage(value, 'relevance')
+    ]
+  }
+};
 
-// Schema for comparing theses
-const compareThesesSchema = Joi.object({
-  thesis_ids: Joi.array().items(Joi.string().uuid()).min(2).required()
-    .messages({
-      'array.min': 'At least two thesis IDs are required',
-      'array.base': 'Thesis IDs must be an array',
-      'any.required': 'Thesis IDs are required'
-    }),
-    
-  comparison_type: Joi.string().valid(
-    'compatibility',
-    'difference',
-    'contradiction',
-    'complementarity',
-    'comprehensive'
-  ).default('comprehensive')
-    .messages({
-      'any.only': 'Comparison type must be one of: compatibility, difference, contradiction, complementarity, comprehensive'
-    }),
-    
-  detail_level: Joi.string().valid('basic', 'moderate', 'detailed').default('moderate')
-    .messages({
-      'any.only': 'Detail level must be one of: basic, moderate, detailed'
-    }),
-    
-  consider_categories: Joi.boolean().default(true),
-  
-  focus: Joi.string().max(255).allow('').default('')
-    .messages({
-      'string.max': 'Focus cannot exceed {{#limit}} characters'
-    })
-});
+/**
+ * Схема для сравнения тезисов
+ */
+const compareThesesSchema = {
+  thesisIds: {
+    required: true,
+    validators: [
+      (value) => arrayValidators.isNonEmptyArray(value, 'thesisIds'),
+      (value) => arrayValidators.hasArrayLength(value, 2, 10, 'thesisIds'),
+      (value) => arrayValidators.hasUniqueElements(value, 'thesisIds'),
+      (value) => {
+        value.forEach((id, index) => {
+          specializedValidators.isUUID(id, `thesisIds[${index}]`);
+        });
+      }
+    ]
+  },
+  comparisonType: {
+    required: false,
+    validators: [
+      (value) => stringValidators.isOneOf(
+        value,
+        ['similarity', 'contradiction', 'complementarity', 'development', 'full'],
+        'comparisonType'
+      )
+    ]
+  }
+};
 
-// Schema for analyzing thesis origin
-const analyzeThesisOriginSchema = Joi.object({
-  thesis_ids: Joi.array().items(Joi.string().uuid()).min(1).required()
-    .messages({
-      'array.min': 'At least one thesis ID is required',
-      'array.base': 'Thesis IDs must be an array',
-      'any.required': 'Thesis IDs are required'
-    }),
-    
-  analysis_level: Joi.string().valid('basic', 'moderate', 'detailed').default('moderate')
-    .messages({
-      'any.only': 'Analysis level must be one of: basic, moderate, detailed'
-    }),
-    
-  traditions_to_consider: Joi.array().items(Joi.string().max(100)).default([])
-    .messages({
-      'array.base': 'Traditions to consider must be an array'
-    }),
-    
-  philosophers_to_consider: Joi.array().items(Joi.string().max(100)).default([])
-    .messages({
-      'array.base': 'Philosophers to consider must be an array'
-    }),
-    
-  consider_graph_if_available: Joi.boolean().default(true)
-});
+/**
+ * Схема для синтеза тезисов
+ */
+const synthesizeThesesSchema = {
+  parentThesisIds: {
+    required: true,
+    validators: [
+      (value) => arrayValidators.isNonEmptyArray(value, 'parentThesisIds'),
+      (value) => arrayValidators.hasArrayLength(value, 2, 10, 'parentThesisIds'),
+      (value) => arrayValidators.hasUniqueElements(value, 'parentThesisIds'),
+      (value) => {
+        value.forEach((id, index) => {
+          specializedValidators.isUUID(id, `parentThesisIds[${index}]`);
+        });
+      }
+    ]
+  },
+  synthesisMethod: {
+    required: false,
+    validators: [
+      (value) => stringValidators.isOneOf(
+        value,
+        ['dialectical', 'integrative', 'critical', 'constructive'],
+        'synthesisMethod'
+      )
+    ]
+  },
+  targetType: {
+    required: false,
+    validators: [
+      (value) => philosophyValidators.isThesisType(value, 'targetType')
+    ]
+  }
+};
 
-// Schema for comparing theses with characteristics
-const compareThesesWithCharacteristicsSchema = Joi.object({
-  thesis_ids: Joi.array().items(Joi.string().uuid()).min(2).required()
-    .messages({
-      'array.min': 'At least two thesis IDs are required',
-      'array.base': 'Thesis IDs must be an array',
-      'any.required': 'Thesis IDs are required'
-    }),
-    
-  characteristic_weights: Joi.object({
-    centrality: Joi.number().min(0).max(1).default(0.7)
-      .messages({
-        'number.base': 'Centrality weight must be a number',
-        'number.min': 'Centrality weight must be at least {{#limit}}',
-        'number.max': 'Centrality weight cannot exceed {{#limit}}'
-      }),
-      
-    certainty: Joi.number().min(0).max(1).default(0.5)
-      .messages({
-        'number.base': 'Certainty weight must be a number',
-        'number.min': 'Certainty weight must be at least {{#limit}}',
-        'number.max': 'Certainty weight cannot exceed {{#limit}}'
-      }),
-      
-    historical_significance: Joi.number().min(0).max(1).default(0.3)
-      .messages({
-        'number.base': 'Historical significance weight must be a number',
-        'number.min': 'Historical significance weight must be at least {{#limit}}',
-        'number.max': 'Historical significance weight cannot exceed {{#limit}}'
-      })
-  }).default({
-    centrality: 0.7,
-    certainty: 0.5,
-    historical_significance: 0.3
-  }),
-  
-  comparison_type: Joi.string().valid(
-    'compatibility',
-    'difference',
-    'contradiction',
-    'complementarity',
-    'comprehensive'
-  ).default('comprehensive')
-    .messages({
-      'any.only': 'Comparison type must be one of: compatibility, difference, contradiction, complementarity, comprehensive'
-    }),
-    
-  detail_level: Joi.string().valid('basic', 'moderate', 'detailed').default('moderate')
-    .messages({
-      'any.only': 'Detail level must be one of: basic, moderate, detailed'
-    }),
-    
-  focus: Joi.string().max(255).allow('').default('')
-    .messages({
-      'string.max': 'Focus cannot exceed {{#limit}} characters'
-    })
-});
+/**
+ * Схема для поиска тезисов
+ */
+const searchThesesSchema = {
+  conceptId: {
+    required: false,
+    validators: [
+      (value) => specializedValidators.isUUID(value, 'conceptId')
+    ]
+  },
+  query: {
+    required: false,
+    validators: [
+      (value) => stringValidators.hasLength(value, 1, 200, 'query')
+    ]
+  },
+  types: {
+    required: false,
+    validators: [
+      (value) => {
+        if (Array.isArray(value)) {
+          value.forEach((type, index) => {
+            philosophyValidators.isThesisType(type, `types[${index}]`);
+          });
+        } else {
+          philosophyValidators.isThesisType(value, 'types');
+        }
+      }
+    ]
+  },
+  styles: {
+    required: false,
+    validators: [
+      (value) => {
+        if (Array.isArray(value)) {
+          value.forEach((style, index) => {
+            philosophyValidators.isThesisStyle(style, `styles[${index}]`);
+          });
+        } else {
+          philosophyValidators.isThesisStyle(value, 'styles');
+        }
+      }
+    ]
+  },
+  status: {
+    required: false,
+    validators: [
+      (value) => {
+        const validStatuses = ['draft', 'reviewed', 'published'];
+        if (Array.isArray(value)) {
+          value.forEach((status, index) => {
+            stringValidators.isOneOf(status, validStatuses, `status[${index}]`);
+          });
+        } else {
+          stringValidators.isOneOf(value, validStatuses, 'status');
+        }
+      }
+    ]
+  },
+  hasJustification: {
+    required: false,
+    validators: [
+      (value) => {
+        if (typeof value !== 'boolean') {
+          throw new Error('hasJustification must be a boolean');
+        }
+      }
+    ]
+  },
+  minScore: {
+    required: false,
+    validators: [
+      (value) => objectValidators.isObject(value, 'minScore'),
+      (value) => {
+        const scoreFields = ['clarity', 'originality', 'validity', 'relevance'];
+        Object.keys(value).forEach(field => {
+          if (!scoreFields.includes(field)) {
+            throw new Error(`Invalid score field: ${field}`);
+          }
+          numberValidators.isPercentage(value[field], `minScore.${field}`);
+        });
+      }
+    ]
+  },
+  relatedCategories: {
+    required: false,
+    validators: [
+      (value) => arrayValidators.isArray(value, 'relatedCategories'),
+      (value) => {
+        value.forEach((categoryId, index) => {
+          specializedValidators.isUUID(categoryId, `relatedCategories[${index}]`);
+        });
+      }
+    ]
+  },
+  tags: {
+    required: false,
+    validators: [
+      (value) => arrayValidators.isArray(value, 'tags'),
+      (value) => arrayValidators.hasArrayLength(value, 0, 10, 'tags')
+    ]
+  },
+  language: {
+    required: false,
+    validators: [
+      (value) => specializedValidators.isLanguageCode(value, 'language')
+    ]
+  },
+  createdAfter: {
+    required: false,
+    validators: [
+      (value) => dateValidators.isValidDate(value, 'createdAfter')
+    ]
+  },
+  createdBefore: {
+    required: false,
+    validators: [
+      (value) => dateValidators.isValidDate(value, 'createdBefore')
+    ]
+  },
+  sortBy: {
+    required: false,
+    validators: [
+      (value) => stringValidators.isOneOf(
+        value,
+        ['createdAt', 'updatedAt', 'viewCount', 'citationCount', 'overallScore'],
+        'sortBy'
+      )
+    ]
+  },
+  sortOrder: {
+    required: false,
+    validators: [
+      (value) => stringValidators.isOneOf(value, ['asc', 'desc'], 'sortOrder')
+    ]
+  },
+  page: {
+    required: false,
+    validators: [
+      (value) => numberValidators.isInteger(value, 'page'),
+      (value) => numberValidators.isPositive(value, 'page')
+    ]
+  },
+  limit: {
+    required: false,
+    validators: [
+      (value) => numberValidators.isInteger(value, 'limit'),
+      (value) => numberValidators.isInRange(value, 1, 100, 'limit')
+    ]
+  }
+};
 
-// Schema for creating a thesis elaboration
-const createThesisElaborationSchema = Joi.object({
-  content: Joi.string().min(1).max(5000).required()
-    .messages({
-      'string.empty': 'Elaboration content is required',
-      'string.min': 'Elaboration content must be at least {{#limit}} characters',
-      'string.max': 'Elaboration content cannot exceed {{#limit}} characters',
-      'any.required': 'Elaboration content is required'
-    }),
-    
-  type: Joi.string().valid(
-    'explanation',
-    'justification',
-    'critique',
-    'examples',
-    'counterarguments',
-    'implications',
-    'historical_context',
-    'comprehensive'
-  ).default('explanation')
-    .messages({
-      'any.only': 'Elaboration type must be one of: explanation, justification, critique, examples, counterarguments, implications, historical_context, comprehensive'
-    }),
-    
-  claude_generation_id: Joi.string().uuid().allow(null).default(null),
-  
-  metadata: Joi.object().default({})
-});
+/**
+ * Схема для анализа происхождения тезисов
+ */
+const analyzeThesisOriginSchema = {
+  thesisIds: {
+    required: true,
+    validators: [
+      (value) => arrayValidators.isNonEmptyArray(value, 'thesisIds'),
+      (value) => arrayValidators.hasArrayLength(value, 1, 20, 'thesisIds'),
+      (value) => {
+        value.forEach((id, index) => {
+          specializedValidators.isUUID(id, `thesisIds[${index}]`);
+        });
+      }
+    ]
+  },
+  analysisDepth: {
+    required: false,
+    validators: [
+      (value) => stringValidators.isOneOf(
+        value,
+        ['surface', 'moderate', 'deep'],
+        'analysisDepth'
+      )
+    ]
+  }
+};
 
-// Schema for updating a thesis elaboration
-const updateThesisElaborationSchema = Joi.object({
-  content: Joi.string().min(1).max(5000)
-    .messages({
-      'string.empty': 'Elaboration content cannot be empty',
-      'string.min': 'Elaboration content must be at least {{#limit}} characters',
-      'string.max': 'Elaboration content cannot exceed {{#limit}} characters'
-    }),
-    
-  type: Joi.string().valid(
-    'explanation',
-    'justification',
-    'critique',
-    'examples',
-    'counterarguments',
-    'implications',
-    'historical_context',
-    'comprehensive'
-  ).messages({
-    'any.only': 'Elaboration type must be one of: explanation, justification, critique, examples, counterarguments, implications, historical_context, comprehensive'
-  }),
-  
-  claude_generation_id: Joi.string().uuid().allow(null),
-  
-  metadata: Joi.object()
-}).min(1).messages({
-  'object.min': 'At least one field must be provided'
-});
+/**
+ * Схема для массовых операций с тезисами
+ */
+const bulkThesisOperationSchema = {
+  thesisIds: {
+    required: true,
+    validators: [
+      (value) => arrayValidators.isNonEmptyArray(value, 'thesisIds'),
+      (value) => arrayValidators.hasArrayLength(value, 1, 100, 'thesisIds'),
+      (value) => arrayValidators.hasUniqueElements(value, 'thesisIds'),
+      (value) => {
+        value.forEach((id, index) => {
+          specializedValidators.isUUID(id, `thesisIds[${index}]`);
+        });
+      }
+    ]
+  },
+  operation: {
+    required: true,
+    validators: [
+      (value) => stringValidators.isOneOf(
+        value,
+        ['publish', 'review', 'delete', 'addTag', 'removeTag', 'score'],
+        'operation'
+      )
+    ]
+  },
+  params: {
+    required: false,
+    validators: [
+      (value, field, data) => {
+        if ((data.operation === 'addTag' || data.operation === 'removeTag') && !value?.tag) {
+          throw new Error('tag is required for tag operations');
+        }
+        if (data.operation === 'score' && !value?.scores) {
+          throw new Error('scores are required for score operation');
+        }
+      }
+    ]
+  }
+};
+
+/**
+ * Создание валидаторов из схем
+ */
+const validateCreateThesis = createSchemaValidator(createThesisSchema);
+const validateUpdateThesis = createSchemaValidator(updateThesisSchema);
+const validateGenerateTheses = createSchemaValidator(generateThesesSchema);
+const validateAddJustification = createSchemaValidator(addJustificationSchema);
+const validateAddCounterargument = createSchemaValidator(addCounterargumentSchema);
+const validateAddSupportingEvidence = createSchemaValidator(addSupportingEvidenceSchema);
+const validateScoreThesis = createSchemaValidator(scoreThesisSchema);
+const validateCompareTheses = createSchemaValidator(compareThesesSchema);
+const validateSynthesizeTheses = createSchemaValidator(synthesizeThesesSchema);
+const validateSearchTheses = createSchemaValidator(searchThesesSchema);
+const validateAnalyzeThesisOrigin = createSchemaValidator(analyzeThesisOriginSchema);
+const validateBulkThesisOperation = createSchemaValidator(bulkThesisOperationSchema);
 
 module.exports = {
+  // Схемы
   createThesisSchema,
   updateThesisSchema,
   generateThesesSchema,
-  generateThesesWithCharacteristicsSchema,
-  elaborateThesisSchema,
+  addJustificationSchema,
+  addCounterargumentSchema,
+  addSupportingEvidenceSchema,
+  scoreThesisSchema,
   compareThesesSchema,
+  synthesizeThesesSchema,
+  searchThesesSchema,
   analyzeThesisOriginSchema,
-  compareThesesWithCharacteristicsSchema,
-  createThesisElaborationSchema,
-  updateThesisElaborationSchema
+  bulkThesisOperationSchema,
+  
+  // Валидаторы
+  validateCreateThesis,
+  validateUpdateThesis,
+  validateGenerateTheses,
+  validateAddJustification,
+  validateAddCounterargument,
+  validateAddSupportingEvidence,
+  validateScoreThesis,
+  validateCompareTheses,
+  validateSynthesizeTheses,
+  validateSearchTheses,
+  validateAnalyzeThesisOrigin,
+  validateBulkThesisOperation
 };

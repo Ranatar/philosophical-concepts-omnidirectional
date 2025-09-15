@@ -1,18 +1,49 @@
-# Development Dockerfile for Node.js microservices
-FROM node:16-alpine
+# Development Dockerfile template for Node.js services
+# This is a generic template that can be used for all Node.js microservices
 
-# Set working directory
+FROM node:18-alpine
+
+# Install development tools
+RUN apk add --no-cache \
+    bash \
+    git \
+    curl \
+    nano \
+    vim \
+    postgresql-client \
+    mongodb-tools
+
+# Create app directory
 WORKDIR /app
 
-# Install dependencies
-COPY package*.json ./
-RUN npm install
+# Install nodemon globally for hot-reload
+RUN npm install -g nodemon
 
-# Copy source files
+# Copy package.json and package-lock.json
+COPY package*.json ./
+
+# Install dependencies including devDependencies
+RUN npm ci
+
+# Copy shared libraries (mounted as volume in docker-compose)
+# This allows sharing common code between services
+RUN mkdir -p /shared
+
+# Copy application code
 COPY . .
 
-# Expose port (to be overridden in docker-compose)
+# Create a non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
+
+# Change ownership of app directory
+RUN chown -R nodejs:nodejs /app
+
+# Switch to non-root user
+USER nodejs
+
+# Expose default port (will be overridden in docker-compose)
 EXPOSE 3000
 
-# Start in development mode with hot reloading
+# Default command (will be overridden in docker-compose.override.yml)
 CMD ["npm", "run", "dev"]

@@ -1,649 +1,743 @@
-import React, { useState, useEffect } from 'react';
+/**
+ * Шаблон компонента списка
+ * Базовый шаблон для создания списков с пагинацией, фильтрацией и сортировкой
+ * 
+ * Использование:
+ * 1. Скопировать файл в нужную директорию компонентов
+ * 2. Заменить {{ListName}} на название списка (например, UserList)
+ * 3. Заменить {{EntityName}} на название сущности (например, User)
+ * 4. Заменить {{entityName}} на название в camelCase (например, user)
+ * 5. Адаптировать колонки и фильтры под специфику списка
+ */
+
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import classNames from 'classnames';
+import { debounce } from 'lodash';
+
+// UI компоненты
+import { Button } from '../common/Button';
+import { Input } from '../common/Input';
+import { Select } from '../common/Select';
+import { Loader } from '../common/Loader';
+import { ErrorBoundary } from '../common/ErrorBoundary';
+import { Notification } from '../common/Notification';
+import { Modal } from '../common/Modal';
+
+// Хуки
+import { useApi } from '../../hooks/useApi';
+import { useAuth } from '../../hooks/useAuth';
+
+// Сервисы
+import { {{entityName}}Service } from '../../services/{{entityName}}Service';
+
+// Типы
+import { {{EntityName}}, {{EntityName}}Filter, SortField, SortOrder } from '../../types/{{entityName}}.types';
+
+// Утилиты
+import { formatDate, formatNumber } from '../../utils/formatters';
+import { downloadFile, exportToCSV } from '../../utils/export';
+
+// Иконки
+import { ChevronUp, ChevronDown, Filter, Download, Trash, Edit, Eye } from 'lucide-react';
+
+// Стили
+import styles from './{{ListName}}.module.css';
 
 /**
- * Column configuration for list component
+ * Интерфейс пропсов компонента списка
  */
-export interface ColumnConfig<T> {
-  /** Column identifier */
-  key: string;
-  /** Column header title */
-  title: string;
-  /** Function to render cell content */
-  render?: (item: T, index: number) => React.ReactNode;
-  /** Column width (e.g., '150px', '20%') */
-  width?: string;
-  /** Whether the column is sortable */
-  sortable?: boolean;
-  /** Custom sort function (if sortable) */
-  sortFn?: (a: T, b: T) => number;
-  /** Whether this is the default sort column */
-  defaultSort?: boolean;
-  /** Default sort direction ('asc' or 'desc') */
-  defaultDirection?: 'asc' | 'desc';
-  /** Whether the column can be hidden */
-  hideable?: boolean;
-  /** Whether the column is hidden by default */
-  hidden?: boolean;
-}
-
-/**
- * Props for the ListComponent
- */
-interface ListComponentProps<T> {
-  /** Title for the list */
-  title?: string;
-  /** Array of data items */
-  items: T[];
-  /** Array of column configurations */
-  columns: ColumnConfig<T>[];
-  /** Key function to extract unique identifier for items */
-  keyExtractor: (item: T) => string | number;
-  /** Whether data is currently loading */
-  loading?: boolean;
-  /** Error message */
-  error?: string;
-  /** Function to handle clicking on a row */
-  onRowClick?: (item: T) => void;
-  /** Function to handle selecting rows (if selectable) */
-  onSelectItems?: (items: T[]) => void;
-  /** Whether rows are selectable */
-  selectable?: boolean;
-  /** Whether multiple rows can be selected */
-  multiSelect?: boolean;
-  /** Custom renderer for empty state */
-  emptyComponent?: React.ReactNode;
-  /** Whether to enable pagination */
-  pagination?: boolean;
-  /** Total number of items (if using pagination) */
-  totalItems?: number;
-  /** Current page (if using pagination) */
-  currentPage?: number;
-  /** Number of items per page (if using pagination) */
-  pageSize?: number;
-  /** Function to handle page changes */
-  onPageChange?: (page: number) => void;
-  /** Whether to show the table header */
-  showHeader?: boolean;
-  /** Whether to show column visibility controls */
-  showColumnControls?: boolean;
-  /** Whether to enable local sorting */
-  enableLocalSort?: boolean;
-  /** Custom actions to show in list header */
-  actions?: React.ReactNode;
-  /** Additional class name */
+interface {{ListName}}Props {
   className?: string;
-  /** Children elements to render below the list */
-  children?: React.ReactNode;
+  onItemSelect?: (item: {{EntityName}}) => void;
+  selectable?: boolean;
+  multiSelect?: boolean;
+  showActions?: boolean;
+  customActions?: (item: {{EntityName}}) => React.ReactNode;
+  initialFilters?: Partial<{{EntityName}}Filter>;
+  pageSize?: number;
+  showFilters?: boolean;
+  showPagination?: boolean;
+  showExport?: boolean;
 }
 
 /**
- * Generic list component with sorting, pagination, and row selection
+ * Интерфейс состояния списка
+ */
+interface ListState {
+  selectedItems: Set<string>;
+  showBulkActions: boolean;
+  showDeleteModal: boolean;
+  itemToDelete: {{EntityName}} | null;
+}
+
+/**
+ * Компонент списка {{ListName}}
  * 
  * @example
  * ```tsx
- * <ListComponent
- *   items={data}
- *   columns={[
- *     { key: 'id', title: 'ID', width: '80px' },
- *     { key: 'name', title: 'Name', sortable: true },
- *     { key: 'status', title: 'Status', render: item => <StatusBadge status={item.status} /> }
- *   ]}
- *   keyExtractor={item => item.id}
- *   onRowClick={handleRowClick}
- *   selectable
+ * <{{ListName}}
+ *   onItemSelect={(item) => navigate(`/{{entityName}}s/${item.id}`)}
+ *   showActions
+ *   pageSize={25}
  * />
  * ```
  */
-function ListComponent<T>({
-  title,
-  items,
-  columns: initialColumns,
-  keyExtractor,
-  loading = false,
-  error,
-  onRowClick,
-  onSelectItems,
+export const {{ListName}}: React.FC<{{ListName}}Props> = ({
+  className,
+  onItemSelect,
   selectable = false,
   multiSelect = false,
-  emptyComponent,
-  pagination = false,
-  totalItems,
-  currentPage = 1,
+  showActions = true,
+  customActions,
+  initialFilters = {},
   pageSize = 20,
-  onPageChange,
-  showHeader = true,
-  showColumnControls = false,
-  enableLocalSort = true,
-  actions,
-  className = '',
-  children
-}: ListComponentProps<T>) {
-  // Initialize columns with visibility state
-  const [columns, setColumns] = useState(
-    initialColumns.map(col => ({
-      ...col,
-      hidden: col.hidden || false
-    }))
-  );
+  showFilters = true,
+  showPagination = true,
+  showExport = true,
+}) => {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { user } = useAuth();
   
-  // Sorting state
-  const [sortKey, setSortKey] = useState<string | null>(
-    initialColumns.find(col => col.defaultSort)?.key || null
-  );
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>(
-    initialColumns.find(col => col.defaultSort)?.defaultDirection || 'asc'
-  );
+  // Состояние компонента
+  const [state, setState] = useState<ListState>({
+    selectedItems: new Set(),
+    showBulkActions: false,
+    showDeleteModal: false,
+    itemToDelete: null
+  });
   
-  // Filtered and sorted items
-  const [displayedItems, setDisplayedItems] = useState<T[]>(items);
+  const [notification, setNotification] = useState<{
+    type: 'success' | 'error' | 'warning' | 'info';
+    message: string;
+  } | null>(null);
   
-  // Selected items
-  const [selectedItems, setSelectedItems] = useState<Set<string | number>>(new Set());
-  const [selectAll, setSelectAll] = useState(false);
+  // Параметры списка из URL
+  const currentPage = parseInt(searchParams.get('page') || '1');
+  const currentSort = (searchParams.get('sort') || 'created_at') as SortField;
+  const currentOrder = (searchParams.get('order') || 'desc') as SortOrder;
+  const currentSearch = searchParams.get('search') || '';
   
-  // Update displayed items when items, sorting or filtering change
+  // Фильтры
+  const [filters, setFilters] = useState<{{EntityName}}Filter>({
+    search: currentSearch,
+    ...initialFilters,
+    ...Object.fromEntries(searchParams.entries())
+  });
+  
+  // Ref для отложенного поиска
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  
+  // API запрос для получения списка
+  const {
+    data,
+    loading,
+    error,
+    refetch
+  } = useApi<{
+    items: {{EntityName}}[];
+    total: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
+  }>('/api/{{entityName}}s', {
+    params: {
+      page: currentPage,
+      limit: pageSize,
+      sort: currentSort,
+      order: currentOrder,
+      ...filters
+    }
+  });
+  
+  // Обновление URL при изменении параметров
   useEffect(() => {
-    if (enableLocalSort && sortKey) {
-      // Find the column config for the sort key
-      const sortColumn = columns.find(col => col.key === sortKey);
-      
-      // Sort the items
-      const sortedItems = [...items].sort((a: T, b: T) => {
-        // Use custom sort function if provided
-        if (sortColumn?.sortFn) {
-          return sortDirection === 'asc'
-            ? sortColumn.sortFn(a, b)
-            : sortColumn.sortFn(b, a);
-        }
-        
-        // Default sort based on property values
-        const aValue = (a as any)[sortKey];
-        const bValue = (b as any)[sortKey];
-        
-        if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
-        if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
-        return 0;
-      });
-      
-      setDisplayedItems(sortedItems);
-    } else {
-      setDisplayedItems(items);
-    }
-  }, [items, sortKey, sortDirection, columns, enableLocalSort]);
-  
-  // Handle selecting/deselecting all items
-  useEffect(() => {
-    if (selectAll) {
-      const allKeys = displayedItems.map(item => keyExtractor(item));
-      setSelectedItems(new Set(allKeys));
-    } else if (selectedItems.size === displayedItems.length) {
-      // If we uncheck "select all", clear all selections
-      setSelectedItems(new Set());
-    }
-  }, [selectAll, displayedItems, keyExtractor]);
-  
-  // Notify parent when selection changes
-  useEffect(() => {
-    if (onSelectItems) {
-      const selected = displayedItems.filter(item => 
-        selectedItems.has(keyExtractor(item))
-      );
-      onSelectItems(selected);
-    }
-  }, [selectedItems, displayedItems, keyExtractor, onSelectItems]);
-  
-  // Handle column sorting
-  const handleSort = (key: string) => {
-    if (sortKey === key) {
-      // Toggle direction if already sorting by this column
-      setSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'));
-    } else {
-      // Set new sort column
-      setSortKey(key);
-      setSortDirection('asc');
-    }
-  };
-  
-  // Handle row selection
-  const handleSelectRow = (item: T) => {
-    const itemKey = keyExtractor(item);
+    const params = new URLSearchParams();
     
-    setSelectedItems(prev => {
-      const newSet = new Set(prev);
+    if (currentPage > 1) params.set('page', currentPage.toString());
+    if (currentSort !== 'created_at') params.set('sort', currentSort);
+    if (currentOrder !== 'desc') params.set('order', currentOrder);
+    if (filters.search) params.set('search', filters.search);
+    
+    // Добавляем другие фильтры
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value && key !== 'search') {
+        params.set(key, value.toString());
+      }
+    });
+    
+    setSearchParams(params);
+  }, [currentPage, currentSort, currentOrder, filters]);
+  
+  // Обработчики событий
+  const handlePageChange = useCallback((page: number) => {
+    setSearchParams(prev => {
+      prev.set('page', page.toString());
+      return prev;
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [setSearchParams]);
+  
+  const handleSortChange = useCallback((field: SortField) => {
+    setSearchParams(prev => {
+      const currentSortField = prev.get('sort');
+      const currentSortOrder = prev.get('order');
       
-      if (newSet.has(itemKey)) {
-        newSet.delete(itemKey);
+      if (currentSortField === field) {
+        // Переключаем порядок сортировки
+        prev.set('order', currentSortOrder === 'asc' ? 'desc' : 'asc');
       } else {
-        if (!multiSelect) {
-          // Clear previous selections if not multi-select
-          newSet.clear();
-        }
-        newSet.add(itemKey);
+        // Новое поле сортировки
+        prev.set('sort', field);
+        prev.set('order', 'desc');
       }
       
-      return newSet;
+      // Сбрасываем на первую страницу
+      prev.delete('page');
+      
+      return prev;
     });
-  };
+  }, [setSearchParams]);
   
-  // Handle select all toggle
-  const handleSelectAll = () => {
-    setSelectAll(prev => !prev);
-  };
+  // Отложенный поиск
+  const debouncedSearch = useMemo(
+    () => debounce((value: string) => {
+      setFilters(prev => ({ ...prev, search: value }));
+      setSearchParams(prev => {
+        if (value) {
+          prev.set('search', value);
+        } else {
+          prev.delete('search');
+        }
+        prev.delete('page'); // Сброс на первую страницу
+        return prev;
+      });
+    }, 500),
+    [setSearchParams]
+  );
   
-  // Handle column visibility toggle
-  const toggleColumnVisibility = (key: string) => {
-    setColumns(prev => 
-      prev.map(col => 
-        col.key === key ? { ...col, hidden: !col.hidden } : col
-      )
-    );
-  };
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    debouncedSearch(value);
+  }, [debouncedSearch]);
   
-  // Calculate total pages for pagination
-  const totalPages = pagination && totalItems && pageSize
-    ? Math.ceil(totalItems / pageSize)
-    : 0;
+  const handleFilterChange = useCallback((key: keyof {{EntityName}}Filter, value: any) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+    setSearchParams(prev => {
+      if (value) {
+        prev.set(key, value.toString());
+      } else {
+        prev.delete(key);
+      }
+      prev.delete('page'); // Сброс на первую страницу
+      return prev;
+    });
+  }, [setSearchParams]);
   
-  // Handle page change
-  const handlePageChange = (page: number) => {
-    if (onPageChange) {
-      onPageChange(page);
+  const handleResetFilters = useCallback(() => {
+    setFilters(initialFilters);
+    setSearchParams(new URLSearchParams());
+    if (searchInputRef.current) {
+      searchInputRef.current.value = '';
     }
-  };
+  }, [initialFilters, setSearchParams]);
   
-  // Generate a list of page numbers for pagination
-  const generatePageNumbers = () => {
-    if (!totalPages) return [];
-    
-    const pages = [];
-    
-    // Always show first page
-    pages.push(1);
-    
-    // Calculate range of pages around current page
-    const rangeStart = Math.max(2, currentPage - 2);
-    const rangeEnd = Math.min(totalPages - 1, currentPage + 2);
-    
-    // Add ellipsis after first page if needed
-    if (rangeStart > 2) {
-      pages.push('...');
-    }
-    
-    // Add pages in range
-    for (let i = rangeStart; i <= rangeEnd; i++) {
-      pages.push(i);
-    }
-    
-    // Add ellipsis before last page if needed
-    if (rangeEnd < totalPages - 1) {
-      pages.push('...');
+  // Выбор элементов
+  const handleSelectItem = useCallback((item: {{EntityName}}) => {
+    if (!selectable) {
+      onItemSelect?.(item);
+      return;
     }
     
-    // Always show last page if not already included
-    if (totalPages > 1) {
-      pages.push(totalPages);
+    setState(prev => {
+      const newSelected = new Set(prev.selectedItems);
+      
+      if (multiSelect) {
+        if (newSelected.has(item.id)) {
+          newSelected.delete(item.id);
+        } else {
+          newSelected.add(item.id);
+        }
+      } else {
+        newSelected.clear();
+        newSelected.add(item.id);
+      }
+      
+      return {
+        ...prev,
+        selectedItems: newSelected,
+        showBulkActions: newSelected.size > 0
+      };
+    });
+  }, [selectable, multiSelect, onItemSelect]);
+  
+  const handleSelectAll = useCallback((checked: boolean) => {
+    if (!data?.items) return;
+    
+    setState(prev => ({
+      ...prev,
+      selectedItems: checked 
+        ? new Set(data.items.map(item => item.id))
+        : new Set(),
+      showBulkActions: checked
+    }));
+  }, [data]);
+  
+  // Действия
+  const handleView = useCallback((item: {{EntityName}}) => {
+    navigate(`/{{entityName}}s/${item.id}`);
+  }, [navigate]);
+  
+  const handleEdit = useCallback((item: {{EntityName}}) => {
+    navigate(`/{{entityName}}s/${item.id}/edit`);
+  }, [navigate]);
+  
+  const handleDelete = useCallback((item: {{EntityName}}) => {
+    setState(prev => ({
+      ...prev,
+      showDeleteModal: true,
+      itemToDelete: item
+    }));
+  }, []);
+  
+  const confirmDelete = useCallback(async () => {
+    if (!state.itemToDelete) return;
+    
+    try {
+      await {{entityName}}Service.delete(state.itemToDelete.id);
+      
+      setNotification({
+        type: 'success',
+        message: '{{EntityName}} deleted successfully'
+      });
+      
+      setState(prev => ({
+        ...prev,
+        showDeleteModal: false,
+        itemToDelete: null
+      }));
+      
+      refetch();
+    } catch (error) {
+      setNotification({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Failed to delete {{entityName}}'
+      });
+    }
+  }, [state.itemToDelete, refetch]);
+  
+  const handleBulkDelete = useCallback(async () => {
+    if (!window.confirm(`Delete ${state.selectedItems.size} selected items?`)) {
+      return;
     }
     
-    return pages;
+    try {
+      await {{entityName}}Service.bulkDelete(Array.from(state.selectedItems));
+      
+      setNotification({
+        type: 'success',
+        message: `${state.selectedItems.size} items deleted successfully`
+      });
+      
+      setState(prev => ({
+        ...prev,
+        selectedItems: new Set(),
+        showBulkActions: false
+      }));
+      
+      refetch();
+    } catch (error) {
+      setNotification({
+        type: 'error',
+        message: 'Failed to delete selected items'
+      });
+    }
+  }, [state.selectedItems, refetch]);
+  
+  // Экспорт
+  const handleExport = useCallback(async (format: 'csv' | 'json') => {
+    try {
+      const exportData = await {{entityName}}Service.export({
+        format,
+        filters
+      });
+      
+      const filename = `{{entityName}}s_export_${Date.now()}.${format}`;
+      
+      if (format === 'csv') {
+        downloadFile(exportData, filename, 'text/csv');
+      } else {
+        downloadFile(JSON.stringify(exportData, null, 2), filename, 'application/json');
+      }
+      
+      setNotification({
+        type: 'success',
+        message: 'Export completed successfully'
+      });
+    } catch (error) {
+      setNotification({
+        type: 'error',
+        message: 'Failed to export data'
+      });
+    }
+  }, [filters]);
+  
+  // Вычисляемые значения
+  const isAllSelected = useMemo(() => {
+    if (!data?.items || data.items.length === 0) return false;
+    return data.items.every(item => state.selectedItems.has(item.id));
+  }, [data, state.selectedItems]);
+  
+  const hasActiveFilters = useMemo(() => {
+    return Object.entries(filters).some(([key, value]) => {
+      if (key === 'search') return value !== '';
+      return value !== undefined && value !== null && value !== '';
+    });
+  }, [filters]);
+  
+  // Рендер компонентов
+  const renderSortIcon = (field: SortField) => {
+    if (currentSort !== field) return null;
+    return currentOrder === 'asc' ? <ChevronUp size={16} /> : <ChevronDown size={16} />;
   };
   
-  // Combine classes
-  const listClasses = [
-    'list-component',
-    loading ? 'is-loading' : '',
-    error ? 'has-error' : '',
-    onRowClick ? 'has-clickable-rows' : '',
-    selectable ? 'has-selectable-rows' : '',
-    className
-  ].filter(Boolean).join(' ');
+  const renderEmptyState = () => (
+    <div className={styles.emptyState}>
+      <p className={styles.emptyMessage}>
+        {hasActiveFilters ? 'No items match your filters' : 'No items found'}
+      </p>
+      {hasActiveFilters && (
+        <Button variant="secondary" onClick={handleResetFilters}>
+          Clear filters
+        </Button>
+      )}
+    </div>
+  );
   
-  // Filter out hidden columns
-  const visibleColumns = columns.filter(col => !col.hidden);
-  
-  return (
-    <div className={listClasses}>
-      {/* List header with title, actions, and column controls */}
-      {(title || actions || showColumnControls) && (
-        <div className="list-header">
-          {title && <h3 className="list-title">{title}</h3>}
-          
-          <div className="list-header-actions">
-            {showColumnControls && (
-              <div className="column-controls">
-                <button className="btn btn-sm">
-                  Columns <span className="caret"></span>
-                </button>
-                <div className="column-dropdown">
-                  {columns.map(column => 
-                    column.hideable !== false && (
-                      <div key={column.key} className="column-option">
-                        <label>
-                          <input
-                            type="checkbox"
-                            checked={!column.hidden}
-                            onChange={() => toggleColumnVisibility(column.key)}
-                          />
-                          {column.title}
-                        </label>
-                      </div>
-                    )
-                  )}
-                </div>
-              </div>
-            )}
+  const renderPagination = () => {
+    if (!data || data.totalPages <= 1) return null;
+    
+    const pages = Array.from({ length: data.totalPages }, (_, i) => i + 1);
+    const visiblePages = pages.filter(page => {
+      if (page === 1 || page === data.totalPages) return true;
+      if (Math.abs(page - currentPage) <= 2) return true;
+      return false;
+    });
+    
+    return (
+      <div className={styles.pagination}>
+        <Button
+          variant="ghost"
+          onClick={() => handlePageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+        >
+          Previous
+        </Button>
+        
+        <div className={styles.pageNumbers}>
+          {visiblePages.map((page, index) => {
+            const showEllipsis = index > 0 && page - visiblePages[index - 1] > 1;
             
-            {actions}
-          </div>
-        </div>
-      )}
-      
-      {/* Error message */}
-      {error && (
-        <div className="list-error">
-          <div className="error-message">
-            <span className="error-icon">⚠️</span> {error}
-          </div>
-        </div>
-      )}
-      
-      {/* Loading overlay */}
-      {loading && (
-        <div className="list-loading-overlay">
-          <div className="loading-spinner"></div>
-          <p>Loading...</p>
-        </div>
-      )}
-      
-      <div className="list-table-container">
-        <table className="list-table">
-          {/* Table header */}
-          {showHeader && (
-            <thead>
-              <tr>
-                {/* Selection checkbox for multi-select */}
-                {selectable && (
-                  <th className="select-column">
-                    {multiSelect && (
-                      <input
-                        type="checkbox"
-                        checked={selectAll}
-                        onChange={handleSelectAll}
-                      />
-                    )}
-                  </th>
-                )}
-                
-                {/* Column headers */}
-                {visibleColumns.map(column => (
-                  <th
-                    key={column.key}
-                    className={`
-                      ${column.sortable ? 'sortable-column' : ''}
-                      ${sortKey === column.key ? `sorted-${sortDirection}` : ''}
-                    `}
-                    style={{ width: column.width }}
-                    onClick={() => column.sortable && handleSort(column.key)}
-                  >
-                    <div className="column-header">
-                      <span className="column-title">{column.title}</span>
-                      
-                      {column.sortable && (
-                        <span className="sort-icon">
-                          {sortKey === column.key ? (
-                            sortDirection === 'asc' ? '▲' : '▼'
-                          ) : (
-                            '⬍'
-                          )}
-                        </span>
-                      )}
-                    </div>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-          )}
-          
-          {/* Table body */}
-          <tbody>
-            {displayedItems.length === 0 ? (
-              // Empty state
-              <tr className="empty-row">
-                <td colSpan={visibleColumns.length + (selectable ? 1 : 0)}>
-                  {emptyComponent || (
-                    <div className="empty-state">
-                      <p>No items to display</p>
-                    </div>
-                  )}
-                </td>
-              </tr>
-            ) : (
-              // Data rows
-              displayedItems.map((item, index) => {
-                const itemKey = keyExtractor(item);
-                const isSelected = selectedItems.has(itemKey);
-                
-                return (
-                  <tr
-                    key={itemKey}
-                    className={`list-row ${isSelected ? 'selected' : ''}`}
-                    onClick={() => {
-                      if (selectable) {
-                        handleSelectRow(item);
-                      }
-                      if (onRowClick) {
-                        onRowClick(item);
-                      }
-                    }}
-                  >
-                    {/* Selection checkbox */}
-                    {selectable && (
-                      <td className="select-cell">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={e => {
-                            e.stopPropagation();
-                            handleSelectRow(item);
-                          }}
-                          onClick={e => e.stopPropagation()}
-                        />
-                      </td>
-                    )}
-                    
-                    {/* Data cells */}
-                    {visibleColumns.map(column => (
-                      <td key={column.key} className="list-cell">
-                        {column.render 
-                          ? column.render(item, index)
-                          : (item as any)[column.key]
-                        }
-                      </td>
-                    ))}
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-      
-      {/* Pagination */}
-      {pagination && totalPages > 0 && (
-        <div className="list-pagination">
-          <div className="pagination-info">
-            Showing {(currentPage - 1) * pageSize + 1} to{' '}
-            {Math.min(currentPage * pageSize, totalItems || 0)} of{' '}
-            {totalItems} items
-          </div>
-          
-          <div className="pagination-controls">
-            <button
-              className="pagination-btn prev-btn"
-              disabled={currentPage <= 1}
-              onClick={() => handlePageChange(currentPage - 1)}
-            >
-              Previous
-            </button>
-            
-            <div className="pagination-pages">
-              {generatePageNumbers().map((page, index) => (
+            return (
+              <React.Fragment key={page}>
+                {showEllipsis && <span className={styles.ellipsis}>...</span>}
                 <button
-                  key={index}
-                  className={`
-                    pagination-btn page-btn
-                    ${page === currentPage ? 'active' : ''}
-                    ${page === '...' ? 'ellipsis' : ''}
-                  `}
-                  disabled={page === '...'}
-                  onClick={() => 
-                    typeof page === 'number' && handlePageChange(page)
-                  }
+                  className={classNames(styles.pageNumber, {
+                    [styles.active]: page === currentPage
+                  })}
+                  onClick={() => handlePageChange(page)}
                 >
                   {page}
                 </button>
-              ))}
-            </div>
-            
-            <button
-              className="pagination-btn next-btn"
-              disabled={currentPage >= totalPages}
-              onClick={() => handlePageChange(currentPage + 1)}
-            >
-              Next
-            </button>
-          </div>
+              </React.Fragment>
+            );
+          })}
         </div>
-      )}
-      
-      {children}
-    </div>
-  );
-}
-
-export default ListComponent;
-
-/**
- * Simple list component for displaying items in a card-based grid layout
- */
-export function GridList<T>({
-  items,
-  renderItem,
-  keyExtractor,
-  loading = false,
-  error,
-  emptyComponent,
-  title,
-  actions,
-  className = '',
-  gridClassName = '',
-  columns = 3,
-  gap = '1rem',
-  children
-}: {
-  /** Array of data items */
-  items: T[];
-  /** Function to render each item */
-  renderItem: (item: T, index: number) => React.ReactNode;
-  /** Key function to extract unique identifier for items */
-  keyExtractor: (item: T) => string | number;
-  /** Whether data is currently loading */
-  loading?: boolean;
-  /** Error message */
-  error?: string;
-  /** Custom renderer for empty state */
-  emptyComponent?: React.ReactNode;
-  /** Title for the list */
-  title?: string;
-  /** Custom actions to show in list header */
-  actions?: React.ReactNode;
-  /** Additional class name for the container */
-  className?: string;
-  /** Additional class name for the grid */
-  gridClassName?: string;
-  /** Number of columns in the grid */
-  columns?: number;
-  /** Gap between grid items */
-  gap?: string;
-  /** Children elements to render below the list */
-  children?: React.ReactNode;
-}) {
-  // Combine classes
-  const listClasses = [
-    'grid-list-component',
-    loading ? 'is-loading' : '',
-    error ? 'has-error' : '',
-    className
-  ].filter(Boolean).join(' ');
+        
+        <Button
+          variant="ghost"
+          onClick={() => handlePageChange(currentPage + 1)}
+          disabled={currentPage === data.totalPages}
+        >
+          Next
+        </Button>
+      </div>
+    );
+  };
   
-  const gridClasses = [
-    'grid-list',
-    gridClassName
-  ].filter(Boolean).join(' ');
+  // Основной рендер
+  if (loading && !data) {
+    return (
+      <div className={classNames(styles.container, styles.centered, className)}>
+        <Loader size="large" />
+      </div>
+    );
+  }
+  
+  if (error) {
+    return (
+      <div className={classNames(styles.container, styles.centered, className)}>
+        <div className={styles.error}>
+          <h3>Error loading {{entityName}}s</h3>
+          <p>{error.message}</p>
+          <Button onClick={refetch}>Retry</Button>
+        </div>
+      </div>
+    );
+  }
   
   return (
-    <div className={listClasses}>
-      {/* List header with title and actions */}
-      {(title || actions) && (
-        <div className="list-header">
-          {title && <h3 className="list-title">{title}</h3>}
-          
-          {actions && (
-            <div className="list-header-actions">
-              {actions}
-            </div>
-          )}
-        </div>
-      )}
-      
-      {/* Error message */}
-      {error && (
-        <div className="list-error">
-          <div className="error-message">
-            <span className="error-icon">⚠️</span> {error}
-          </div>
-        </div>
-      )}
-      
-      {/* Loading overlay */}
-      {loading && (
-        <div className="list-loading-overlay">
-          <div className="loading-spinner"></div>
-          <p>Loading...</p>
-        </div>
-      )}
-      
-      {/* Grid list */}
-      <div 
-        className={gridClasses}
-        style={{
-          display: 'grid',
-          gridTemplateColumns: `repeat(${columns}, 1fr)`,
-          gap
-        }}
-      >
-        {items.length === 0 ? (
-          // Empty state
-          <div className="empty-state" style={{ gridColumn: `span ${columns}` }}>
-            {emptyComponent || (
-              <div className="empty-message">
-                <p>No items to display</p>
+    <ErrorBoundary fallback={<div>Something went wrong</div>}>
+      <div className={classNames(styles.container, className)}>
+        {/* Уведомления */}
+        {notification && (
+          <Notification
+            type={notification.type}
+            message={notification.message}
+            onClose={() => setNotification(null)}
+          />
+        )}
+        
+        {/* Заголовок и действия */}
+        <div className={styles.header}>
+          <h2 className={styles.title}>{{EntityName}}s</h2>
+          <div className={styles.headerActions}>
+            {showExport && (
+              <div className={styles.exportDropdown}>
+                <Button variant="secondary" size="small">
+                  <Download size={16} />
+                  Export
+                </Button>
+                <div className={styles.exportMenu}>
+                  <button onClick={() => handleExport('csv')}>Export as CSV</button>
+                  <button onClick={() => handleExport('json')}>Export as JSON</button>
+                </div>
               </div>
             )}
-          </div>
-        ) : (
-          // Items
-          items.map((item, index) => (
-            <div
-              key={keyExtractor(item)}
-              className="grid-item"
+            <Button
+              variant="primary"
+              onClick={() => navigate('/{{entityName}}s/new')}
             >
-              {renderItem(item, index)}
+              Create {{EntityName}}
+            </Button>
+          </div>
+        </div>
+        
+        {/* Фильтры */}
+        {showFilters && (
+          <div className={styles.filters}>
+            <div className={styles.searchBox}>
+              <Input
+                ref={searchInputRef}
+                type="search"
+                placeholder="Search {{entityName}}s..."
+                defaultValue={currentSearch}
+                onChange={handleSearchChange}
+                className={styles.searchInput}
+              />
             </div>
-          ))
+            
+            <div className={styles.filterControls}>
+              <Select
+                value={filters.status || ''}
+                onChange={(value) => handleFilterChange('status', value)}
+                options={[
+                  { value: '', label: 'All Statuses' },
+                  { value: 'active', label: 'Active' },
+                  { value: 'inactive', label: 'Inactive' },
+                  { value: 'pending', label: 'Pending' }
+                ]}
+                className={styles.filterSelect}
+              />
+              
+              {hasActiveFilters && (
+                <Button
+                  variant="ghost"
+                  size="small"
+                  onClick={handleResetFilters}
+                >
+                  Clear filters
+                </Button>
+              )}
+            </div>
+          </div>
         )}
+        
+        {/* Массовые действия */}
+        {state.showBulkActions && multiSelect && (
+          <div className={styles.bulkActions}>
+            <span>{state.selectedItems.size} selected</span>
+            <Button
+              variant="danger"
+              size="small"
+              onClick={handleBulkDelete}
+            >
+              Delete selected
+            </Button>
+          </div>
+        )}
+        
+        {/* Таблица */}
+        <div className={styles.tableWrapper}>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                {(selectable && multiSelect) && (
+                  <th className={styles.checkboxColumn}>
+                    <input
+                      type="checkbox"
+                      checked={isAllSelected}
+                      onChange={(e) => handleSelectAll(e.target.checked)}
+                    />
+                  </th>
+                )}
+                <th
+                  className={styles.sortable}
+                  onClick={() => handleSortChange('name')}
+                >
+                  Name {renderSortIcon('name')}
+                </th>
+                <th
+                  className={styles.sortable}
+                  onClick={() => handleSortChange('status')}
+                >
+                  Status {renderSortIcon('status')}
+                </th>
+                <th
+                  className={styles.sortable}
+                  onClick={() => handleSortChange('created_at')}
+                >
+                  Created {renderSortIcon('created_at')}
+                </th>
+                <th
+                  className={styles.sortable}
+                  onClick={() => handleSortChange('updated_at')}
+                >
+                  Updated {renderSortIcon('updated_at')}
+                </th>
+                {showActions && <th className={styles.actionsColumn}>Actions</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {data?.items.length === 0 ? (
+                <tr>
+                  <td colSpan={100} className={styles.emptyCell}>
+                    {renderEmptyState()}
+                  </td>
+                </tr>
+              ) : (
+                data?.items.map(item => (
+                  <tr
+                    key={item.id}
+                    className={classNames(styles.row, {
+                      [styles.selected]: state.selectedItems.has(item.id),
+                      [styles.clickable]: selectable || onItemSelect
+                    })}
+                    onClick={() => handleSelectItem(item)}
+                  >
+                    {(selectable && multiSelect) && (
+                      <td className={styles.checkboxColumn}>
+                        <input
+                          type="checkbox"
+                          checked={state.selectedItems.has(item.id)}
+                          onChange={() => {}}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </td>
+                    )}
+                    <td className={styles.nameCell}>{item.name}</td>
+                    <td>
+                      <span className={classNames(styles.status, styles[`status-${item.status}`])}>
+                        {item.status}
+                      </span>
+                    </td>
+                    <td className={styles.dateCell}>{formatDate(item.created_at)}</td>
+                    <td className={styles.dateCell}>{formatDate(item.updated_at)}</td>
+                    {showActions && (
+                      <td className={styles.actionsCell}>
+                        <div className={styles.actions}>
+                          {customActions?.(item) || (
+                            <>
+                              <button
+                                className={styles.actionButton}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleView(item);
+                                }}
+                                title="View"
+                              >
+                                <Eye size={16} />
+                              </button>
+                              <button
+                                className={styles.actionButton}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEdit(item);
+                                }}
+                                title="Edit"
+                              >
+                                <Edit size={16} />
+                              </button>
+                              <button
+                                className={styles.actionButton}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDelete(item);
+                                }}
+                                title="Delete"
+                              >
+                                <Trash size={16} />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        
+        {/* Пагинация и информация */}
+        {showPagination && data && (
+          <div className={styles.footer}>
+            <div className={styles.info}>
+              Showing {((currentPage - 1) * pageSize) + 1} to{' '}
+              {Math.min(currentPage * pageSize, data.total)} of {data.total} items
+            </div>
+            {renderPagination()}
+          </div>
+        )}
+        
+        {/* Модалка удаления */}
+        <Modal
+          isOpen={state.showDeleteModal}
+          onClose={() => setState(prev => ({ ...prev, showDeleteModal: false, itemToDelete: null }))}
+          title="Confirm Delete"
+        >
+          <p>Are you sure you want to delete "{state.itemToDelete?.name}"?</p>
+          <p className={styles.warning}>This action cannot be undone.</p>
+          <div className={styles.modalActions}>
+            <Button
+              variant="danger"
+              onClick={confirmDelete}
+            >
+              Delete
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => setState(prev => ({ ...prev, showDeleteModal: false, itemToDelete: null }))}
+            >
+              Cancel
+            </Button>
+          </div>
+        </Modal>
       </div>
-      
-      {children}
-    </div>
+    </ErrorBoundary>
   );
-}
+};
+
+export default {{ListName}};

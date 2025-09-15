@@ -1,84 +1,253 @@
 /**
- * Standardized status constants for the philosophy service application
- * These statuses are used across all microservices to ensure consistent
- * state management and reporting
+ * Status constants for the Philosophy Service
+ * Used across all microservices for consistency
  */
 
-module.exports = {
-  // General statuses
-  ACTIVE: 'active',
-  INACTIVE: 'inactive',
-  PENDING: 'pending',
-  DELETED: 'deleted',
-  ARCHIVED: 'archived',
-  
+const STATUSES = {
+  // General entity statuses
+  ENTITY_STATUS: {
+    ACTIVE: 'active',
+    INACTIVE: 'inactive',
+    DELETED: 'deleted',
+    ARCHIVED: 'archived',
+    DRAFT: 'draft',
+    PUBLISHED: 'published'
+  },
+
   // User statuses
-  USER_ACTIVE: 'active',
-  USER_INACTIVE: 'inactive',
-  USER_PENDING_VERIFICATION: 'pending_verification',
-  USER_LOCKED: 'locked',
-  USER_DELETED: 'deleted',
-  
+  USER_STATUS: {
+    ACTIVE: 'active',
+    INACTIVE: 'inactive',
+    SUSPENDED: 'suspended',
+    DELETED: 'deleted',
+    PENDING_VERIFICATION: 'pending_verification',
+    VERIFIED: 'verified'
+  },
+
   // Concept statuses
-  CONCEPT_DRAFT: 'draft',
-  CONCEPT_PUBLISHED: 'published',
-  CONCEPT_ARCHIVED: 'archived',
-  CONCEPT_DELETED: 'deleted',
-  
-  // Graph processing statuses
-  GRAPH_DRAFT: 'draft',
-  GRAPH_VALIDATED: 'validated',
-  GRAPH_ENRICHED: 'enriched',
-  GRAPH_PUBLISHED: 'published',
-  
+  CONCEPT_STATUS: {
+    DRAFT: 'draft',
+    PUBLISHED: 'published',
+    UNDER_REVIEW: 'under_review',
+    APPROVED: 'approved',
+    REJECTED: 'rejected',
+    ARCHIVED: 'archived'
+  },
+
+  // Graph statuses
+  GRAPH_STATUS: {
+    INCOMPLETE: 'incomplete',
+    COMPLETE: 'complete',
+    VALIDATED: 'validated',
+    NEEDS_VALIDATION: 'needs_validation',
+    HAS_ERRORS: 'has_errors'
+  },
+
   // Thesis statuses
-  THESIS_DRAFT: 'draft',
-  THESIS_GENERATED: 'generated',
-  THESIS_EDITED: 'edited',
-  THESIS_ELABORATED: 'elaborated',
-  THESIS_PUBLISHED: 'published',
-  
-  // Claude task statuses
-  TASK_QUEUED: 'queued',
-  TASK_PROCESSING: 'processing',
-  TASK_COMPLETED: 'completed',
-  TASK_FAILED: 'failed',
-  TASK_CANCELED: 'canceled',
-  
+  THESIS_STATUS: {
+    DRAFT: 'draft',
+    GENERATED: 'generated',
+    REVIEWED: 'reviewed',
+    APPROVED: 'approved',
+    PUBLISHED: 'published',
+    ARCHIVED: 'archived'
+  },
+
   // Synthesis statuses
-  SYNTHESIS_DRAFT: 'draft',
-  SYNTHESIS_ANALYZED: 'analyzed',
-  SYNTHESIS_COMPLETED: 'completed',
-  SYNTHESIS_REJECTED: 'rejected',
-  
+  SYNTHESIS_STATUS: {
+    PENDING: 'pending',
+    IN_PROGRESS: 'in_progress',
+    COMPLETED: 'completed',
+    FAILED: 'failed',
+    CANCELLED: 'cancelled'
+  },
+
+  // Task statuses (for async operations)
+  TASK_STATUS: {
+    QUEUED: 'queued',
+    PROCESSING: 'processing',
+    COMPLETED: 'completed',
+    FAILED: 'failed',
+    CANCELLED: 'cancelled',
+    TIMEOUT: 'timeout',
+    RETRYING: 'retrying'
+  },
+
+  // Claude interaction statuses
+  CLAUDE_STATUS: {
+    PENDING: 'pending',
+    SENT: 'sent',
+    RECEIVED: 'received',
+    PROCESSED: 'processed',
+    ERROR: 'error',
+    RATE_LIMITED: 'rate_limited',
+    TIMEOUT: 'timeout'
+  },
+
+  // Validation statuses
+  VALIDATION_STATUS: {
+    PENDING: 'pending',
+    VALID: 'valid',
+    INVALID: 'invalid',
+    WARNINGS: 'warnings',
+    NEEDS_REVIEW: 'needs_review'
+  },
+
+  // Element approval statuses
+  ELEMENT_APPROVAL_STATUS: {
+    PENDING: 'pending',
+    APPROVED: 'approved',
+    REJECTED: 'rejected',
+    AUTO_APPROVED: 'auto_approved'
+  },
+
   // Analysis statuses
-  ANALYSIS_PENDING: 'pending',
-  ANALYSIS_IN_PROGRESS: 'in_progress',
-  ANALYSIS_COMPLETED: 'completed',
-  ANALYSIS_FAILED: 'failed',
-  
+  ANALYSIS_STATUS: {
+    NOT_STARTED: 'not_started',
+    IN_PROGRESS: 'in_progress',
+    COMPLETED: 'completed',
+    FAILED: 'failed',
+    PARTIAL: 'partial'
+  },
+
+  // API key statuses
+  API_KEY_STATUS: {
+    ACTIVE: 'active',
+    INACTIVE: 'inactive',
+    EXPIRED: 'expired',
+    REVOKED: 'revoked',
+    INVALID: 'invalid'
+  },
+
+  // Sharing statuses
+  SHARING_STATUS: {
+    PRIVATE: 'private',
+    SHARED: 'shared',
+    PUBLIC: 'public',
+    RESTRICTED: 'restricted'
+  },
+
+  // Historical context statuses
+  HISTORICAL_CONTEXT_STATUS: {
+    DRAFT: 'draft',
+    GENERATED: 'generated',
+    REVIEWED: 'reviewed',
+    VERIFIED: 'verified',
+    DISPUTED: 'disputed'
+  },
+
   // Dialogue statuses
-  DIALOGUE_DRAFT: 'draft',
-  DIALOGUE_GENERATED: 'generated',
-  DIALOGUE_EDITED: 'edited',
-  DIALOGUE_PUBLISHED: 'published',
-  
+  DIALOGUE_STATUS: {
+    INITIATED: 'initiated',
+    IN_PROGRESS: 'in_progress',
+    COMPLETED: 'completed',
+    PAUSED: 'paused',
+    ABANDONED: 'abandoned'
+  },
+
   // Evolution statuses
-  EVOLUTION_ANALYZED: 'analyzed',
-  EVOLUTION_PROPOSED: 'proposed',
-  EVOLUTION_APPLIED: 'applied',
-  EVOLUTION_REJECTED: 'rejected',
-  
-  // Operational statuses
-  OPERATION_PENDING: 'pending',
-  OPERATION_IN_PROGRESS: 'in_progress',
-  OPERATION_COMPLETED: 'completed',
-  OPERATION_FAILED: 'failed',
-  OPERATION_CANCELED: 'canceled',
-  
-  // Transformation statuses
-  TRANSFORMATION_REQUESTED: 'requested',
-  TRANSFORMATION_PROCESSING: 'processing',
-  TRANSFORMATION_COMPLETED: 'completed',
-  TRANSFORMATION_FAILED: 'failed'
+  EVOLUTION_STATUS: {
+    PROPOSED: 'proposed',
+    UNDER_REVIEW: 'under_review',
+    APPROVED: 'approved',
+    REJECTED: 'rejected',
+    IMPLEMENTED: 'implemented',
+    SUPERSEDED: 'superseded'
+  }
+};
+
+// Helper functions
+
+/**
+ * Check if a status is valid for a given status type
+ * @param {string} statusType - The type of status (e.g., 'USER_STATUS')
+ * @param {string} status - The status to check
+ * @returns {boolean} - Whether the status is valid
+ */
+function isValidStatus(statusType, status) {
+  if (!STATUSES[statusType]) {
+    return false;
+  }
+  return Object.values(STATUSES[statusType]).includes(status);
+}
+
+/**
+ * Get all valid statuses for a given status type
+ * @param {string} statusType - The type of status
+ * @returns {string[]} - Array of valid statuses
+ */
+function getValidStatuses(statusType) {
+  if (!STATUSES[statusType]) {
+    return [];
+  }
+  return Object.values(STATUSES[statusType]);
+}
+
+/**
+ * Check if a transition from one status to another is valid
+ * @param {string} statusType - The type of status
+ * @param {string} fromStatus - Current status
+ * @param {string} toStatus - Target status
+ * @returns {boolean} - Whether the transition is valid
+ */
+function isValidTransition(statusType, fromStatus, toStatus) {
+  // Define valid transitions for each status type
+  const transitions = {
+    USER_STATUS: {
+      PENDING_VERIFICATION: ['VERIFIED', 'SUSPENDED', 'DELETED'],
+      VERIFIED: ['ACTIVE', 'INACTIVE', 'SUSPENDED', 'DELETED'],
+      ACTIVE: ['INACTIVE', 'SUSPENDED', 'DELETED'],
+      INACTIVE: ['ACTIVE', 'SUSPENDED', 'DELETED'],
+      SUSPENDED: ['ACTIVE', 'DELETED'],
+      DELETED: [] // Cannot transition from deleted
+    },
+    CONCEPT_STATUS: {
+      DRAFT: ['PUBLISHED', 'UNDER_REVIEW', 'ARCHIVED'],
+      PUBLISHED: ['UNDER_REVIEW', 'ARCHIVED'],
+      UNDER_REVIEW: ['APPROVED', 'REJECTED', 'DRAFT'],
+      APPROVED: ['PUBLISHED', 'ARCHIVED'],
+      REJECTED: ['DRAFT', 'ARCHIVED'],
+      ARCHIVED: ['DRAFT'] // Can be restored to draft
+    },
+    TASK_STATUS: {
+      QUEUED: ['PROCESSING', 'CANCELLED'],
+      PROCESSING: ['COMPLETED', 'FAILED', 'TIMEOUT', 'RETRYING'],
+      RETRYING: ['PROCESSING', 'FAILED', 'CANCELLED'],
+      COMPLETED: [], // Terminal state
+      FAILED: ['RETRYING'], // Can retry failed tasks
+      CANCELLED: [], // Terminal state
+      TIMEOUT: ['RETRYING'] // Can retry timed out tasks
+    }
+  };
+
+  if (!transitions[statusType] || !transitions[statusType][fromStatus]) {
+    return false;
+  }
+
+  return transitions[statusType][fromStatus].includes(toStatus);
+}
+
+/**
+ * Get terminal statuses for a given status type
+ * @param {string} statusType - The type of status
+ * @returns {string[]} - Array of terminal statuses
+ */
+function getTerminalStatuses(statusType) {
+  const terminal = {
+    USER_STATUS: ['DELETED'],
+    CONCEPT_STATUS: [],
+    TASK_STATUS: ['COMPLETED', 'CANCELLED'],
+    SYNTHESIS_STATUS: ['COMPLETED', 'FAILED', 'CANCELLED'],
+    CLAUDE_STATUS: ['PROCESSED', 'ERROR', 'TIMEOUT']
+  };
+
+  return terminal[statusType] || [];
+}
+
+module.exports = {
+  STATUSES,
+  isValidStatus,
+  getValidStatuses,
+  isValidTransition,
+  getTerminalStatuses
 };

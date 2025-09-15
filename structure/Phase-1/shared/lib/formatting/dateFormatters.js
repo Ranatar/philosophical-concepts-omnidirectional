@@ -1,264 +1,381 @@
 /**
- * Utilities for formatting and handling dates
- * Provides consistent date formatting across the application
+ * Date formatting utilities for the Philosophy Service
+ * Provides consistent date formatting across all services
  */
 
-// Date format constants
+const moment = require('moment');
+const momentTimezone = require('moment-timezone');
+
+// Default timezone for the application
+const DEFAULT_TIMEZONE = process.env.TZ || 'UTC';
+
+// Common date formats
 const DATE_FORMATS = {
-  ISO: 'iso',
-  SIMPLE: 'simple',
-  READABLE: 'readable',
-  SHORT: 'short',
-  LONG: 'long',
-  TIME: 'time',
-  DATETIME: 'datetime',
-  UNIX: 'unix',
-  UNIX_MS: 'unix_ms'
+  ISO: 'YYYY-MM-DDTHH:mm:ss.SSSZ',
+  ISO_DATE: 'YYYY-MM-DD',
+  ISO_TIME: 'HH:mm:ss',
+  DISPLAY: 'MMMM D, YYYY',
+  DISPLAY_WITH_TIME: 'MMMM D, YYYY h:mm A',
+  SHORT: 'MM/DD/YYYY',
+  SHORT_WITH_TIME: 'MM/DD/YYYY h:mm A',
+  RELATIVE: 'relative', // Special format for relative time
+  TIMESTAMP: 'x', // Unix timestamp in milliseconds
+  UNIX: 'X', // Unix timestamp in seconds
+  SQL: 'YYYY-MM-DD HH:mm:ss',
+  FILENAME: 'YYYY-MM-DD_HH-mm-ss',
+  LOG: 'YYYY-MM-DD HH:mm:ss.SSS',
+  HUMAN: 'dddd, MMMM Do YYYY, h:mm:ss a'
+};
+
+// Philosophical era date ranges
+const PHILOSOPHICAL_ERAS = {
+  ANCIENT: { start: -800, end: 500, name: 'Ancient Philosophy' },
+  MEDIEVAL: { start: 500, end: 1400, name: 'Medieval Philosophy' },
+  RENAISSANCE: { start: 1400, end: 1600, name: 'Renaissance Philosophy' },
+  MODERN: { start: 1600, end: 1900, name: 'Modern Philosophy' },
+  CONTEMPORARY: { start: 1900, end: new Date().getFullYear(), name: 'Contemporary Philosophy' }
 };
 
 /**
- * Format a date to ISO 8601 string (e.g., "2023-04-15T14:32:17.123Z")
- * @param {Date|string|number} date - Date to format
+ * Format a date to a specified format
+ * @param {Date|string|number} date - The date to format
+ * @param {string} format - The format to use (from DATE_FORMATS or custom)
+ * @param {string} timezone - Timezone to use (optional)
  * @returns {string} Formatted date string
  */
-function toISOString(date) {
-  return new Date(date).toISOString();
-}
-
-/**
- * Format a date to a simple date string (e.g., "2023-04-15")
- * @param {Date|string|number} date - Date to format
- * @returns {string} Formatted date string
- */
-function toSimpleDate(date) {
-  const d = new Date(date);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-/**
- * Format a date to a readable string (e.g., "April 15, 2023")
- * @param {Date|string|number} date - Date to format
- * @returns {string} Formatted date string
- */
-function toReadableDate(date) {
-  return new Date(date).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
-}
-
-/**
- * Format a date to a short string (e.g., "04/15/2023")
- * @param {Date|string|number} date - Date to format
- * @returns {string} Formatted date string
- */
-function toShortDate(date) {
-  return new Date(date).toLocaleDateString('en-US');
-}
-
-/**
- * Format a date to a long string (e.g., "Saturday, April 15, 2023")
- * @param {Date|string|number} date - Date to format
- * @returns {string} Formatted date string
- */
-function toLongDate(date) {
-  return new Date(date).toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
-}
-
-/**
- * Format a date to a time string (e.g., "2:32 PM")
- * @param {Date|string|number} date - Date to format
- * @returns {string} Formatted time string
- */
-function toTimeString(date) {
-  return new Date(date).toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true
-  });
-}
-
-/**
- * Format a date to a date and time string (e.g., "April 15, 2023, 2:32 PM")
- * @param {Date|string|number} date - Date to format
- * @returns {string} Formatted date and time string
- */
-function toDateTimeString(date) {
-  return new Date(date).toLocaleString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true
-  });
-}
-
-/**
- * Convert a date to Unix timestamp (seconds since epoch)
- * @param {Date|string|number} date - Date to convert
- * @returns {number} Unix timestamp in seconds
- */
-function toUnixTimestamp(date) {
-  return Math.floor(new Date(date).getTime() / 1000);
-}
-
-/**
- * Convert a date to Unix timestamp in milliseconds
- * @param {Date|string|number} date - Date to convert
- * @returns {number} Unix timestamp in milliseconds
- */
-function toUnixTimestampMs(date) {
-  return new Date(date).getTime();
-}
-
-/**
- * Format a date according to the specified format
- * @param {Date|string|number} date - Date to format
- * @param {string} format - Format to use (from DATE_FORMATS)
- * @returns {string|number} Formatted date
- */
-function formatDate(date, format = DATE_FORMATS.ISO) {
-  switch (format) {
-    case DATE_FORMATS.ISO:
-      return toISOString(date);
-    case DATE_FORMATS.SIMPLE:
-      return toSimpleDate(date);
-    case DATE_FORMATS.READABLE:
-      return toReadableDate(date);
-    case DATE_FORMATS.SHORT:
-      return toShortDate(date);
-    case DATE_FORMATS.LONG:
-      return toLongDate(date);
-    case DATE_FORMATS.TIME:
-      return toTimeString(date);
-    case DATE_FORMATS.DATETIME:
-      return toDateTimeString(date);
-    case DATE_FORMATS.UNIX:
-      return toUnixTimestamp(date);
-    case DATE_FORMATS.UNIX_MS:
-      return toUnixTimestampMs(date);
-    default:
-      return toISOString(date);
+function formatDate(date, format = DATE_FORMATS.ISO, timezone = DEFAULT_TIMEZONE) {
+  if (!date) return '';
+  
+  const m = moment(date);
+  
+  if (!m.isValid()) {
+    console.warn('Invalid date provided to formatDate:', date);
+    return '';
   }
+  
+  // Handle timezone conversion
+  const mtz = timezone ? m.tz(timezone) : m;
+  
+  // Handle relative format
+  if (format === DATE_FORMATS.RELATIVE) {
+    return mtz.fromNow();
+  }
+  
+  // Use predefined format or custom format
+  const formatString = DATE_FORMATS[format] || format;
+  return mtz.format(formatString);
 }
 
 /**
- * Get the current date and time formatted according to the specified format
- * @param {string} format - Format to use (from DATE_FORMATS)
- * @returns {string|number} Formatted current date and time
+ * Parse a date string with various formats
+ * @param {string} dateString - The date string to parse
+ * @param {string|array} format - Expected format(s) (optional)
+ * @param {boolean} strict - Use strict parsing
+ * @returns {Date|null} Parsed date or null if invalid
  */
-function now(format = DATE_FORMATS.ISO) {
-  return formatDate(new Date(), format);
+function parseDate(dateString, format = null, strict = false) {
+  if (!dateString) return null;
+  
+  let m;
+  
+  if (format) {
+    m = moment(dateString, format, strict);
+  } else {
+    // Try multiple formats
+    const formats = [
+      moment.ISO_8601,
+      DATE_FORMATS.SQL,
+      DATE_FORMATS.SHORT,
+      DATE_FORMATS.SHORT_WITH_TIME,
+      'YYYY-MM-DD',
+      'MM/DD/YYYY',
+      'DD/MM/YYYY'
+    ];
+    m = moment(dateString, formats, strict);
+  }
+  
+  return m.isValid() ? m.toDate() : null;
 }
 
 /**
- * Check if a date is valid
- * @param {Date|string|number} date - Date to check
- * @returns {boolean} Whether the date is valid
+ * Get the philosophical era for a given year
+ * @param {number} year - The year to check
+ * @returns {Object|null} Era object with name and period
  */
-function isValidDate(date) {
-  const d = new Date(date);
-  return !isNaN(d.getTime());
+function getPhilosophicalEra(year) {
+  for (const [key, era] of Object.entries(PHILOSOPHICAL_ERAS)) {
+    if (year >= era.start && year <= era.end) {
+      return {
+        key,
+        name: era.name,
+        period: `${era.start} - ${era.end} CE`
+      };
+    }
+  }
+  
+  // Handle BCE dates
+  if (year < -800) {
+    return {
+      key: 'PRE_ANCIENT',
+      name: 'Pre-Ancient Philosophy',
+      period: `Before 800 BCE`
+    };
+  }
+  
+  return null;
 }
 
 /**
- * Add days to a date
- * @param {Date|string|number} date - Base date
- * @param {number} days - Number of days to add (can be negative)
- * @returns {Date} New date with days added
+ * Format a date range
+ * @param {Date} startDate - Start date
+ * @param {Date} endDate - End date
+ * @param {string} format - Format to use
+ * @param {Object} options - Additional options
+ * @returns {string} Formatted date range
  */
-function addDays(date, days) {
-  const result = new Date(date);
-  result.setDate(result.getDate() + days);
-  return result;
+function formatDateRange(startDate, endDate, format = DATE_FORMATS.DISPLAY, options = {}) {
+  const {
+    separator = ' - ',
+    sameFormat = true,
+    timezone = DEFAULT_TIMEZONE
+  } = options;
+  
+  if (!startDate || !endDate) return '';
+  
+  const start = formatDate(startDate, format, timezone);
+  const end = formatDate(endDate, format, timezone);
+  
+  // If dates are the same, return single date
+  if (start === end && sameFormat) {
+    return start;
+  }
+  
+  // If same month and year, can abbreviate
+  if (format === DATE_FORMATS.DISPLAY || format === DATE_FORMATS.SHORT) {
+    const startM = moment(startDate).tz(timezone);
+    const endM = moment(endDate).tz(timezone);
+    
+    if (startM.year() === endM.year() && startM.month() === endM.month()) {
+      return `${startM.format('MMMM D')}${separator}${endM.format('D, YYYY')}`;
+    }
+  }
+  
+  return `${start}${separator}${end}`;
 }
 
 /**
- * Add months to a date
- * @param {Date|string|number} date - Base date
- * @param {number} months - Number of months to add (can be negative)
- * @returns {Date} New date with months added
+ * Get time ago in human readable format
+ * @param {Date} date - The date to compare
+ * @param {boolean} withoutSuffix - Remove 'ago' suffix
+ * @returns {string} Human readable time difference
  */
-function addMonths(date, months) {
-  const result = new Date(date);
-  result.setMonth(result.getMonth() + months);
-  return result;
+function timeAgo(date, withoutSuffix = false) {
+  if (!date) return '';
+  return moment(date).fromNow(withoutSuffix);
 }
 
 /**
- * Add years to a date
- * @param {Date|string|number} date - Base date
- * @param {number} years - Number of years to add (can be negative)
- * @returns {Date} New date with years added
+ * Get time from now in human readable format
+ * @param {Date} date - The date to compare
+ * @param {boolean} withoutPrefix - Remove 'in' prefix
+ * @returns {string} Human readable time difference
  */
-function addYears(date, years) {
-  const result = new Date(date);
-  result.setFullYear(result.getFullYear() + years);
-  return result;
+function timeFromNow(date, withoutPrefix = false) {
+  if (!date) return '';
+  return moment(date).toNow(withoutPrefix);
 }
 
 /**
- * Calculate the difference between two dates in days
- * @param {Date|string|number} dateA - First date
- * @param {Date|string|number} dateB - Second date
- * @returns {number} Difference in days
+ * Get duration between two dates in human readable format
+ * @param {Date} startDate - Start date
+ * @param {Date} endDate - End date
+ * @param {boolean} precise - Show precise duration
+ * @returns {string} Human readable duration
  */
-function diffInDays(dateA, dateB) {
-  const a = new Date(dateA);
-  const b = new Date(dateB);
-  const diff = a.getTime() - b.getTime();
-  return Math.round(diff / (1000 * 60 * 60 * 24));
+function getDuration(startDate, endDate, precise = false) {
+  if (!startDate || !endDate) return '';
+  
+  const start = moment(startDate);
+  const end = moment(endDate);
+  const duration = moment.duration(end.diff(start));
+  
+  if (precise) {
+    return duration.humanize(true);
+  }
+  
+  const parts = [];
+  const years = duration.years();
+  const months = duration.months();
+  const days = duration.days();
+  const hours = duration.hours();
+  const minutes = duration.minutes();
+  
+  if (years > 0) parts.push(`${years} year${years !== 1 ? 's' : ''}`);
+  if (months > 0) parts.push(`${months} month${months !== 1 ? 's' : ''}`);
+  if (days > 0) parts.push(`${days} day${days !== 1 ? 's' : ''}`);
+  if (hours > 0) parts.push(`${hours} hour${hours !== 1 ? 's' : ''}`);
+  if (minutes > 0) parts.push(`${minutes} minute${minutes !== 1 ? 's' : ''}`);
+  
+  return parts.join(', ') || 'less than a minute';
 }
 
 /**
- * Calculate the difference between two dates in months
- * @param {Date|string|number} dateA - First date
- * @param {Date|string|number} dateB - Second date
- * @returns {number} Difference in months
+ * Check if a date is within a range
+ * @param {Date} date - Date to check
+ * @param {Date} startDate - Start of range
+ * @param {Date} endDate - End of range
+ * @param {string} inclusivity - '()', '[)', '(]', or '[]'
+ * @returns {boolean} Whether date is in range
  */
-function diffInMonths(dateA, dateB) {
-  const a = new Date(dateA);
-  const b = new Date(dateB);
-  return (a.getFullYear() - b.getFullYear()) * 12 + (a.getMonth() - b.getMonth());
+function isDateInRange(date, startDate, endDate, inclusivity = '[]') {
+  if (!date || !startDate || !endDate) return false;
+  return moment(date).isBetween(startDate, endDate, null, inclusivity);
 }
 
 /**
- * Calculate the difference between two dates in years
- * @param {Date|string|number} dateA - First date
- * @param {Date|string|number} dateB - Second date
- * @returns {number} Difference in years
+ * Add time to a date
+ * @param {Date} date - Base date
+ * @param {number} amount - Amount to add
+ * @param {string} unit - Unit ('days', 'hours', 'minutes', etc.)
+ * @returns {Date} New date
  */
-function diffInYears(dateA, dateB) {
-  const a = new Date(dateA);
-  const b = new Date(dateB);
-  return a.getFullYear() - b.getFullYear();
+function addToDate(date, amount, unit) {
+  if (!date) return null;
+  return moment(date).add(amount, unit).toDate();
+}
+
+/**
+ * Subtract time from a date
+ * @param {Date} date - Base date
+ * @param {number} amount - Amount to subtract
+ * @param {string} unit - Unit ('days', 'hours', 'minutes', etc.)
+ * @returns {Date} New date
+ */
+function subtractFromDate(date, amount, unit) {
+  if (!date) return null;
+  return moment(date).subtract(amount, unit).toDate();
+}
+
+/**
+ * Get start of a period
+ * @param {Date} date - Base date
+ * @param {string} unit - Unit ('day', 'week', 'month', 'year')
+ * @returns {Date} Start of period
+ */
+function startOf(date, unit) {
+  if (!date) return null;
+  return moment(date).startOf(unit).toDate();
+}
+
+/**
+ * Get end of a period
+ * @param {Date} date - Base date
+ * @param {string} unit - Unit ('day', 'week', 'month', 'year')
+ * @returns {Date} End of period
+ */
+function endOf(date, unit) {
+  if (!date) return null;
+  return moment(date).endOf(unit).toDate();
+}
+
+/**
+ * Format a philosopher's life span
+ * @param {number} birthYear - Birth year (can be negative for BCE)
+ * @param {number} deathYear - Death year (can be negative for BCE)
+ * @returns {string} Formatted life span
+ */
+function formatPhilosopherLifespan(birthYear, deathYear) {
+  if (!birthYear) return 'Unknown';
+  
+  const formatYear = (year) => {
+    if (year < 0) {
+      return `${Math.abs(year)} BCE`;
+    }
+    return `${year} CE`;
+  };
+  
+  if (!deathYear) {
+    return `Born ${formatYear(birthYear)}`;
+  }
+  
+  const lifespan = Math.abs(deathYear - birthYear);
+  return `${formatYear(birthYear)} - ${formatYear(deathYear)} (${lifespan} years)`;
+}
+
+/**
+ * Get age from birth date
+ * @param {Date} birthDate - Birth date
+ * @param {Date} referenceDate - Reference date (defaults to now)
+ * @returns {number} Age in years
+ */
+function getAge(birthDate, referenceDate = new Date()) {
+  if (!birthDate) return null;
+  return moment(referenceDate).diff(moment(birthDate), 'years');
+}
+
+/**
+ * Convert date to different timezone
+ * @param {Date} date - Date to convert
+ * @param {string} fromTimezone - Source timezone
+ * @param {string} toTimezone - Target timezone
+ * @returns {Date} Converted date
+ */
+function convertTimezone(date, fromTimezone, toTimezone) {
+  if (!date) return null;
+  return moment.tz(date, fromTimezone).tz(toTimezone).toDate();
+}
+
+/**
+ * Validate if a string is a valid date
+ * @param {string} dateString - String to validate
+ * @param {string} format - Expected format (optional)
+ * @returns {boolean} Whether the string is a valid date
+ */
+function isValidDate(dateString, format = null) {
+  if (!dateString) return false;
+  const parsed = parseDate(dateString, format, true);
+  return parsed !== null;
 }
 
 module.exports = {
+  // Format constants
   DATE_FORMATS,
+  PHILOSOPHICAL_ERAS,
+  DEFAULT_TIMEZONE,
+  
+  // Core functions
   formatDate,
-  now,
+  parseDate,
+  formatDateRange,
+  
+  // Relative time functions
+  timeAgo,
+  timeFromNow,
+  getDuration,
+  
+  // Date manipulation
+  addToDate,
+  subtractFromDate,
+  startOf,
+  endOf,
+  
+  // Validation and comparison
+  isDateInRange,
   isValidDate,
-  addDays,
-  addMonths,
-  addYears,
-  diffInDays,
-  diffInMonths,
-  diffInYears,
-  toISOString,
-  toSimpleDate,
-  toReadableDate,
-  toShortDate,
-  toLongDate,
-  toTimeString,
-  toDateTimeString,
-  toUnixTimestamp,
-  toUnixTimestampMs
+  
+  // Specialized functions
+  getPhilosophicalEra,
+  formatPhilosopherLifespan,
+  getAge,
+  convertTimezone,
+  
+  // Convenience methods
+  now: () => new Date(),
+  today: () => startOf(new Date(), 'day'),
+  yesterday: () => subtractFromDate(startOf(new Date(), 'day'), 1, 'day'),
+  tomorrow: () => addToDate(startOf(new Date(), 'day'), 1, 'day'),
+  
+  // Moment.js instance for advanced usage
+  moment,
+  momentTimezone
 };

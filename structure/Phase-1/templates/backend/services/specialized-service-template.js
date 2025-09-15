@@ -1,571 +1,734 @@
 /**
- * Template for specialized services (non-CRUD operations)
- * Replace all instances of `Feature` with the actual feature name
- * Replace all instances of `feature` with the lowercase feature name
- * Replace all references to featureRepository with the actual repository
+ * Шаблон специализированного сервиса
+ * Базовый шаблон для создания сервисов со специфичной бизнес-логикой
+ * 
+ * Использование:
+ * 1. Скопировать файл в нужную директорию
+ * 2. Заменить {{ServiceName}} на название сервиса (например, GraphValidation)
+ * 3. Заменить {{serviceName}} на название сервиса в camelCase (например, graphValidation)
+ * 4. Адаптировать методы под специфику сервиса
  */
 
-const { v4: uuidv4 } = require('uuid');
-const { defaultLogger } = require('../../../shared/lib/logging/logger');
-const { defaultTaskProducer } = require('../../../shared/lib/messaging/producers');
-const { BadRequestError, NotFoundError } = require('../../../shared/lib/errors/HttpErrors');
+const logger = require('../../../shared/lib/logging/logger');
+const { ValidationError, NotFoundError } = require('../../../shared/lib/errors');
+const { cacheHelper } = require('../../../shared/lib/db/redis/cacheHelper');
+const { publishMessage } = require('../../../shared/lib/messaging/producers');
+const { incrementCounter } = require('../../../shared/lib/metrics/counters');
 
-/**
- * Service for specialized feature operations
- */
-class FeatureService {
-  /**
-   * Create a new FeatureService
-   * @param {Object} featureRepository - Feature repository
-   * @param {Object} [relatedRepository] - Related repository (if needed)
-   * @param {Object} [claudeService] - Claude service for AI operations
-   * @param {Object} [taskProducer=defaultTaskProducer] - Task producer for async operations
-   * @param {Object} [logger=defaultLogger] - Logger instance
-   */
-  constructor(
-    featureRepository,
-    relatedRepository = null,
-    claudeService = null,
-    taskProducer = defaultTaskProducer,
-    logger = defaultLogger
-  ) {
-    this.featureRepository = featureRepository;
-    this.relatedRepository = relatedRepository;
-    this.claudeService = claudeService;
-    this.taskProducer = taskProducer;
-    this.logger = logger;
+class {{ServiceName}}Service {
+  constructor(repository, dependencies = {}) {
+    this.repository = repository;
+    this.dependencies = dependencies;
+    this.cachePrefix = '{{serviceName}}';
+    this.cacheTTL = 3600; // 1 час
+    
+    // Инициализация зависимостей
+    this.claudeClient = dependencies.claudeClient;
+    this.relatedServices = dependencies.relatedServices || {};
   }
 
   /**
-   * Process a feature request
-   * @param {Object} data - Feature request data
-   * @returns {Promise<Object>} Promise resolving to processing result
+   * Основной метод обработки
    */
-  async process(data) {
+  async process({ entityId, options = {}, userId }) {
+    const startTime = Date.now();
+    
     try {
-      this.logger.info('Processing feature request', { data });
-      
-      // Validate and normalize input data
-      const normalizedData = this._normalizeProcessData(data);
-      
-      // Process the request
-      const result = await this._processFeature(normalizedData);
-      
-      // Store the result if needed
-      if (result.shouldStore) {
-        await this.featureRepository.storeResult(result);
+      logger.info('Starting {{serviceName}} processing', {
+        entityId,
+        userId,
+        options
+      });
+
+      // Получаем исходные данные
+      const entity = await this.getEntityData(entityId);
+      if (!entity) {
+        throw new NotFoundError('Entity not found');
       }
+
+      // Проверяем права доступа
+      await this.checkAccessRights(entity, userId);
+
+      // Валидация входных данных
+      await this.validateProcessingRequest(entity, options);
+
+      // Подготавливаем контекст обработки
+      const context = await this.prepareProcessingContext(entity, options);
+
+      // Выполняем основную обработку
+      const result = await this.performProcessing(context);
+
+      // Постобработка результатов
+      const finalResult = await this.postProcessResults(result, context);
+
+      // Сохраняем результаты
+      await this.saveResults(entityId, finalResult, userId);
+
+      // Публикуем событие
+      await this.publishProcessingComplete(entityId, finalResult);
+
+      const processingTime = Date.now() - startTime;
+      logger.info('{{ServiceName}} processing completed', {
+        entityId,
+        processingTime
+      });
+
+      incrementCounter('{{serviceName}}_processing_duration_ms', processingTime);
+
+      return finalResult;
+    } catch (error) {
+      logger.error('Error in {{serviceName}} processing', {
+        entityId,
+        error: error.message,
+        stack: error.stack
+      });
       
+      incrementCounter('{{serviceName}}_errors_total');
+      throw error;
+    }
+  }
+
+  /**
+   * Анализ данных
+   */
+  async analyze({ entity, analysisType = 'full', parameters = {}, userId }) {
+    try {
+      logger.info('Starting {{serviceName}} analysis', {
+        entityId: entity.id,
+        analysisType,
+        userId
+      });
+
+      // Проверяем кэш
+      const cacheKey = this.getCacheKey('analysis', {
+        entityId: entity.id,
+        analysisType,
+        parameters
+      });
+      
+      const cached = await cacheHelper.get(cacheKey);
+      if (cached && !parameters.forceRefresh) {
+        logger.debug('Analysis retrieved from cache');
+        return cached;
+      }
+
+      // Выбираем стратегию анализа
+      const analyzerStrategy = this.getAnalyzerStrategy(analysisType);
+      
+      // Подготавливаем данные для анализа
+      const preparedData = await this.prepareDataForAnalysis(entity, parameters);
+
+      // Выполняем анализ
+      const analysisResult = await analyzerStrategy.analyze(preparedData, parameters);
+
+      // Обогащаем результаты
+      const enrichedResult = await this.enrichAnalysisResults(analysisResult, entity);
+
+      // Генерируем рекомендации
+      const recommendations = await this.generateRecommendations(enrichedResult);
+
+      const finalResult = {
+        ...enrichedResult,
+        recommendations,
+        metadata: {
+          analysisType,
+          analyzedAt: new Date().toISOString(),
+          parameters
+        }
+      };
+
+      // Сохраняем в кэш
+      await cacheHelper.set(cacheKey, finalResult, this.cacheTTL);
+
+      // Сохраняем результаты анализа
+      await this.saveAnalysisResults(entity.id, finalResult, userId);
+
+      incrementCounter('{{serviceName}}_analyses_completed', {
+        type: analysisType
+      });
+
+      return finalResult;
+    } catch (error) {
+      logger.error('Error in {{serviceName}} analysis', {
+        entityId: entity.id,
+        error
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Валидация данных
+   */
+  async validate({ data, validationType = 'standard' }) {
+    try {
+      logger.info('Starting {{serviceName}} validation', {
+        validationType,
+        dataSize: JSON.stringify(data).length
+      });
+
+      // Получаем правила валидации
+      const validationRules = this.getValidationRules(validationType);
+      
+      const errors = [];
+      const warnings = [];
+      const suggestions = [];
+
+      // Структурная валидация
+      const structuralErrors = await this.validateStructure(data, validationRules);
+      errors.push(...structuralErrors);
+
+      // Бизнес-правила
+      if (errors.length === 0) {
+        const businessErrors = await this.validateBusinessRules(data, validationRules);
+        errors.push(...businessErrors);
+      }
+
+      // Проверка на предупреждения
+      const validationWarnings = await this.checkForWarnings(data, validationRules);
+      warnings.push(...validationWarnings);
+
+      // Генерация предложений по улучшению
+      if (errors.length === 0) {
+        const improvementSuggestions = await this.generateSuggestions(data);
+        suggestions.push(...improvementSuggestions);
+      }
+
+      const result = {
+        valid: errors.length === 0,
+        errors,
+        warnings,
+        suggestions,
+        metadata: {
+          validationType,
+          validatedAt: new Date().toISOString()
+        }
+      };
+
+      incrementCounter('{{serviceName}}_validations_completed', {
+        valid: result.valid
+      });
+
       return result;
     } catch (error) {
-      this.logger.error(`Error processing feature request: ${error.message}`, {
-        data,
-        stack: error.stack
-      });
+      logger.error('Error in {{serviceName}} validation', { error });
       throw error;
     }
   }
 
   /**
-   * Check if a feature exists
-   * @param {string} id - Feature ID
-   * @returns {Promise<boolean>} Promise resolving to whether the feature exists
+   * Преобразование данных
    */
-  async exists(id) {
+  async transform({ sourceData, targetFormat, options = {} }) {
     try {
-      return await this.featureRepository.exists(id);
+      logger.info('Starting {{serviceName}} transformation', {
+        sourceFormat: this.detectFormat(sourceData),
+        targetFormat,
+        options
+      });
+
+      // Валидация исходных данных
+      await this.validateSourceData(sourceData);
+
+      // Получаем трансформер
+      const transformer = this.getTransformer(targetFormat);
+      
+      // Подготовка данных
+      const preparedData = await this.prepareForTransformation(sourceData, options);
+
+      // Выполняем преобразование
+      const transformed = await transformer.transform(preparedData, options);
+
+      // Валидация результата
+      await this.validateTransformationResult(transformed, targetFormat);
+
+      // Оптимизация результата
+      const optimized = await this.optimizeTransformationResult(transformed, options);
+
+      incrementCounter('{{serviceName}}_transformations_completed', {
+        targetFormat
+      });
+
+      return optimized;
     } catch (error) {
-      this.logger.error(`Error checking feature existence: ${error.message}`, {
-        id,
-        stack: error.stack
-      });
+      logger.error('Error in {{serviceName}} transformation', { error });
       throw error;
     }
   }
 
   /**
-   * Analyze a feature
-   * @param {string} id - Feature ID
-   * @param {Object} options - Analysis options
-   * @returns {Promise<Object>} Promise resolving to analysis result
+   * Сравнение данных
    */
-  async analyze(id, options) {
+  async compare({ entities, comparisonType = 'full', options = {} }) {
     try {
-      // Get the feature
-      const feature = await this.featureRepository.findById(id);
-      
-      if (!feature) {
-        throw new NotFoundError('Feature not found', null, { id });
-      }
-      
-      // Prepare options
-      const analysisOptions = this._prepareAnalysisOptions(options);
-      
-      // Analyze the feature (if using Claude, call the Claude service)
-      let analysisResult;
-      if (this.claudeService && analysisOptions.useClaudeForAnalysis) {
-        analysisResult = await this._analyzeWithClaude(feature, analysisOptions);
-      } else {
-        analysisResult = await this._analyzeFeature(feature, analysisOptions);
-      }
-      
-      // Store the analysis result
-      await this.featureRepository.storeAnalysis(id, analysisResult);
-      
-      return analysisResult;
-    } catch (error) {
-      this.logger.error(`Error analyzing feature: ${error.message}`, {
-        id,
-        options,
-        stack: error.stack
+      logger.info('Starting {{serviceName}} comparison', {
+        count: entities.length,
+        comparisonType
       });
-      throw error;
-    }
-  }
 
-  /**
-   * Generate a report for a feature
-   * @param {string} id - Feature ID
-   * @param {Object} options - Report options
-   * @returns {Promise<Object|Buffer>} Promise resolving to the report
-   */
-  async generateReport(id, options) {
-    try {
-      // Get the feature
-      const feature = await this.featureRepository.findById(id);
-      
-      if (!feature) {
-        throw new NotFoundError('Feature not found', null, { id });
-      }
-      
-      // Get related data if needed
-      const relatedData = options.includeRelated
-        ? await this._getRelatedData(id)
-        : null;
-      
-      // Generate the report
-      const report = await this._generateFeatureReport(feature, relatedData, options);
-      
-      return report;
-    } catch (error) {
-      this.logger.error(`Error generating feature report: ${error.message}`, {
-        id,
-        options,
-        stack: error.stack
-      });
-      throw error;
-    }
-  }
+      // Подготовка данных для сравнения
+      const preparedEntities = await this.prepareEntitiesForComparison(entities, options);
 
-  /**
-   * Submit a feature for review
-   * @param {string} id - Feature ID
-   * @param {Object} data - Review submission data
-   * @returns {Promise<Object>} Promise resolving to review request info
-   */
-  async submitForReview(id, data) {
-    try {
-      // Get the feature
-      const feature = await this.featureRepository.findById(id);
-      
-      if (!feature) {
-        throw new NotFoundError('Feature not found', null, { id });
-      }
-      
-      // Check if feature is in a state that can be reviewed
-      this._validateFeatureForReview(feature);
-      
-      // Create review request
-      const reviewRequest = {
-        id: uuidv4(),
-        featureId: id,
-        submittedBy: data.submittedBy,
-        comments: data.comments || '',
-        status: 'pending',
-        submittedAt: new Date().toISOString()
-      };
-      
-      // Store the review request
-      await this.featureRepository.storeReviewRequest(reviewRequest);
-      
-      // Notify stakeholders (could be done asynchronously)
-      await this._notifyReviewStakeholders(feature, reviewRequest);
-      
-      return reviewRequest;
-    } catch (error) {
-      this.logger.error(`Error submitting feature for review: ${error.message}`, {
-        id,
-        data,
-        stack: error.stack
-      });
-      throw error;
-    }
-  }
+      // Выбираем стратегию сравнения
+      const comparator = this.getComparator(comparisonType);
 
-  /**
-   * Compare multiple features
-   * @param {Array<string>} ids - Feature IDs
-   * @returns {Promise<Object>} Promise resolving to comparison result
-   */
-  async compare(ids) {
-    try {
-      // Validate input
-      if (!Array.isArray(ids) || ids.length < 2) {
-        throw new BadRequestError('At least two feature IDs are required for comparison');
-      }
-      
-      // Get all features
-      const features = await Promise.all(
-        ids.map(async id => {
-          const feature = await this.featureRepository.findById(id);
-          
-          if (!feature) {
-            throw new NotFoundError('Feature not found', null, { id });
-          }
-          
-          return feature;
-        })
-      );
-      
-      // Compare the features
-      const comparison = await this._compareFeatures(features);
-      
-      return comparison;
-    } catch (error) {
-      this.logger.error(`Error comparing features: ${error.message}`, {
-        ids,
-        stack: error.stack
-      });
-      throw error;
-    }
-  }
+      // Выполняем попарное сравнение
+      const comparisonMatrix = await this.buildComparisonMatrix(preparedEntities, comparator);
 
-  /**
-   * Start an asynchronous operation on a feature
-   * @param {string} id - Feature ID
-   * @param {string} operation - Operation type
-   * @returns {Promise<string>} Promise resolving to operation ID
-   */
-  async startAsyncOperation(id, operation) {
-    try {
-      // Get the feature
-      const feature = await this.featureRepository.findById(id);
-      
-      if (!feature) {
-        throw new NotFoundError('Feature not found', null, { id });
-      }
-      
-      // Validate operation type
-      this._validateAsyncOperation(operation);
-      
-      // Generate operation ID
-      const operationId = uuidv4();
-      
-      // Store operation in progress status
-      await this.featureRepository.storeAsyncOperation({
-        id: operationId,
-        featureId: id,
-        operation,
-        status: 'in_progress',
-        progress: 0,
-        startedAt: new Date().toISOString()
-      });
-      
-      // Send task to queue for processing
-      await this.taskProducer.sendTask(
-        'feature_operation',
-        {
-          operationId,
-          featureId: id,
-          operation,
-          feature // Include feature data or just the ID as needed
+      // Анализ различий
+      const differences = await this.analyzeDifferences(comparisonMatrix);
+
+      // Вычисление метрик сходства
+      const similarityMetrics = await this.calculateSimilarityMetrics(comparisonMatrix);
+
+      // Кластеризация по сходству
+      const clusters = await this.clusterBySimilarity(preparedEntities, similarityMetrics);
+
+      const result = {
+        comparisonMatrix,
+        differences,
+        similarityMetrics,
+        clusters,
+        metadata: {
+          comparisonType,
+          entityCount: entities.length,
+          comparedAt: new Date().toISOString()
         }
-      );
-      
-      return operationId;
-    } catch (error) {
-      this.logger.error(`Error starting async operation: ${error.message}`, {
-        id,
-        operation,
-        stack: error.stack
+      };
+
+      incrementCounter('{{serviceName}}_comparisons_completed', {
+        entityCount: entities.length
       });
+
+      return result;
+    } catch (error) {
+      logger.error('Error in {{serviceName}} comparison', { error });
       throw error;
     }
   }
 
   /**
-   * Get the status of an asynchronous operation
-   * @param {string} operationId - Operation ID
-   * @returns {Promise<Object|null>} Promise resolving to operation status or null if not found
+   * Генерация отчета
    */
-  async getAsyncOperationStatus(operationId) {
+  async generateReport({ entityId, reportType = 'summary', options = {} }) {
     try {
-      return await this.featureRepository.getAsyncOperation(operationId);
-    } catch (error) {
-      this.logger.error(`Error getting async operation status: ${error.message}`, {
-        operationId,
-        stack: error.stack
+      logger.info('Generating {{serviceName}} report', {
+        entityId,
+        reportType,
+        options
       });
+
+      // Получаем данные для отчета
+      const reportData = await this.collectReportData(entityId, reportType, options);
+
+      // Анализ данных
+      const analysis = await this.analyzeReportData(reportData, reportType);
+
+      // Генерация визуализаций
+      const visualizations = await this.generateVisualizations(analysis, reportType);
+
+      // Форматирование отчета
+      const formattedReport = await this.formatReport({
+        data: reportData,
+        analysis,
+        visualizations,
+        reportType,
+        options
+      });
+
+      // Сохранение отчета
+      const reportId = await this.saveReport(entityId, formattedReport);
+
+      incrementCounter('{{serviceName}}_reports_generated', {
+        type: reportType
+      });
+
+      return {
+        reportId,
+        report: formattedReport,
+        downloadUrl: `/reports/${reportId}/download`
+      };
+    } catch (error) {
+      logger.error('Error generating {{serviceName}} report', { error });
       throw error;
     }
   }
 
   /**
-   * Process the feature (implementation specific)
-   * @param {Object} data - Normalized data
-   * @returns {Promise<Object>} Promise resolving to processing result
-   * @private
+   * Обработка асинхронной задачи
    */
-  async _processFeature(data) {
-    // Implementation specific processing logic
-    // This is a placeholder that should be replaced with actual logic
-    
-    return {
-      id: uuidv4(),
-      result: 'Processed successfully',
-      shouldStore: true,
-      // More fields as needed
-    };
+  async processAsyncTask(taskId, taskData) {
+    try {
+      logger.info('Processing async {{serviceName}} task', { taskId });
+
+      // Обновляем статус задачи
+      await this.updateTaskStatus(taskId, 'processing');
+
+      // Выполняем обработку
+      const result = await this.process(taskData);
+
+      // Сохраняем результат
+      await this.saveTaskResult(taskId, result);
+
+      // Обновляем статус
+      await this.updateTaskStatus(taskId, 'completed', result);
+
+      // Уведомляем о завершении
+      await this.notifyTaskCompletion(taskId, result);
+
+      return result;
+    } catch (error) {
+      logger.error('Error processing async task', { taskId, error });
+      
+      // Обновляем статус с ошибкой
+      await this.updateTaskStatus(taskId, 'failed', { error: error.message });
+      
+      throw error;
+    }
   }
 
   /**
-   * Analyze a feature (implementation specific)
-   * @param {Object} feature - Feature to analyze
-   * @param {Object} options - Analysis options
-   * @returns {Promise<Object>} Promise resolving to analysis result
-   * @private
+   * Получение статуса задачи
    */
-  async _analyzeFeature(feature, options) {
-    // Implementation specific analysis logic
-    // This is a placeholder that should be replaced with actual logic
-    
-    return {
-      id: uuidv4(),
-      featureId: feature.id,
-      // Analysis results here
-    };
-  }
-
-  /**
-   * Analyze a feature using Claude
-   * @param {Object} feature - Feature to analyze
-   * @param {Object} options - Analysis options
-   * @returns {Promise<Object>} Promise resolving to analysis result
-   * @private
-   */
-  async _analyzeWithClaude(feature, options) {
-    // Format the prompt for Claude
-    const prompt = this._formatClaudePrompt(feature, options);
-    
-    // Call Claude service
-    const claudeResponse = await this.claudeService.query({
-      prompt,
-      options: {
-        temperature: options.temperature || 0.7,
-        maxTokens: options.maxTokens || 1000
+  async getTaskStatus(taskId) {
+    try {
+      const task = await this.repository.getTask(taskId);
+      
+      if (!task) {
+        return null;
       }
-    });
-    
-    // Parse and format the response
-    return this._parseClaudeResponse(claudeResponse, feature.id);
-  }
 
-  /**
-   * Generate a feature report
-   * @param {Object} feature - Feature to report on
-   * @param {Object|null} relatedData - Related data (if any)
-   * @param {Object} options - Report options
-   * @returns {Promise<Object|Buffer>} Promise resolving to the report
-   * @private
-   */
-  async _generateFeatureReport(feature, relatedData, options) {
-    // Implementation specific report generation logic
-    // This is a placeholder that should be replaced with actual logic
-    
-    // For PDF and CSV formats, return Buffer
-    if (options.format === 'pdf') {
-      // Generate PDF report (would use a library like PDFKit)
-      return Buffer.from('PDF report content');
-    } else if (options.format === 'csv') {
-      // Generate CSV report
-      return Buffer.from('CSV report content');
+      // Добавляем прогресс, если задача выполняется
+      if (task.status === 'processing') {
+        task.progress = await this.calculateTaskProgress(taskId);
+      }
+
+      return task;
+    } catch (error) {
+      logger.error('Error getting task status', { taskId, error });
+      throw error;
     }
-    
-    // Default to JSON report
-    return {
-      id: uuidv4(),
-      featureId: feature.id,
-      generatedAt: new Date().toISOString(),
-      details: options.details,
-      // Report data here
-    };
   }
 
   /**
-   * Compare multiple features
-   * @param {Array<Object>} features - Features to compare
-   * @returns {Promise<Object>} Promise resolving to comparison result
-   * @private
+   * Отмена задачи
    */
-  async _compareFeatures(features) {
-    // Implementation specific comparison logic
-    // This is a placeholder that should be replaced with actual logic
-    
-    return {
-      id: uuidv4(),
-      featureIds: features.map(f => f.id),
-      comparedAt: new Date().toISOString(),
-      // Comparison results here
-    };
-  }
-
-  /**
-   * Get related data for a feature
-   * @param {string} featureId - Feature ID
-   * @returns {Promise<Object>} Promise resolving to related data
-   * @private
-   */
-  async _getRelatedData(featureId) {
-    // Implementation specific logic to get related data
-    // Depends on the related repository
-    
-    if (!this.relatedRepository) {
-      return null;
-    }
-    
-    // Example: Get related items
-    return await this.relatedRepository.findByFeatureId(featureId);
-  }
-
-  /**
-   * Normalize process data
-   * @param {Object} data - Raw data
-   * @returns {Object} Normalized data
-   * @private
-   */
-  _normalizeProcessData(data) {
-    // Implementation specific normalization logic
-    return {
-      ...data,
-      // Normalize specific fields as needed
-    };
-  }
-
-  /**
-   * Prepare analysis options
-   * @param {Object} options - Raw options
-   * @returns {Object} Prepared options
-   * @private
-   */
-  _prepareAnalysisOptions(options) {
-    // Set defaults and validate options
-    return {
-      depth: options.depth || 'standard',
-      includeMetrics: options.includeMetrics !== false,
-      includeTrends: options.includeTrends === true,
-      useClaudeForAnalysis: options.useClaudeForAnalysis === true,
-      // More options as needed
-    };
-  }
-
-  /**
-   * Format a prompt for Claude
-   * @param {Object} feature - Feature to analyze
-   * @param {Object} options - Analysis options
-   * @returns {string} Formatted prompt
-   * @private
-   */
-  _formatClaudePrompt(feature, options) {
-    // Format a prompt for Claude based on the feature and options
-    return `
-      Analyze the following feature:
-      ${JSON.stringify(feature, null, 2)}
+  async cancelTask(taskId) {
+    try {
+      const task = await this.getTaskStatus(taskId);
       
-      Analysis options:
-      ${JSON.stringify(options, null, 2)}
-      
-      Please provide an analysis of this feature including:
-      1. Key strengths and weaknesses
-      2. Potential improvements
-      3. Comparison to best practices
-      4. Recommendations for next steps
-    `;
-  }
+      if (!task) {
+        throw new NotFoundError('Task not found');
+      }
 
-  /**
-   * Parse a response from Claude
-   * @param {Object} claudeResponse - Response from Claude
-   * @param {string} featureId - Feature ID
-   * @returns {Object} Parsed response
-   * @private
-   */
-  _parseClaudeResponse(claudeResponse, featureId) {
-    // Parse and format the response from Claude
-    return {
-      id: uuidv4(),
-      featureId,
-      analysisText: claudeResponse.content,
-      source: 'claude',
-      generatedAt: new Date().toISOString(),
-      // Additional parsing as needed
-    };
-  }
+      if (task.status !== 'pending' && task.status !== 'processing') {
+        throw new ValidationError('Task cannot be cancelled in current status');
+      }
 
-  /**
-   * Validate a feature for review
-   * @param {Object} feature - Feature to validate
-   * @throws {BadRequestError} If feature cannot be reviewed
-   * @private
-   */
-  _validateFeatureForReview(feature) {
-    // Check if feature is in a state that can be reviewed
-    // This is a placeholder that should be replaced with actual logic
-    
-    // Example: Check if feature is in draft status
-    if (feature.status !== 'draft') {
-      throw new BadRequestError(
-        `Feature cannot be submitted for review in status: ${feature.status}`
-      );
+      // Отправляем сигнал отмены
+      await publishMessage('task.cancellation', {
+        taskId,
+        timestamp: new Date().toISOString()
+      });
+
+      // Обновляем статус
+      await this.updateTaskStatus(taskId, 'cancelled');
+
+      logger.info('Task cancelled', { taskId });
+      return true;
+    } catch (error) {
+      logger.error('Error cancelling task', { taskId, error });
+      throw error;
     }
   }
 
   /**
-   * Notify stakeholders about a review request
-   * @param {Object} feature - Feature being reviewed
-   * @param {Object} reviewRequest - Review request
-   * @returns {Promise<void>} Promise that resolves when notifications are sent
-   * @private
+   * Получение статистики
    */
-  async _notifyReviewStakeholders(feature, reviewRequest) {
-    // Implementation specific notification logic
-    // This is a placeholder that should be replaced with actual logic
+  async getStatistics({ period = '7d', groupBy = 'day' }) {
+    try {
+      // Парсим период
+      const { startDate, endDate } = this.parsePeriod(period);
+
+      // Получаем сырые данные
+      const rawStats = await this.repository.getStatistics(startDate, endDate);
+
+      // Группируем данные
+      const grouped = this.groupStatistics(rawStats, groupBy);
+
+      // Вычисляем агрегированные метрики
+      const aggregated = this.calculateAggregatedMetrics(grouped);
+
+      // Добавляем тренды
+      const withTrends = this.calculateTrends(aggregated);
+
+      return {
+        period: { startDate, endDate },
+        groupBy,
+        data: withTrends,
+        summary: this.generateSummary(withTrends)
+      };
+    } catch (error) {
+      logger.error('Error getting {{serviceName}} statistics', { error });
+      throw error;
+    }
+  }
+
+  // Вспомогательные методы
+
+  /**
+   * Получение данных сущности
+   */
+  async getEntityData(entityId) {
+    // Реализация получения данных из соответствующего сервиса/репозитория
+    if (this.relatedServices.entityService) {
+      return this.relatedServices.entityService.getById(entityId);
+    }
+    return this.repository.getEntity(entityId);
+  }
+
+  /**
+   * Проверка прав доступа
+   */
+  async checkAccessRights(entity, userId) {
+    // Реализация проверки прав доступа
+    if (entity.isPrivate && entity.ownerId !== userId) {
+      throw new ValidationError('Access denied');
+    }
+  }
+
+  /**
+   * Валидация запроса на обработку
+   */
+  async validateProcessingRequest(entity, options) {
+    // Специфичная валидация для сервиса
+  }
+
+  /**
+   * Подготовка контекста обработки
+   */
+  async prepareProcessingContext(entity, options) {
+    return {
+      entity,
+      options,
+      metadata: {
+        timestamp: new Date().toISOString(),
+        version: '1.0'
+      }
+    };
+  }
+
+  /**
+   * Выполнение основной обработки
+   */
+  async performProcessing(context) {
+    // Основная бизнес-логика сервиса
+    // Может включать вызовы Claude API, других сервисов и т.д.
     
-    // Example: In a real implementation, this would send emails or other notifications
-    this.logger.info('Review request notification would be sent to stakeholders', {
-      featureId: feature.id,
-      reviewRequestId: reviewRequest.id
+    if (this.claudeClient) {
+      return this.claudeClient.process({
+        type: '{{serviceName}}',
+        data: context
+      });
+    }
+    
+    // Заглушка для примера
+    return { processed: true, context };
+  }
+
+  /**
+   * Постобработка результатов
+   */
+  async postProcessResults(result, context) {
+    // Дополнительная обработка результатов
+    return {
+      ...result,
+      postProcessed: true
+    };
+  }
+
+  /**
+   * Сохранение результатов
+   */
+  async saveResults(entityId, results, userId) {
+    return this.repository.saveResults({
+      entityId,
+      results,
+      userId,
+      timestamp: new Date()
     });
   }
 
   /**
-   * Validate an async operation type
-   * @param {string} operation - Operation to validate
-   * @throws {BadRequestError} If operation is invalid
-   * @private
+   * Публикация события о завершении
    */
-  _validateAsyncOperation(operation) {
-    // Implementation specific validation logic
-    // This is a placeholder that should be replaced with actual logic
+  async publishProcessingComplete(entityId, results) {
+    return publishMessage('{{serviceName}}.completed', {
+      entityId,
+      resultsId: results.id,
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  /**
+   * Получение стратегии анализа
+   */
+  getAnalyzerStrategy(analysisType) {
+    // Возвращает соответствующую стратегию анализа
+    const strategies = {
+      full: new FullAnalysisStrategy(),
+      quick: new QuickAnalysisStrategy(),
+      deep: new DeepAnalysisStrategy()
+    };
     
-    // Example: Check if operation is supported
-    const supportedOperations = ['process', 'analyze', 'transform', 'export'];
+    return strategies[analysisType] || strategies.full;
+  }
+
+  /**
+   * Получение правил валидации
+   */
+  getValidationRules(validationType) {
+    // Возвращает правила валидации для типа
+    return {
+      standard: {
+        required: ['field1', 'field2'],
+        optional: ['field3'],
+        constraints: {
+          field1: { minLength: 3, maxLength: 100 }
+        }
+      },
+      strict: {
+        // Более строгие правила
+      }
+    }[validationType];
+  }
+
+  /**
+   * Получение трансформера
+   */
+  getTransformer(targetFormat) {
+    // Возвращает трансформер для целевого формата
+    const transformers = {
+      json: new JsonTransformer(),
+      xml: new XmlTransformer(),
+      csv: new CsvTransformer()
+    };
     
-    if (!supportedOperations.includes(operation)) {
-      throw new BadRequestError(
-        `Unsupported operation: ${operation}. Supported operations: ${supportedOperations.join(', ')}`
-      );
+    return transformers[targetFormat];
+  }
+
+  /**
+   * Получение компаратора
+   */
+  getComparator(comparisonType) {
+    // Возвращает компаратор для типа сравнения
+    const comparators = {
+      full: new FullComparator(),
+      structural: new StructuralComparator(),
+      semantic: new SemanticComparator()
+    };
+    
+    return comparators[comparisonType];
+  }
+
+  /**
+   * Формирование ключа кэша
+   */
+  getCacheKey(type, params) {
+    const key = `${this.cachePrefix}:${type}`;
+    return `${key}:${JSON.stringify(params)}`;
+  }
+
+  /**
+   * Определение формата данных
+   */
+  detectFormat(data) {
+    if (typeof data === 'string') {
+      try {
+        JSON.parse(data);
+        return 'json';
+      } catch {
+        if (data.includes('<?xml')) return 'xml';
+        if (data.includes(',') && data.includes('\n')) return 'csv';
+        return 'text';
+      }
     }
+    return typeof data;
+  }
+
+  /**
+   * Парсинг периода
+   */
+  parsePeriod(period) {
+    const endDate = new Date();
+    const startDate = new Date();
+    
+    const match = period.match(/(\d+)([dhm])/);
+    if (match) {
+      const [, value, unit] = match;
+      const units = { d: 'Date', h: 'Hours', m: 'Minutes' };
+      startDate[`set${units[unit]}`](startDate[`get${units[unit]}`]() - parseInt(value));
+    }
+    
+    return { startDate, endDate };
   }
 }
 
-module.exports = FeatureService;
+// Заглушки для стратегий (в реальном проекте будут отдельными классами)
+class FullAnalysisStrategy {
+  async analyze(data, parameters) {
+    return { type: 'full', data };
+  }
+}
+
+class QuickAnalysisStrategy {
+  async analyze(data, parameters) {
+    return { type: 'quick', data };
+  }
+}
+
+class DeepAnalysisStrategy {
+  async analyze(data, parameters) {
+    return { type: 'deep', data };
+  }
+}
+
+class JsonTransformer {
+  async transform(data, options) {
+    return JSON.stringify(data, null, 2);
+  }
+}
+
+class XmlTransformer {
+  async transform(data, options) {
+    // Реализация XML трансформации
+    return '<xml></xml>';
+  }
+}
+
+class CsvTransformer {
+  async transform(data, options) {
+    // Реализация CSV трансформации
+    return 'csv,data';
+  }
+}
+
+class FullComparator {
+  async compare(entity1, entity2) {
+    return { similarity: 0.8 };
+  }
+}
+
+class StructuralComparator {
+  async compare(entity1, entity2) {
+    return { similarity: 0.7 };
+  }
+}
+
+class SemanticComparator {
+  async compare(entity1, entity2) {
+    return { similarity: 0.9 };
+  }
+}
+
+module.exports = {{ServiceName}}Service;

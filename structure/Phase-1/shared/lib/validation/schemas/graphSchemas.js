@@ -1,355 +1,584 @@
 /**
- * Validation schemas for graphs
+ * Graph Validation Schemas
+ * Схемы валидации для графов, категорий и связей
  */
 
-const Joi = require('joi');
-const { 
-  GRAPH_DRAFT, 
-  GRAPH_VALIDATED, 
-  GRAPH_ENRICHED, 
-  GRAPH_PUBLISHED 
-} = require('../../../constants/statuses');
-const { 
-  RELATIONSHIP_TYPES, 
-  RELATIONSHIP_DIRECTIONS 
-} = require('../../../constants/philosophyConstants');
+const {
+  stringValidators,
+  numberValidators,
+  arrayValidators,
+  objectValidators,
+  specializedValidators,
+  philosophyValidators,
+  createSchemaValidator
+} = require('../validators');
 
-// Helper for characteristic validation (1-5 scale)
-const characteristicSchema = Joi.number().integer().min(1).max(5);
+/**
+ * Схема для создания категории
+ */
+const createCategorySchema = {
+  conceptId: {
+    required: true,
+    validators: [
+      (value) => specializedValidators.isUUID(value, 'conceptId')
+    ]
+  },
+  name: {
+    required: true,
+    validators: [
+      (value) => stringValidators.isNonEmptyString(value, 'name'),
+      (value) => stringValidators.hasLength(value, 1, 255, 'name')
+    ]
+  },
+  type: {
+    required: false,
+    validators: [
+      (value) => philosophyValidators.isCategoryType(value, 'type')
+    ]
+  },
+  definition: {
+    required: false,
+    validators: [
+      (value) => stringValidators.hasLength(value, 0, 2000, 'definition')
+    ]
+  },
+  centrality: {
+    required: false,
+    validators: [
+      (value) => numberValidators.isPercentage(value, 'centrality')
+    ]
+  },
+  certainty: {
+    required: false,
+    validators: [
+      (value) => numberValidators.isPercentage(value, 'certainty')
+    ]
+  },
+  historicalSignificance: {
+    required: false,
+    validators: [
+      (value) => numberValidators.isPercentage(value, 'historicalSignificance')
+    ]
+  },
+  innovationDegree: {
+    required: false,
+    validators: [
+      (value) => philosophyValidators.isInnovationDegree(value, 'innovationDegree')
+    ]
+  },
+  clarity: {
+    required: false,
+    validators: [
+      (value) => numberValidators.isPercentage(value, 'clarity')
+    ]
+  },
+  breadth: {
+    required: false,
+    validators: [
+      (value) => numberValidators.isPercentage(value, 'breadth')
+    ]
+  },
+  depth: {
+    required: false,
+    validators: [
+      (value) => numberValidators.isPercentage(value, 'depth')
+    ]
+  },
+  applicability: {
+    required: false,
+    validators: [
+      (value) => numberValidators.isPercentage(value, 'applicability')
+    ]
+  },
+  traditions: {
+    required: false,
+    validators: [
+      (value) => arrayValidators.isArray(value, 'traditions'),
+      (value) => arrayValidators.hasArrayLength(value, 0, 20, 'traditions'),
+      (value) => {
+        value.forEach((tradition, index) => {
+          objectValidators.hasRequiredFields(
+            tradition, 
+            ['id'], 
+            `traditions[${index}]`
+          );
+          specializedValidators.isUUID(tradition.id, `traditions[${index}].id`);
+        });
+      }
+    ]
+  },
+  philosophers: {
+    required: false,
+    validators: [
+      (value) => arrayValidators.isArray(value, 'philosophers'),
+      (value) => arrayValidators.hasArrayLength(value, 0, 50, 'philosophers'),
+      (value) => {
+        value.forEach((philosopher, index) => {
+          objectValidators.hasRequiredFields(
+            philosopher, 
+            ['id'], 
+            `philosophers[${index}]`
+          );
+          specializedValidators.isUUID(philosopher.id, `philosophers[${index}].id`);
+        });
+      }
+    ]
+  }
+};
 
-// Schema for creating a new category
-const createCategorySchema = Joi.object({
-  name: Joi.string().min(1).max(255).required()
-    .messages({
-      'string.empty': 'Category name is required',
-      'string.min': 'Category name must be at least {{#limit}} characters',
-      'string.max': 'Category name cannot exceed {{#limit}} characters',
-      'any.required': 'Category name is required'
-    }),
-    
-  definition: Joi.string().max(2000).allow('').default('')
-    .messages({
-      'string.max': 'Category definition cannot exceed {{#limit}} characters'
-    }),
-    
-  centrality: characteristicSchema.default(3)
-    .messages({
-      'number.base': 'Centrality must be a number',
-      'number.integer': 'Centrality must be an integer',
-      'number.min': 'Centrality must be at least {{#limit}}',
-      'number.max': 'Centrality cannot exceed {{#limit}}'
-    }),
-    
-  certainty: characteristicSchema.default(3)
-    .messages({
-      'number.base': 'Certainty must be a number',
-      'number.integer': 'Certainty must be an integer',
-      'number.min': 'Certainty must be at least {{#limit}}',
-      'number.max': 'Certainty cannot exceed {{#limit}}'
-    }),
-    
-  historical_significance: characteristicSchema.default(3)
-    .messages({
-      'number.base': 'Historical significance must be a number',
-      'number.integer': 'Historical significance must be an integer',
-      'number.min': 'Historical significance must be at least {{#limit}}',
-      'number.max': 'Historical significance cannot exceed {{#limit}}'
-    }),
-    
-  traditions: Joi.array().items(Joi.string().max(100)).default([])
-    .messages({
-      'array.base': 'Traditions must be an array'
-    }),
-    
-  philosophers: Joi.array().items(Joi.string().max(100)).default([])
-    .messages({
-      'array.base': 'Philosophers must be an array'
-    }),
-    
-  metadata: Joi.object().default({})
-});
+/**
+ * Схема для обновления категории
+ */
+const updateCategorySchema = {
+  name: {
+    required: false,
+    validators: createCategorySchema.name.validators
+  },
+  type: {
+    required: false,
+    validators: createCategorySchema.type.validators
+  },
+  definition: {
+    required: false,
+    validators: createCategorySchema.definition.validators
+  },
+  centrality: {
+    required: false,
+    validators: createCategorySchema.centrality.validators
+  },
+  certainty: {
+    required: false,
+    validators: createCategorySchema.certainty.validators
+  },
+  historicalSignificance: {
+    required: false,
+    validators: createCategorySchema.historicalSignificance.validators
+  },
+  innovationDegree: {
+    required: false,
+    validators: createCategorySchema.innovationDegree.validators
+  },
+  clarity: {
+    required: false,
+    validators: createCategorySchema.clarity.validators
+  },
+  breadth: {
+    required: false,
+    validators: createCategorySchema.breadth.validators
+  },
+  depth: {
+    required: false,
+    validators: createCategorySchema.depth.validators
+  },
+  applicability: {
+    required: false,
+    validators: createCategorySchema.applicability.validators
+  }
+};
 
-// Schema for updating a category
-const updateCategorySchema = Joi.object({
-  name: Joi.string().min(1).max(255)
-    .messages({
-      'string.empty': 'Category name cannot be empty',
-      'string.min': 'Category name must be at least {{#limit}} characters',
-      'string.max': 'Category name cannot exceed {{#limit}} characters'
-    }),
-    
-  definition: Joi.string().max(2000).allow('')
-    .messages({
-      'string.max': 'Category definition cannot exceed {{#limit}} characters'
-    }),
-    
-  centrality: characteristicSchema
-    .messages({
-      'number.base': 'Centrality must be a number',
-      'number.integer': 'Centrality must be an integer',
-      'number.min': 'Centrality must be at least {{#limit}}',
-      'number.max': 'Centrality cannot exceed {{#limit}}'
-    }),
-    
-  certainty: characteristicSchema
-    .messages({
-      'number.base': 'Certainty must be a number',
-      'number.integer': 'Certainty must be an integer',
-      'number.min': 'Certainty must be at least {{#limit}}',
-      'number.max': 'Certainty cannot exceed {{#limit}}'
-    }),
-    
-  historical_significance: characteristicSchema
-    .messages({
-      'number.base': 'Historical significance must be a number',
-      'number.integer': 'Historical significance must be an integer',
-      'number.min': 'Historical significance must be at least {{#limit}}',
-      'number.max': 'Historical significance cannot exceed {{#limit}}'
-    }),
-    
-  traditions: Joi.array().items(Joi.string().max(100))
-    .messages({
-      'array.base': 'Traditions must be an array'
-    }),
-    
-  philosophers: Joi.array().items(Joi.string().max(100))
-    .messages({
-      'array.base': 'Philosophers must be an array'
-    }),
-    
-  metadata: Joi.object()
-}).min(1).messages({
-  'object.min': 'At least one field must be provided'
-});
+/**
+ * Схема для создания связи
+ */
+const createRelationshipSchema = {
+  sourceId: {
+    required: true,
+    validators: [
+      (value) => specializedValidators.isUUID(value, 'sourceId')
+    ]
+  },
+  targetId: {
+    required: true,
+    validators: [
+      (value) => specializedValidators.isUUID(value, 'targetId')
+    ]
+  },
+  type: {
+    required: true,
+    validators: [
+      (value) => philosophyValidators.isRelationshipType(value, 'type')
+    ]
+  },
+  direction: {
+    required: false,
+    validators: [
+      (value) => stringValidators.isOneOf(
+        value, 
+        ['unidirectional', 'bidirectional', 'reflexive'], 
+        'direction'
+      )
+    ]
+  },
+  strength: {
+    required: false,
+    validators: [
+      (value) => numberValidators.isPercentage(value, 'strength')
+    ]
+  },
+  certainty: {
+    required: false,
+    validators: [
+      (value) => numberValidators.isPercentage(value, 'certainty')
+    ]
+  },
+  innovationDegree: {
+    required: false,
+    validators: [
+      (value) => philosophyValidators.isInnovationDegree(value, 'innovationDegree')
+    ]
+  },
+  historicalSupport: {
+    required: false,
+    validators: [
+      (value) => numberValidators.isPercentage(value, 'historicalSupport')
+    ]
+  },
+  logicalNecessity: {
+    required: false,
+    validators: [
+      (value) => numberValidators.isPercentage(value, 'logicalNecessity')
+    ]
+  },
+  contextDependence: {
+    required: false,
+    validators: [
+      (value) => numberValidators.isPercentage(value, 'contextDependence')
+    ]
+  },
+  source: {
+    required: false,
+    validators: [
+      (value) => stringValidators.hasLength(value, 0, 500, 'source')
+    ]
+  },
+  traditions: {
+    required: false,
+    validators: createCategorySchema.traditions.validators
+  },
+  philosophers: {
+    required: false,
+    validators: createCategorySchema.philosophers.validators
+  }
+};
 
-// Get valid relationship types
-const validRelationshipTypes = Object.values(RELATIONSHIP_TYPES);
+/**
+ * Схема для обновления связи
+ */
+const updateRelationshipSchema = {
+  type: {
+    required: false,
+    validators: createRelationshipSchema.type.validators
+  },
+  direction: {
+    required: false,
+    validators: createRelationshipSchema.direction.validators
+  },
+  strength: {
+    required: false,
+    validators: createRelationshipSchema.strength.validators
+  },
+  certainty: {
+    required: false,
+    validators: createRelationshipSchema.certainty.validators
+  },
+  innovationDegree: {
+    required: false,
+    validators: createRelationshipSchema.innovationDegree.validators
+  },
+  historicalSupport: {
+    required: false,
+    validators: createRelationshipSchema.historicalSupport.validators
+  },
+  logicalNecessity: {
+    required: false,
+    validators: createRelationshipSchema.logicalNecessity.validators
+  },
+  contextDependence: {
+    required: false,
+    validators: createRelationshipSchema.contextDependence.validators
+  },
+  source: {
+    required: false,
+    validators: createRelationshipSchema.source.validators
+  }
+};
 
-// Get valid relationship directions
-const validRelationshipDirections = Object.values(RELATIONSHIP_DIRECTIONS);
+/**
+ * Схема для обновления характеристик
+ */
+const updateCharacteristicsSchema = {
+  characteristic: {
+    required: true,
+    validators: [
+      (value) => stringValidators.isOneOf(
+        value,
+        [
+          'centrality', 'certainty', 'historicalSignificance', 'innovationDegree',
+          'clarity', 'breadth', 'depth', 'applicability', 'strength',
+          'historicalSupport', 'logicalNecessity', 'contextDependence'
+        ],
+        'characteristic'
+      )
+    ]
+  },
+  value: {
+    required: true,
+    validators: [
+      (value, field, data) => {
+        if (data.characteristic === 'innovationDegree') {
+          philosophyValidators.isInnovationDegree(value, 'value');
+        } else {
+          numberValidators.isPercentage(value, 'value');
+        }
+      }
+    ]
+  },
+  justification: {
+    required: false,
+    validators: [
+      (value) => stringValidators.hasLength(value, 0, 1000, 'justification')
+    ]
+  }
+};
 
-// Schema for creating a new relationship
-const createRelationshipSchema = Joi.object({
-  source_id: Joi.string().uuid().required()
-    .messages({
-      'string.guid': 'Source ID must be a valid UUID',
-      'any.required': 'Source ID is required'
-    }),
-    
-  target_id: Joi.string().uuid().required()
-    .messages({
-      'string.guid': 'Target ID must be a valid UUID',
-      'any.required': 'Target ID is required'
-    }),
-    
-  type: Joi.string().valid(...validRelationshipTypes).required()
-    .messages({
-      'any.only': `Relationship type must be one of: ${validRelationshipTypes.join(', ')}`,
-      'any.required': 'Relationship type is required'
-    }),
-    
-  direction: Joi.string().valid(...validRelationshipDirections).default(RELATIONSHIP_DIRECTIONS.UNIDIRECTIONAL)
-    .messages({
-      'any.only': `Direction must be one of: ${validRelationshipDirections.join(', ')}`
-    }),
-    
-  strength: characteristicSchema.default(3)
-    .messages({
-      'number.base': 'Strength must be a number',
-      'number.integer': 'Strength must be an integer',
-      'number.min': 'Strength must be at least {{#limit}}',
-      'number.max': 'Strength cannot exceed {{#limit}}'
-    }),
-    
-  certainty: characteristicSchema.default(3)
-    .messages({
-      'number.base': 'Certainty must be a number',
-      'number.integer': 'Certainty must be an integer',
-      'number.min': 'Certainty must be at least {{#limit}}',
-      'number.max': 'Certainty cannot exceed {{#limit}}'
-    }),
-    
-  description: Joi.string().max(2000).allow('').default('')
-    .messages({
-      'string.max': 'Description cannot exceed {{#limit}} characters'
-    }),
-    
-  traditions: Joi.array().items(Joi.string().max(100)).default([])
-    .messages({
-      'array.base': 'Traditions must be an array'
-    }),
-    
-  philosophers: Joi.array().items(Joi.string().max(100)).default([])
-    .messages({
-      'array.base': 'Philosophers must be an array'
-    }),
-    
-  metadata: Joi.object().default({})
-});
+/**
+ * Схема для генерации графа из тезисов
+ */
+const generateGraphFromThesesSchema = {
+  thesisIds: {
+    required: true,
+    validators: [
+      (value) => arrayValidators.isNonEmptyArray(value, 'thesisIds'),
+      (value) => arrayValidators.hasArrayLength(value, 1, 50, 'thesisIds'),
+      (value) => {
+        value.forEach((id, index) => {
+          specializedValidators.isUUID(id, `thesisIds[${index}]`);
+        });
+      }
+    ]
+  },
+  parameters: {
+    required: false,
+    validators: [
+      (value) => objectValidators.isObject(value, 'parameters')
+    ]
+  }
+};
 
-// Schema for updating a relationship
-const updateRelationshipSchema = Joi.object({
-  type: Joi.string().valid(...validRelationshipTypes)
-    .messages({
-      'any.only': `Relationship type must be one of: ${validRelationshipTypes.join(', ')}`
-    }),
-    
-  direction: Joi.string().valid(...validRelationshipDirections)
-    .messages({
-      'any.only': `Direction must be one of: ${validRelationshipDirections.join(', ')}`
-    }),
-    
-  strength: characteristicSchema
-    .messages({
-      'number.base': 'Strength must be a number',
-      'number.integer': 'Strength must be an integer',
-      'number.min': 'Strength must be at least {{#limit}}',
-      'number.max': 'Strength cannot exceed {{#limit}}'
-    }),
-    
-  certainty: characteristicSchema
-    .messages({
-      'number.base': 'Certainty must be a number',
-      'number.integer': 'Certainty must be an integer',
-      'number.min': 'Certainty must be at least {{#limit}}',
-      'number.max': 'Certainty cannot exceed {{#limit}}'
-    }),
-    
-  description: Joi.string().max(2000).allow('')
-    .messages({
-      'string.max': 'Description cannot exceed {{#limit}} characters'
-    }),
-    
-  traditions: Joi.array().items(Joi.string().max(100))
-    .messages({
-      'array.base': 'Traditions must be an array'
-    }),
-    
-  philosophers: Joi.array().items(Joi.string().max(100))
-    .messages({
-      'array.base': 'Philosophers must be an array'
-    }),
-    
-  metadata: Joi.object()
-}).min(1).messages({
-  'object.min': 'At least one field must be provided'
-});
+/**
+ * Схема для валидации графа
+ */
+const validateGraphSchema = {
+  conceptId: {
+    required: true,
+    validators: [
+      (value) => specializedValidators.isUUID(value, 'conceptId')
+    ]
+  },
+  validationType: {
+    required: false,
+    validators: [
+      (value) => stringValidators.isOneOf(
+        value,
+        ['structure', 'consistency', 'completeness', 'full'],
+        'validationType'
+      )
+    ]
+  }
+};
 
-// Schema for updating graph status
-const updateGraphStatusSchema = Joi.object({
-  status: Joi.string().valid(
-    GRAPH_DRAFT,
-    GRAPH_VALIDATED,
-    GRAPH_ENRICHED,
-    GRAPH_PUBLISHED
-  ).required()
-    .messages({
-      'any.only': 'Status must be one of: draft, validated, enriched, published',
-      'any.required': 'Status is required'
-    })
-});
+/**
+ * Схема для обогащения графа
+ */
+const enrichGraphSchema = {
+  conceptId: {
+    required: true,
+    validators: [
+      (value) => specializedValidators.isUUID(value, 'conceptId')
+    ]
+  },
+  enrichmentType: {
+    required: false,
+    validators: [
+      (value) => stringValidators.isOneOf(
+        value,
+        ['categories', 'relationships', 'definitions', 'characteristics', 'full'],
+        'enrichmentType'
+      )
+    ]
+  },
+  targetElements: {
+    required: false,
+    validators: [
+      (value) => arrayValidators.isArray(value, 'targetElements'),
+      (value) => {
+        value.forEach((id, index) => {
+          specializedValidators.isUUID(id, `targetElements[${index}]`);
+        });
+      }
+    ]
+  }
+};
 
-// Schema for graph validation request
-const graphValidationSchema = Joi.object({
-  checkCircularReferences: Joi.boolean().default(true),
-  checkOrphanedCategories: Joi.boolean().default(true),
-  checkCategoryNames: Joi.boolean().default(true),
-  checkRelationshipTypes: Joi.boolean().default(true),
-  suggestionLevel: Joi.string().valid('none', 'basic', 'detailed').default('basic')
-    .messages({
-      'any.only': 'Suggestion level must be one of: none, basic, detailed'
-    })
-});
+/**
+ * Схема для экспорта графа
+ */
+const exportGraphSchema = {
+  conceptId: {
+    required: true,
+    validators: [
+      (value) => specializedValidators.isUUID(value, 'conceptId')
+    ]
+  },
+  format: {
+    required: true,
+    validators: [
+      (value) => stringValidators.isOneOf(
+        value,
+        ['json', 'graphml', 'gexf', 'cytoscape', 'd3', 'neo4j'],
+        'format'
+      )
+    ]
+  },
+  includeMetadata: {
+    required: false,
+    validators: [
+      (value) => {
+        if (typeof value !== 'boolean') {
+          throw new Error('includeMetadata must be a boolean');
+        }
+      }
+    ]
+  }
+};
 
-// Schema for graph enrichment request
-const graphEnrichmentSchema = Joi.object({
-  enrichCategories: Joi.boolean().default(true),
-  enrichRelationships: Joi.boolean().default(true),
-  suggestNewCategories: Joi.boolean().default(false),
-  suggestNewRelationships: Joi.boolean().default(false),
-  detailLevel: Joi.string().valid('basic', 'detailed', 'comprehensive').default('detailed')
-    .messages({
-      'any.only': 'Detail level must be one of: basic, detailed, comprehensive'
-    }),
-  focus: Joi.array().items(Joi.string().max(100)).default([])
-    .messages({
-      'array.base': 'Focus must be an array'
-    }),
-  traditions: Joi.array().items(Joi.string().max(100)).default([])
-    .messages({
-      'array.base': 'Traditions must be an array'
-    }),
-  philosophers: Joi.array().items(Joi.string().max(100)).default([])
-    .messages({
-      'array.base': 'Philosophers must be an array'
-    })
-});
+/**
+ * Схема для импорта графа
+ */
+const importGraphSchema = {
+  conceptId: {
+    required: true,
+    validators: [
+      (value) => specializedValidators.isUUID(value, 'conceptId')
+    ]
+  },
+  format: {
+    required: true,
+    validators: exportGraphSchema.format.validators
+  },
+  data: {
+    required: true,
+    validators: [
+      (value) => {
+        if (!value || (typeof value !== 'object' && typeof value !== 'string')) {
+          throw new Error('data must be an object or string');
+        }
+      }
+    ]
+  },
+  mergeStrategy: {
+    required: false,
+    validators: [
+      (value) => stringValidators.isOneOf(
+        value,
+        ['replace', 'merge', 'append'],
+        'mergeStrategy'
+      )
+    ]
+  }
+};
 
-// Schema for generating a graph from theses
-const graphFromThesesSchema = Joi.object({
-  thesis_ids: Joi.array().items(Joi.string().uuid()).min(1).required()
-    .messages({
-      'array.min': 'At least one thesis ID is required',
-      'array.base': 'Thesis IDs must be an array',
-      'any.required': 'Thesis IDs are required'
-    }),
-  extractionLevel: Joi.string().valid('basic', 'detailed', 'comprehensive').default('detailed')
-    .messages({
-      'any.only': 'Extraction level must be one of: basic, detailed, comprehensive'
-    }),
-  createMissingCategories: Joi.boolean().default(true),
-  mergeSimilarCategories: Joi.boolean().default(true),
-  similarityThreshold: Joi.number().min(0).max(1).default(0.7)
-    .messages({
-      'number.base': 'Similarity threshold must be a number',
-      'number.min': 'Similarity threshold must be at least {{#limit}}',
-      'number.max': 'Similarity threshold cannot exceed {{#limit}}'
-    })
-});
+/**
+ * Схема для массовых операций с элементами графа
+ */
+const bulkGraphOperationSchema = {
+  operation: {
+    required: true,
+    validators: [
+      (value) => stringValidators.isOneOf(
+        value,
+        ['createCategories', 'createRelationships', 'updateCategories', 'updateRelationships', 'delete'],
+        'operation'
+      )
+    ]
+  },
+  elements: {
+    required: true,
+    validators: [
+      (value) => arrayValidators.isNonEmptyArray(value, 'elements'),
+      (value) => arrayValidators.hasArrayLength(value, 1, 100, 'elements')
+    ]
+  }
+};
 
-// Schema for category characteristics metadata
-const categoryCharacteristicsMetadataSchema = Joi.object({
-  field: Joi.string().valid('centrality', 'certainty', 'historical_significance').required()
-    .messages({
-      'any.only': 'Field must be one of: centrality, certainty, historical_significance',
-      'any.required': 'Field is required'
-    }),
-  value: characteristicSchema.required()
-    .messages({
-      'number.base': 'Value must be a number',
-      'number.integer': 'Value must be an integer',
-      'number.min': 'Value must be at least {{#limit}}',
-      'number.max': 'Value cannot exceed {{#limit}}',
-      'any.required': 'Value is required'
-    })
-});
+/**
+ * Схема для анализа структуры графа
+ */
+const analyzeGraphStructureSchema = {
+  conceptId: {
+    required: true,
+    validators: [
+      (value) => specializedValidators.isUUID(value, 'conceptId')
+    ]
+  },
+  analysisType: {
+    required: false,
+    validators: [
+      (value) => {
+        const validTypes = ['centrality', 'clustering', 'paths', 'communities', 'full'];
+        if (Array.isArray(value)) {
+          value.forEach((type, index) => {
+            stringValidators.isOneOf(type, validTypes, `analysisType[${index}]`);
+          });
+        } else {
+          stringValidators.isOneOf(value, validTypes, 'analysisType');
+        }
+      }
+    ]
+  }
+};
 
-// Schema for relationship characteristics metadata
-const relationshipCharacteristicsMetadataSchema = Joi.object({
-  field: Joi.string().valid('strength', 'certainty').required()
-    .messages({
-      'any.only': 'Field must be one of: strength, certainty',
-      'any.required': 'Field is required'
-    }),
-  value: characteristicSchema.required()
-    .messages({
-      'number.base': 'Value must be a number',
-      'number.integer': 'Value must be an integer',
-      'number.min': 'Value must be at least {{#limit}}',
-      'number.max': 'Value cannot exceed {{#limit}}',
-      'any.required': 'Value is required'
-    })
-});
+/**
+ * Создание валидаторов из схем
+ */
+const validateCreateCategory = createSchemaValidator(createCategorySchema);
+const validateUpdateCategory = createSchemaValidator(updateCategorySchema);
+const validateCreateRelationship = createSchemaValidator(createRelationshipSchema);
+const validateUpdateRelationship = createSchemaValidator(updateRelationshipSchema);
+const validateUpdateCharacteristics = createSchemaValidator(updateCharacteristicsSchema);
+const validateGenerateGraphFromTheses = createSchemaValidator(generateGraphFromThesesSchema);
+const validateValidateGraph = createSchemaValidator(validateGraphSchema);
+const validateEnrichGraph = createSchemaValidator(enrichGraphSchema);
+const validateExportGraph = createSchemaValidator(exportGraphSchema);
+const validateImportGraph = createSchemaValidator(importGraphSchema);
+const validateBulkGraphOperation = createSchemaValidator(bulkGraphOperationSchema);
+const validateAnalyzeGraphStructure = createSchemaValidator(analyzeGraphStructureSchema);
 
 module.exports = {
+  // Схемы
   createCategorySchema,
   updateCategorySchema,
   createRelationshipSchema,
   updateRelationshipSchema,
-  updateGraphStatusSchema,
-  graphValidationSchema,
-  graphEnrichmentSchema,
-  graphFromThesesSchema,
-  categoryCharacteristicsMetadataSchema,
-  relationshipCharacteristicsMetadataSchema
+  updateCharacteristicsSchema,
+  generateGraphFromThesesSchema,
+  validateGraphSchema,
+  enrichGraphSchema,
+  exportGraphSchema,
+  importGraphSchema,
+  bulkGraphOperationSchema,
+  analyzeGraphStructureSchema,
+  
+  // Валидаторы
+  validateCreateCategory,
+  validateUpdateCategory,
+  validateCreateRelationship,
+  validateUpdateRelationship,
+  validateUpdateCharacteristics,
+  validateGenerateGraphFromTheses,
+  validateValidateGraph,
+  validateEnrichGraph,
+  validateExportGraph,
+  validateImportGraph,
+  validateBulkGraphOperation,
+  validateAnalyzeGraphStructure
 };

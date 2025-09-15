@@ -1,0 +1,179 @@
+version: '3.8'
+
+# This file contains overrides for development environment
+# It will be automatically loaded when running docker-compose up
+
+services:
+  # Frontend development overrides
+  frontend:
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+      - REACT_APP_DEBUG=true
+    stdin_open: true
+    tty: true
+    command: npm start
+
+  # Enable hot-reload for all Node.js services
+  api-gateway:
+    command: npm run dev
+    environment:
+      - DEBUG=api-gateway:*
+      - LOG_LEVEL=debug
+
+  user-service:
+    command: npm run dev
+    environment:
+      - DEBUG=user-service:*
+      - LOG_LEVEL=debug
+      - BCRYPT_ROUNDS=1  # Faster for development
+
+  concept-service:
+    command: npm run dev
+    environment:
+      - DEBUG=concept-service:*
+      - LOG_LEVEL=debug
+
+  graph-service:
+    command: npm run dev
+    environment:
+      - DEBUG=graph-service:*
+      - LOG_LEVEL=debug
+
+  thesis-service:
+    command: npm run dev
+    environment:
+      - DEBUG=thesis-service:*
+      - LOG_LEVEL=debug
+
+  synthesis-service:
+    command: npm run dev
+    environment:
+      - DEBUG=synthesis-service:*
+      - LOG_LEVEL=debug
+
+  claude-service:
+    command: npm run dev
+    environment:
+      - DEBUG=claude-service:*
+      - LOG_LEVEL=debug
+      - CLAUDE_API_MOCK=false  # Set to true to use mock responses
+
+  name-service:
+    command: npm run dev
+    environment:
+      - DEBUG=name-service:*
+      - LOG_LEVEL=debug
+
+  origin-service:
+    command: npm run dev
+    environment:
+      - DEBUG=origin-service:*
+      - LOG_LEVEL=debug
+
+  historical-service:
+    command: npm run dev
+    environment:
+      - DEBUG=historical-service:*
+      - LOG_LEVEL=debug
+
+  practical-service:
+    command: npm run dev
+    environment:
+      - DEBUG=practical-service:*
+      - LOG_LEVEL=debug
+
+  dialogue-service:
+    command: npm run dev
+    environment:
+      - DEBUG=dialogue-service:*
+      - LOG_LEVEL=debug
+
+  evolution-service:
+    command: npm run dev
+    environment:
+      - DEBUG=evolution-service:*
+      - LOG_LEVEL=debug
+
+  # Database development configurations
+  postgres:
+    environment:
+      - POSTGRES_LOG_STATEMENT=all
+    ports:
+      - "5432:5432"
+    command: >
+      postgres
+      -c log_statement=all
+      -c log_duration=on
+      -c log_min_duration_statement=100
+
+  neo4j:
+    environment:
+      - NEO4J_dbms_logs_debug_level=DEBUG
+      - NEO4J_dbms_connector_bolt_thread__pool__min__size=5
+      - NEO4J_dbms_connector_bolt_thread__pool__max__size=400
+
+  mongodb:
+    command: mongod --profile=2 --slowms=100
+
+  # Enable debug for infrastructure services
+  redis:
+    command: redis-server --loglevel debug
+
+  rabbitmq:
+    environment:
+      - RABBITMQ_LOG_LEVEL=debug
+
+  # Development tools
+  prometheus:
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--log.level=debug'
+
+  grafana:
+    environment:
+      - GF_LOG_LEVEL=debug
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+
+  # Development-only services
+  adminer:
+    image: adminer
+    container_name: philosophy-adminer
+    ports:
+      - "8081:8080"
+    networks:
+      - philosophy-network
+    depends_on:
+      - postgres
+
+  mongo-express:
+    image: mongo-express
+    container_name: philosophy-mongo-express
+    ports:
+      - "8082:8081"
+    environment:
+      - ME_CONFIG_MONGODB_SERVER=mongodb
+      - ME_CONFIG_MONGODB_PORT=27017
+      - ME_CONFIG_BASICAUTH_USERNAME=admin
+      - ME_CONFIG_BASICAUTH_PASSWORD=admin123
+    networks:
+      - philosophy-network
+    depends_on:
+      - mongodb
+
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: philosophy-redis-commander
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8083:8081"
+    networks:
+      - philosophy-network
+    depends_on:
+      - redis

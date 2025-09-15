@@ -1,99 +1,84 @@
 /**
- * Template for Neo4j repositories
- * Replace all instances of `GraphEntity` with the actual entity name
- * Replace all instances of `graphEntity` with the lowercase entity name
- * Replace the label and relationship types as appropriate
+ * Шаблон репозитория Neo4j
+ * Базовый шаблон для создания репозиториев для работы с Neo4j
+ * 
+ * Использование:
+ * 1. Скопировать файл в нужную директорию
+ * 2. Заменить {{NodeType}} на тип узла (например, Concept)
+ * 3. Заменить {{nodeType}} на тип узла в camelCase (например, concept)
+ * 4. Заменить {{nodeLabel}} на метку узла в Neo4j (например, Concept)
+ * 5. Адаптировать свойства и отношения под специфику графа
  */
 
-const { defaultLogger } = require('../../../shared/lib/logging/logger');
-const { driver } = require('../../../shared/lib/db/neo4j/driver');
-const { GraphEntity, GraphRelationship } = require('../../../shared/models/Graph');
+const { neo4jDriver } = require('../../../shared/lib/db/neo4j/driver');
+const { cypherBuilder } = require('../../../shared/lib/db/neo4j/cypherBuilder');
+const logger = require('../../../shared/lib/logging/logger');
+const { v4: uuidv4 } = require('uuid');
 
-/**
- * Repository for GraphEntity in Neo4j
- */
-class Neo4jGraphEntityRepository {
-  /**
-   * Create a new Neo4jGraphEntityRepository
-   * @param {Object} [options={}] - Repository options
-   * @param {Object} [options.driver] - Neo4j driver instance
-   * @param {string} [options.label='GraphEntity'] - Node label
-   * @param {Object} [logger=defaultLogger] - Logger instance
-   */
-  constructor(options = {}, logger = defaultLogger) {
-    this.driver = options.driver || driver;
-    this.label = options.label || 'GraphEntity';
-    this.logger = logger;
+class {{NodeType}}Repository {
+  constructor(driver = neo4jDriver) {
+    this.driver = driver;
+    this.nodeLabel = '{{nodeLabel}}';
+    
+    // Базовые свойства узла
+    this.nodeProperties = [
+      'id',
+      'name',
+      'description',
+      'created_at',
+      'updated_at',
+      'properties'
+      // Добавить специфичные свойства
+    ];
+    
+    // Типы отношений
+    this.relationshipTypes = {
+      RELATES_TO: 'RELATES_TO',
+      BELONGS_TO: 'BELONGS_TO',
+      CONTAINS: 'CONTAINS'
+      // Добавить специфичные типы отношений
+    };
   }
 
   /**
-   * Find all graph entities
-   * @param {Object} [options={}] - Query options
-   * @param {number} [options.limit] - Maximum number of results
-   * @param {number} [options.skip] - Number of results to skip
-   * @param {string} [options.orderBy] - Property to order by
-   * @param {string} [options.orderDirection='ASC'] - Order direction ('ASC' or 'DESC')
-   * @param {Object} [options.filters={}] - Filter criteria
-   * @returns {Promise<Array<GraphEntity>>} Promise resolving to array of graph entities
+   * Получение сессии Neo4j
    */
-  async findAll(options = {}) {
-    const session = this.driver.session();
+  getSession(mode = 'READ') {
+    return this.driver.session({
+      defaultAccessMode: mode === 'WRITE' ? 'WRITE' : 'READ'
+    });
+  }
+
+  /**
+   * Создание узла
+   */
+  async createNode(properties) {
+    const session = this.getSession('WRITE');
     
     try {
-      const { 
-        limit, 
-        skip, 
-        orderBy, 
-        orderDirection = 'ASC', 
-        filters = {} 
-      } = options;
+      const nodeId = properties.id || uuidv4();
+      const timestamp = new Date().toISOString();
       
-      // Build the query
-      let queryParts = [`MATCH (n:${this.label})`];
-      let queryParams = {};
+      const nodeData = {
+        ...properties,
+        id: nodeId,
+        created_at: properties.created_at || timestamp,
+        updated_at: properties.updated_at || timestamp
+      };
       
-      // Add filters if provided
-      if (Object.keys(filters).length > 0) {
-        const { whereClause, filterParams } = this._buildWhereClause(filters);
-        
-        if (whereClause) {
-          queryParts.push(`WHERE ${whereClause}`);
-          queryParams = { ...queryParams, ...filterParams };
-        }
-      }
+      const cypher = `
+        CREATE (n:${this.nodeLabel} $properties)
+        RETURN n
+      `;
       
-      // Add return clause
-      queryParts.push('RETURN n');
+      const result = await session.run(cypher, { properties: nodeData });
+      const node = result.records[0].get('n');
       
-      // Add ordering if provided
-      if (orderBy) {
-        queryParts.push(`ORDER BY n.${orderBy} ${orderDirection}`);
-      }
+      logger.info('{{NodeType}} node created', { id: nodeId });
       
-      // Add pagination
-      if (limit !== undefined) {
-        queryParts.push('LIMIT $limit');
-        queryParams.limit = limit;
-        
-        if (skip !== undefined) {
-          queryParts.push('SKIP $skip');
-          queryParams.skip = skip;
-        }
-      }
-      
-      // Execute the query
-      const result = await session.run(queryParts.join(' '), queryParams);
-      
-      // Convert records to graph entities
-      return result.records.map(record => {
-        const node = record.get('n');
-        return this._nodeToEntity(node);
-      });
+      return this.nodeToObject(node);
     } catch (error) {
-      this.logger.error(`Error finding graph entities: ${error.message}`, {
-        options,
-        stack: error.stack
-      });
+      logger.error('Error creating {{nodeType}} node', { error });
       throw error;
     } finally {
       await session.close();
@@ -101,32 +86,30 @@ class Neo4jGraphEntityRepository {
   }
 
   /**
-   * Find a graph entity by ID
-   * @param {string} id - Entity ID
-   * @returns {Promise<GraphEntity|null>} Promise resolving to entity or null if not found
+   * Получение узла по ID
    */
-  async findById(id) {
-    const session = this.driver.session();
+  async findNodeById(id) {
+    const session = this.getSession('READ');
     
     try {
-      const query = `
-        MATCH (n:${this.label} {entity_id: $id})
+      const cypher = `
+        MATCH (n:${this.nodeLabel} {id: $id})
         RETURN n
       `;
       
-      const result = await session.run(query, { id });
+      const result = await session.run(cypher, { id });
       
       if (result.records.length === 0) {
         return null;
       }
       
       const node = result.records[0].get('n');
-      return this._nodeToEntity(node);
+      
+      logger.debug('{{NodeType}} node found', { id });
+      
+      return this.nodeToObject(node);
     } catch (error) {
-      this.logger.error(`Error finding graph entity by ID ${id}: ${error.message}`, {
-        id,
-        stack: error.stack
-      });
+      logger.error('Error finding {{nodeType}} node', { id, error });
       throw error;
     } finally {
       await session.close();
@@ -134,58 +117,49 @@ class Neo4jGraphEntityRepository {
   }
 
   /**
-   * Check if a graph entity exists
-   * @param {string} id - Entity ID
-   * @returns {Promise<boolean>} Promise resolving to whether entity exists
+   * Получение всех узлов с пагинацией
    */
-  async exists(id) {
-    const session = this.driver.session();
+  async findAllNodes({ skip = 0, limit = 20, orderBy = 'created_at', order = 'DESC' } = {}) {
+    const session = this.getSession('READ');
     
     try {
-      const query = `
-        MATCH (n:${this.label} {entity_id: $id})
-        RETURN COUNT(n) > 0 AS exists
+      // Запрос для подсчета общего количества
+      const countCypher = `
+        MATCH (n:${this.nodeLabel})
+        RETURN count(n) as total
       `;
       
-      const result = await session.run(query, { id });
+      const countResult = await session.run(countCypher);
+      const total = countResult.records[0].get('total').toNumber();
       
-      return result.records[0].get('exists');
-    } catch (error) {
-      this.logger.error(`Error checking if graph entity exists: ${error.message}`, {
-        id,
-        stack: error.stack
-      });
-      throw error;
-    } finally {
-      await session.close();
-    }
-  }
-
-  /**
-   * Create a new graph entity
-   * @param {GraphEntity} entity - Entity to create
-   * @returns {Promise<GraphEntity>} Promise resolving to created entity
-   */
-  async create(entity) {
-    const session = this.driver.session();
-    
-    try {
-      const properties = this._entityToProperties(entity);
-      
-      const query = `
-        CREATE (n:${this.label} $properties)
+      // Запрос для получения узлов
+      const cypher = `
+        MATCH (n:${this.nodeLabel})
         RETURN n
+        ORDER BY n.${orderBy} ${order}
+        SKIP $skip
+        LIMIT $limit
       `;
       
-      const result = await session.run(query, { properties });
-      
-      const node = result.records[0].get('n');
-      return this._nodeToEntity(node);
-    } catch (error) {
-      this.logger.error(`Error creating graph entity: ${error.message}`, {
-        entity,
-        stack: error.stack
+      const result = await session.run(cypher, { 
+        skip: parseInt(skip), 
+        limit: parseInt(limit) 
       });
+      
+      const nodes = result.records.map(record => 
+        this.nodeToObject(record.get('n'))
+      );
+      
+      logger.debug('{{NodeType}} nodes retrieved', { count: nodes.length, total });
+      
+      return {
+        nodes,
+        total,
+        skip,
+        limit
+      };
+    } catch (error) {
+      logger.error('Error finding all {{nodeType}} nodes', { error });
       throw error;
     } finally {
       await session.close();
@@ -193,40 +167,42 @@ class Neo4jGraphEntityRepository {
   }
 
   /**
-   * Update a graph entity
-   * @param {string} id - Entity ID
-   * @param {GraphEntity} entity - Entity with updated values
-   * @returns {Promise<GraphEntity>} Promise resolving to updated entity
+   * Обновление узла
    */
-  async update(id, entity) {
-    const session = this.driver.session();
+  async updateNode(id, properties) {
+    const session = this.getSession('WRITE');
     
     try {
-      const properties = this._entityToProperties(entity);
+      const updateData = {
+        ...properties,
+        updated_at: new Date().toISOString()
+      };
       
-      // Remove id from properties (since we're using it in the MATCH clause)
-      delete properties.entity_id;
+      // Удаляем id из обновляемых свойств
+      delete updateData.id;
       
-      const query = `
-        MATCH (n:${this.label} {entity_id: $id})
+      const cypher = `
+        MATCH (n:${this.nodeLabel} {id: $id})
         SET n += $properties
         RETURN n
       `;
       
-      const result = await session.run(query, { id, properties });
+      const result = await session.run(cypher, { 
+        id, 
+        properties: updateData 
+      });
       
       if (result.records.length === 0) {
         return null;
       }
       
       const node = result.records[0].get('n');
-      return this._nodeToEntity(node);
+      
+      logger.info('{{NodeType}} node updated', { id });
+      
+      return this.nodeToObject(node);
     } catch (error) {
-      this.logger.error(`Error updating graph entity ${id}: ${error.message}`, {
-        id,
-        entity,
-        stack: error.stack
-      });
+      logger.error('Error updating {{nodeType}} node', { id, error });
       throw error;
     } finally {
       await session.close();
@@ -234,28 +210,38 @@ class Neo4jGraphEntityRepository {
   }
 
   /**
-   * Delete a graph entity
-   * @param {string} id - Entity ID
-   * @returns {Promise<boolean>} Promise resolving to whether the entity was deleted
+   * Удаление узла
    */
-  async delete(id) {
-    const session = this.driver.session();
+  async deleteNode(id) {
+    const session = this.getSession('WRITE');
     
     try {
-      const query = `
-        MATCH (n:${this.label} {entity_id: $id})
+      // Сначала проверяем, существует ли узел
+      const checkCypher = `
+        MATCH (n:${this.nodeLabel} {id: $id})
+        RETURN count(n) as count
+      `;
+      
+      const checkResult = await session.run(checkCypher, { id });
+      const exists = checkResult.records[0].get('count').toNumber() > 0;
+      
+      if (!exists) {
+        return false;
+      }
+      
+      // Удаляем узел и все его отношения
+      const cypher = `
+        MATCH (n:${this.nodeLabel} {id: $id})
         DETACH DELETE n
-        RETURN COUNT(n) > 0 AS deleted
       `;
       
-      const result = await session.run(query, { id });
+      await session.run(cypher, { id });
       
-      return result.records[0].get('deleted');
+      logger.info('{{NodeType}} node deleted', { id });
+      
+      return true;
     } catch (error) {
-      this.logger.error(`Error deleting graph entity ${id}: ${error.message}`, {
-        id,
-        stack: error.stack
-      });
+      logger.error('Error deleting {{nodeType}} node', { id, error });
       throw error;
     } finally {
       await session.close();
@@ -263,95 +249,93 @@ class Neo4jGraphEntityRepository {
   }
 
   /**
-   * Find graph entities connected to a specific entity
-   * @param {string} id - Entity ID
-   * @param {string} [relationshipType] - Relationship type (optional)
-   * @param {string} [direction='OUTGOING'] - Relationship direction ('OUTGOING', 'INCOMING', or 'BOTH')
-   * @returns {Promise<Array<Object>>} Promise resolving to array of { entity, relationship } objects
+   * Создание отношения между узлами
    */
-  async findConnected(id, relationshipType, direction = 'OUTGOING') {
-    const session = this.driver.session();
+  async createRelationship(fromId, toId, type, properties = {}) {
+    const session = this.getSession('WRITE');
     
     try {
-      // Build relationship pattern based on direction
-      let relationshipPattern;
-      if (direction === 'OUTGOING') {
-        relationshipPattern = '-[r]->';
-      } else if (direction === 'INCOMING') {
-        relationshipPattern = '<-[r]-';
-      } else {
-        relationshipPattern = '-[r]-';
-      }
+      const relationshipData = {
+        ...properties,
+        created_at: new Date().toISOString()
+      };
       
-      // Add relationship type if provided
-      if (relationshipType) {
-        relationshipPattern = relationshipPattern.replace('r', `r:${relationshipType}`);
-      }
-      
-      const query = `
-        MATCH (n:${this.label} {entity_id: $id})${relationshipPattern}(m:${this.label})
-        RETURN m, r
-      `;
-      
-      const result = await session.run(query, { id });
-      
-      return result.records.map(record => {
-        const connectedNode = record.get('m');
-        const relationship = record.get('r');
-        
-        return {
-          entity: this._nodeToEntity(connectedNode),
-          relationship: this._relationshipToObject(relationship)
-        };
-      });
-    } catch (error) {
-      this.logger.error(`Error finding connected graph entities: ${error.message}`, {
-        id,
-        relationshipType,
-        direction,
-        stack: error.stack
-      });
-      throw error;
-    } finally {
-      await session.close();
-    }
-  }
-
-  /**
-   * Create a relationship between two graph entities
-   * @param {string} fromId - ID of the source entity
-   * @param {string} toId - ID of the target entity
-   * @param {string} relationshipType - Relationship type
-   * @param {Object} [properties={}] - Relationship properties
-   * @returns {Promise<Object>} Promise resolving to created relationship
-   */
-  async createRelationship(fromId, toId, relationshipType, properties = {}) {
-    const session = this.driver.session();
-    
-    try {
-      const query = `
-        MATCH (from:${this.label} {entity_id: $fromId})
-        MATCH (to:${this.label} {entity_id: $toId})
-        CREATE (from)-[r:${relationshipType} $properties]->(to)
+      const cypher = `
+        MATCH (from:${this.nodeLabel} {id: $fromId})
+        MATCH (to:${this.nodeLabel} {id: $toId})
+        CREATE (from)-[r:${type} $properties]->(to)
         RETURN r
       `;
       
-      const result = await session.run(query, { fromId, toId, properties });
+      const result = await session.run(cypher, {
+        fromId,
+        toId,
+        properties: relationshipData
+      });
+      
+      if (result.records.length === 0) {
+        throw new Error('One or both nodes not found');
+      }
+      
+      logger.info('Relationship created', { fromId, toId, type });
+      
+      const relationship = result.records[0].get('r');
+      return this.relationshipToObject(relationship);
+    } catch (error) {
+      logger.error('Error creating relationship', { fromId, toId, type, error });
+      throw error;
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Получение узла с его отношениями
+   */
+  async findNodeWithRelationships(id, relationshipTypes = null, depth = 1) {
+    const session = this.getSession('READ');
+    
+    try {
+      let relationshipPattern = '';
+      if (relationshipTypes && relationshipTypes.length > 0) {
+        const types = relationshipTypes.join('|');
+        relationshipPattern = `:${types}`;
+      }
+      
+      const cypher = `
+        MATCH (n:${this.nodeLabel} {id: $id})
+        OPTIONAL MATCH path = (n)-[r${relationshipPattern}*1..${depth}]-(related)
+        RETURN n, collect(DISTINCT r) as relationships, collect(DISTINCT related) as relatedNodes
+      `;
+      
+      const result = await session.run(cypher, { id });
       
       if (result.records.length === 0) {
         return null;
       }
       
-      const relationship = result.records[0].get('r');
-      return this._relationshipToObject(relationship);
-    } catch (error) {
-      this.logger.error(`Error creating relationship: ${error.message}`, {
-        fromId,
-        toId,
-        relationshipType,
-        properties,
-        stack: error.stack
+      const record = result.records[0];
+      const node = this.nodeToObject(record.get('n'));
+      const relationships = record.get('relationships').map(r => 
+        r ? this.relationshipToObject(r) : null
+      ).filter(Boolean);
+      const relatedNodes = record.get('relatedNodes').map(n => 
+        n ? this.nodeToObject(n) : null
+      ).filter(Boolean);
+      
+      logger.debug('{{NodeType}} node with relationships retrieved', { 
+        id, 
+        relationshipCount: relationships.length,
+        relatedNodeCount: relatedNodes.length 
       });
+      
+      return {
+        node,
+        relationships,
+        relatedNodes
+      };
+    } catch (error) {
+      logger.error('Error finding node with relationships', { id, error });
       throw error;
     } finally {
       await session.close();
@@ -359,112 +343,36 @@ class Neo4jGraphEntityRepository {
   }
 
   /**
-   * Update a relationship between two graph entities
-   * @param {string} fromId - ID of the source entity
-   * @param {string} toId - ID of the target entity
-   * @param {string} relationshipType - Relationship type
-   * @param {Object} properties - Relationship properties
-   * @returns {Promise<Object>} Promise resolving to updated relationship
+   * Поиск узлов по свойствам
    */
-  async updateRelationship(fromId, toId, relationshipType, properties) {
-    const session = this.driver.session();
+  async findNodesByProperties(properties) {
+    const session = this.getSession('READ');
     
     try {
-      const query = `
-        MATCH (from:${this.label} {entity_id: $fromId})-[r:${relationshipType}]->(to:${this.label} {entity_id: $toId})
-        SET r += $properties
-        RETURN r
-      `;
+      const whereConditions = Object.entries(properties)
+        .map(([key, value]) => `n.${key} = $${key}`)
+        .join(' AND ');
       
-      const result = await session.run(query, { fromId, toId, properties });
-      
-      if (result.records.length === 0) {
-        return null;
-      }
-      
-      const relationship = result.records[0].get('r');
-      return this._relationshipToObject(relationship);
-    } catch (error) {
-      this.logger.error(`Error updating relationship: ${error.message}`, {
-        fromId,
-        toId,
-        relationshipType,
-        properties,
-        stack: error.stack
-      });
-      throw error;
-    } finally {
-      await session.close();
-    }
-  }
-
-  /**
-   * Delete a relationship between two graph entities
-   * @param {string} fromId - ID of the source entity
-   * @param {string} toId - ID of the target entity
-   * @param {string} [relationshipType] - Relationship type (optional)
-   * @returns {Promise<boolean>} Promise resolving to whether the relationship was deleted
-   */
-  async deleteRelationship(fromId, toId, relationshipType) {
-    const session = this.driver.session();
-    
-    try {
-      // Build relationship pattern
-      let relationshipPattern = 'r';
-      if (relationshipType) {
-        relationshipPattern = `r:${relationshipType}`;
-      }
-      
-      const query = `
-        MATCH (from:${this.label} {entity_id: $fromId})-[${relationshipPattern}]->(to:${this.label} {entity_id: $toId})
-        DELETE r
-        RETURN COUNT(r) > 0 AS deleted
-      `;
-      
-      const result = await session.run(query, { fromId, toId });
-      
-      return result.records[0].get('deleted');
-    } catch (error) {
-      this.logger.error(`Error deleting relationship: ${error.message}`, {
-        fromId,
-        toId,
-        relationshipType,
-        stack: error.stack
-      });
-      throw error;
-    } finally {
-      await session.close();
-    }
-  }
-
-  /**
-   * Find entities by a property value
-   * @param {string} property - Property name
-   * @param {*} value - Property value
-   * @returns {Promise<Array<GraphEntity>>} Promise resolving to array of entities
-   */
-  async findByProperty(property, value) {
-    const session = this.driver.session();
-    
-    try {
-      const query = `
-        MATCH (n:${this.label})
-        WHERE n.${property} = $value
+      const cypher = `
+        MATCH (n:${this.nodeLabel})
+        WHERE ${whereConditions}
         RETURN n
       `;
       
-      const result = await session.run(query, { value });
+      const result = await session.run(cypher, properties);
       
-      return result.records.map(record => {
-        const node = record.get('n');
-        return this._nodeToEntity(node);
+      const nodes = result.records.map(record => 
+        this.nodeToObject(record.get('n'))
+      );
+      
+      logger.debug('{{NodeType}} nodes found by properties', { 
+        count: nodes.length,
+        properties 
       });
+      
+      return nodes;
     } catch (error) {
-      this.logger.error(`Error finding entities by property ${property}: ${error.message}`, {
-        property,
-        value,
-        stack: error.stack
-      });
+      logger.error('Error finding nodes by properties', { properties, error });
       throw error;
     } finally {
       await session.close();
@@ -472,40 +380,37 @@ class Neo4jGraphEntityRepository {
   }
 
   /**
-   * Run a custom Cypher query
-   * @param {string} query - Cypher query
-   * @param {Object} [params={}] - Query parameters
-   * @returns {Promise<Array<Object>>} Promise resolving to query results
+   * Полнотекстовый поиск узлов
    */
-  async runCustomQuery(query, params = {}) {
-    const session = this.driver.session();
+  async searchNodes(searchText, limit = 20) {
+    const session = this.getSession('READ');
     
     try {
-      const result = await session.run(query, params);
+      const cypher = `
+        MATCH (n:${this.nodeLabel})
+        WHERE n.name CONTAINS $searchText 
+           OR n.description CONTAINS $searchText
+        RETURN n
+        LIMIT $limit
+      `;
       
-      return result.records.map(record => {
-        const obj = {};
-        
-        record.keys.forEach(key => {
-          const value = record.get(key);
-          
-          if (value && value.constructor && value.constructor.name === 'Node') {
-            obj[key] = this._nodeToEntity(value);
-          } else if (value && value.constructor && value.constructor.name === 'Relationship') {
-            obj[key] = this._relationshipToObject(value);
-          } else {
-            obj[key] = value;
-          }
-        });
-        
-        return obj;
+      const result = await session.run(cypher, { 
+        searchText, 
+        limit: parseInt(limit) 
       });
+      
+      const nodes = result.records.map(record => 
+        this.nodeToObject(record.get('n'))
+      );
+      
+      logger.debug('{{NodeType}} nodes search completed', { 
+        searchText,
+        found: nodes.length 
+      });
+      
+      return nodes;
     } catch (error) {
-      this.logger.error(`Error running custom query: ${error.message}`, {
-        query,
-        params,
-        stack: error.stack
-      });
+      logger.error('Error searching nodes', { searchText, error });
       throw error;
     } finally {
       await session.close();
@@ -513,130 +418,205 @@ class Neo4jGraphEntityRepository {
   }
 
   /**
-   * Convert a Neo4j node to a graph entity
-   * @param {Object} node - Neo4j node
-   * @returns {GraphEntity} Graph entity
-   * @private
+   * Получение кратчайшего пути между узлами
    */
-  _nodeToEntity(node) {
-    const properties = node.properties;
+  async findShortestPath(fromId, toId, maxLength = 5) {
+    const session = this.getSession('READ');
     
-    // Map Neo4j node properties to GraphEntity properties
-    return new GraphEntity({
-      id: properties.entity_id,
-      name: properties.name,
-      type: properties.type,
-      // Map other properties as needed
-      createdAt: properties.created_at,
-      updatedAt: properties.updated_at
-    });
-  }
-
-  /**
-   * Convert a graph entity to Neo4j node properties
-   * @param {GraphEntity} entity - Graph entity
-   * @returns {Object} Neo4j node properties
-   * @private
-   */
-  _entityToProperties(entity) {
-    // Map GraphEntity properties to Neo4j node properties
-    return {
-      entity_id: entity.id,
-      name: entity.name,
-      type: entity.type,
-      // Map other properties as needed
-      created_at: entity.createdAt instanceof Date 
-        ? entity.createdAt.toISOString() 
-        : entity.createdAt,
-      updated_at: entity.updatedAt instanceof Date 
-        ? entity.updatedAt.toISOString() 
-        : entity.updatedAt
-    };
-  }
-
-  /**
-   * Convert a Neo4j relationship to an object
-   * @param {Object} relationship - Neo4j relationship
-   * @returns {Object} Relationship object
-   * @private
-   */
-  _relationshipToObject(relationship) {
-    return {
-      id: relationship.identity.toString(),
-      type: relationship.type,
-      properties: relationship.properties,
-      startNodeId: relationship.start.toString(),
-      endNodeId: relationship.end.toString()
-    };
-  }
-
-  /**
-   * Build a WHERE clause from filters
-   * @param {Object} filters - Filter criteria
-   * @returns {Object} Object with whereClause and filterParams
-   * @private
-   */
-  _buildWhereClause(filters) {
-    const clauses = [];
-    const filterParams = {};
-    
-    // Process each filter
-    Object.entries(filters).forEach(([key, value]) => {
-      // Create a parameter name that is safe for Neo4j
-      const paramName = key.replace(/[^a-zA-Z0-9]/g, '_');
+    try {
+      const cypher = `
+        MATCH (from:${this.nodeLabel} {id: $fromId})
+        MATCH (to:${this.nodeLabel} {id: $toId})
+        MATCH path = shortestPath((from)-[*..${maxLength}]-(to))
+        RETURN path
+      `;
       
-      if (value === null) {
-        clauses.push(`n.${key} IS NULL`);
-      } else if (Array.isArray(value)) {
-        if (value.length > 0) {
-          clauses.push(`n.${key} IN $${paramName}`);
-          filterParams[paramName] = value;
-        }
-      } else if (typeof value === 'object') {
-        // Handle special operators
-        if (value.$lt !== undefined) {
-          clauses.push(`n.${key} < $${paramName}_lt`);
-          filterParams[`${paramName}_lt`] = value.$lt;
-        }
-        if (value.$lte !== undefined) {
-          clauses.push(`n.${key} <= $${paramName}_lte`);
-          filterParams[`${paramName}_lte`] = value.$lte;
-        }
-        if (value.$gt !== undefined) {
-          clauses.push(`n.${key} > $${paramName}_gt`);
-          filterParams[`${paramName}_gt`] = value.$gt;
-        }
-        if (value.$gte !== undefined) {
-          clauses.push(`n.${key} >= $${paramName}_gte`);
-          filterParams[`${paramName}_gte`] = value.$gte;
-        }
-        if (value.$ne !== undefined) {
-          clauses.push(`n.${key} <> $${paramName}_ne`);
-          filterParams[`${paramName}_ne`] = value.$ne;
-        }
-        if (value.$contains !== undefined) {
-          clauses.push(`n.${key} CONTAINS $${paramName}_contains`);
-          filterParams[`${paramName}_contains`] = value.$contains;
-        }
-        if (value.$startsWith !== undefined) {
-          clauses.push(`n.${key} STARTS WITH $${paramName}_startsWith`);
-          filterParams[`${paramName}_startsWith`] = value.$startsWith;
-        }
-        if (value.$endsWith !== undefined) {
-          clauses.push(`n.${key} ENDS WITH $${paramName}_endsWith`);
-          filterParams[`${paramName}_endsWith`] = value.$endsWith;
-        }
-      } else {
-        clauses.push(`n.${key} = $${paramName}`);
-        filterParams[paramName] = value;
+      const result = await session.run(cypher, { fromId, toId });
+      
+      if (result.records.length === 0) {
+        return null;
       }
-    });
+      
+      const path = result.records[0].get('path');
+      
+      return {
+        nodes: path.segments.map(segment => 
+          this.nodeToObject(segment.start)
+        ).concat([this.nodeToObject(path.segments[path.segments.length - 1].end)]),
+        relationships: path.segments.map(segment => 
+          this.relationshipToObject(segment.relationship)
+        ),
+        length: path.length
+      };
+    } catch (error) {
+      logger.error('Error finding shortest path', { fromId, toId, error });
+      throw error;
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Выполнение произвольного Cypher-запроса
+   */
+  async executeCypher(cypher, parameters = {}) {
+    const session = this.getSession();
+    
+    try {
+      const result = await session.run(cypher, parameters);
+      
+      logger.debug('Custom Cypher query executed', { 
+        recordCount: result.records.length 
+      });
+      
+      return result.records;
+    } catch (error) {
+      logger.error('Error executing Cypher query', { cypher, error });
+      throw error;
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Начало транзакции
+   */
+  async beginTransaction() {
+    const session = this.getSession('WRITE');
+    const tx = session.beginTransaction();
+    return { session, tx };
+  }
+
+  /**
+   * Коммит транзакции
+   */
+  async commitTransaction({ session, tx }) {
+    try {
+      await tx.commit();
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Откат транзакции
+   */
+  async rollbackTransaction({ session, tx }) {
+    try {
+      await tx.rollback();
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Массовое создание узлов
+   */
+  async bulkCreateNodes(nodesData) {
+    const session = this.getSession('WRITE');
+    const tx = session.beginTransaction();
+    
+    try {
+      const createdNodes = [];
+      
+      for (const nodeData of nodesData) {
+        const nodeId = nodeData.id || uuidv4();
+        const timestamp = new Date().toISOString();
+        
+        const properties = {
+          ...nodeData,
+          id: nodeId,
+          created_at: nodeData.created_at || timestamp,
+          updated_at: nodeData.updated_at || timestamp
+        };
+        
+        const cypher = `
+          CREATE (n:${this.nodeLabel} $properties)
+          RETURN n
+        `;
+        
+        const result = await tx.run(cypher, { properties });
+        const node = result.records[0].get('n');
+        createdNodes.push(this.nodeToObject(node));
+      }
+      
+      await tx.commit();
+      
+      logger.info('{{NodeType}} nodes bulk created', { count: createdNodes.length });
+      
+      return createdNodes;
+    } catch (error) {
+      await tx.rollback();
+      logger.error('Error bulk creating nodes', { error });
+      throw error;
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Получение статистики по узлам
+   */
+  async getNodeStatistics() {
+    const session = this.getSession('READ');
+    
+    try {
+      const cypher = `
+        MATCH (n:${this.nodeLabel})
+        WITH count(n) as totalNodes
+        MATCH ()-[r]->()
+        RETURN totalNodes, count(DISTINCT r) as totalRelationships
+      `;
+      
+      const result = await session.run(cypher);
+      
+      if (result.records.length === 0) {
+        return { totalNodes: 0, totalRelationships: 0 };
+      }
+      
+      const record = result.records[0];
+      
+      return {
+        totalNodes: record.get('totalNodes').toNumber(),
+        totalRelationships: record.get('totalRelationships').toNumber()
+      };
+    } catch (error) {
+      logger.error('Error getting node statistics', { error });
+      throw error;
+    } finally {
+      await session.close();
+    }
+  }
+
+  // Вспомогательные методы
+
+  /**
+   * Преобразование узла Neo4j в объект
+   */
+  nodeToObject(node) {
+    if (!node) return null;
     
     return {
-      whereClause: clauses.join(' AND '),
-      filterParams
+      ...node.properties,
+      _id: node.identity.toString(),
+      _labels: node.labels
+    };
+  }
+
+  /**
+   * Преобразование отношения Neo4j в объект
+   */
+  relationshipToObject(relationship) {
+    if (!relationship) return null;
+    
+    return {
+      ...relationship.properties,
+      _id: relationship.identity.toString(),
+      _type: relationship.type,
+      _startNodeId: relationship.start.toString(),
+      _endNodeId: relationship.end.toString()
     };
   }
 }
 
-module.exports = Neo4jGraphEntityRepository;
+module.exports = {{NodeType}}Repository;

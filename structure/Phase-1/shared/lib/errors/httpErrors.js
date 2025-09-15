@@ -1,129 +1,187 @@
 /**
- * HTTP-specific error classes that extend the base AppError
- * Provide standardized error types for common HTTP error scenarios
+ * HTTP-specific error classes for the Philosophy Service
+ * These provide convenient shortcuts for common HTTP errors
  */
 
 const AppError = require('./AppError');
-const errorCodes = require('../../constants/errorCodes');
+const { ERROR_CODES } = require('../../constants/errorCodes');
 
 /**
- * 400 Bad Request error
- * Used when the request is malformed or invalid
+ * BadRequestError - 400
  */
 class BadRequestError extends AppError {
-  constructor(message = 'Bad Request', code = errorCodes.BAD_REQUEST, data = null, originalError = null) {
-    super(message, code, 400, data, originalError);
+  constructor(message = 'Bad Request', details = null) {
+    super(ERROR_CODES.BAD_REQUEST, message, details);
   }
 }
 
 /**
- * 401 Unauthorized error
- * Used when authentication is required and has failed or not been provided
+ * UnauthorizedError - 401
  */
 class UnauthorizedError extends AppError {
-  constructor(message = 'Unauthorized', code = errorCodes.UNAUTHORIZED, data = null, originalError = null) {
-    super(message, code, 401, data, originalError);
+  constructor(message = 'Unauthorized', details = null) {
+    super(ERROR_CODES.UNAUTHORIZED, message, details);
   }
 }
 
 /**
- * 403 Forbidden error
- * Used when the user is authenticated but doesn't have permission to access the resource
+ * ForbiddenError - 403
  */
 class ForbiddenError extends AppError {
-  constructor(message = 'Forbidden', code = errorCodes.FORBIDDEN, data = null, originalError = null) {
-    super(message, code, 403, data, originalError);
+  constructor(message = 'Forbidden', details = null) {
+    super(ERROR_CODES.INSUFFICIENT_PERMISSIONS, message, details);
   }
 }
 
 /**
- * 404 Not Found error
- * Used when the requested resource could not be found
+ * NotFoundError - 404
  */
 class NotFoundError extends AppError {
-  constructor(message = 'Not Found', code = errorCodes.NOT_FOUND, data = null, originalError = null) {
-    super(message, code, 404, data, originalError);
+  constructor(resource = 'Resource', id = null) {
+    const message = id ? `${resource} with id ${id} not found` : `${resource} not found`;
+    const details = id ? { resource, id } : { resource };
+    super(ERROR_CODES.NOT_FOUND, message, details);
   }
 }
 
 /**
- * 409 Conflict error
- * Used when the request could not be completed due to a conflict with the current state of the resource
+ * ConflictError - 409
  */
 class ConflictError extends AppError {
-  constructor(message = 'Conflict', code = errorCodes.CONFLICT, data = null, originalError = null) {
-    super(message, code, 409, data, originalError);
+  constructor(message = 'Conflict', details = null) {
+    super(ERROR_CODES.DUPLICATE_KEY, message, details);
   }
 }
 
 /**
- * 422 Unprocessable Entity error
- * Used when the request was well-formed but contains semantic errors
+ * ValidationError - 400
  */
 class ValidationError extends AppError {
-  constructor(message = 'Validation Error', code = errorCodes.VALIDATION_ERROR, data = null, originalError = null) {
-    super(message, code, 422, data, originalError);
+  constructor(errors, message = 'Validation failed') {
+    const details = Array.isArray(errors) ? { errors } : errors;
+    super(ERROR_CODES.VALIDATION_ERROR, message, details);
+  }
+
+  /**
+   * Create validation error for missing required fields
+   * @param {string[]} fields - Array of missing field names
+   * @returns {ValidationError}
+   */
+  static missingFields(fields) {
+    const errors = fields.map(field => ({
+      field,
+      message: `${field} is required`
+    }));
+    return new ValidationError(errors, 'Missing required fields');
+  }
+
+  /**
+   * Create validation error for invalid field values
+   * @param {Object} fieldErrors - Object with field names as keys and error messages as values
+   * @returns {ValidationError}
+   */
+  static invalidFields(fieldErrors) {
+    const errors = Object.entries(fieldErrors).map(([field, message]) => ({
+      field,
+      message
+    }));
+    return new ValidationError(errors, 'Invalid field values');
   }
 }
 
 /**
- * 429 Too Many Requests error
- * Used when the user has sent too many requests in a given amount of time
+ * TooManyRequestsError - 429
  */
 class TooManyRequestsError extends AppError {
-  constructor(message = 'Too Many Requests', code = errorCodes.TIMEOUT, data = null, originalError = null) {
-    super(message, code, 429, data, originalError);
+  constructor(retryAfter = null) {
+    const message = 'Too many requests';
+    const details = retryAfter ? { retryAfter } : null;
+    super(ERROR_CODES.CLAUDE_RATE_LIMIT, message, details);
   }
 }
 
 /**
- * 500 Internal Server Error
- * Used for unexpected server errors
+ * InternalServerError - 500
  */
 class InternalServerError extends AppError {
-  constructor(message = 'Internal Server Error', code = errorCodes.INTERNAL_SERVER_ERROR, data = null, originalError = null) {
-    super(message, code, 500, data, originalError);
+  constructor(message = 'Internal server error', cause = null) {
+    super(ERROR_CODES.INTERNAL_SERVER_ERROR, message, null, cause);
   }
 }
 
 /**
- * 503 Service Unavailable error
- * Used when the server is not ready to handle the request
+ * ServiceUnavailableError - 503
  */
 class ServiceUnavailableError extends AppError {
-  constructor(message = 'Service Unavailable', code = errorCodes.SERVICE_UNAVAILABLE, data = null, originalError = null) {
-    super(message, code, 503, data, originalError);
+  constructor(service = null, retryAfter = null) {
+    const message = service ? `${service} is temporarily unavailable` : 'Service temporarily unavailable';
+    const details = { service, retryAfter };
+    super(ERROR_CODES.SERVICE_UNAVAILABLE, message, details);
   }
 }
 
 /**
- * Create appropriate HTTP error from status code
+ * GatewayTimeoutError - 504
+ */
+class GatewayTimeoutError extends AppError {
+  constructor(service = null) {
+    const message = service ? `${service} request timeout` : 'Gateway timeout';
+    const details = service ? { service } : null;
+    super(ERROR_CODES.CLAUDE_TIMEOUT, message, details);
+  }
+}
+
+/**
+ * NotImplementedError - 501
+ */
+class NotImplementedError extends AppError {
+  constructor(feature = null) {
+    const message = feature ? `${feature} is not implemented` : 'Not implemented';
+    const details = feature ? { feature } : null;
+    super(ERROR_CODES.NOT_IMPLEMENTED, message, details);
+  }
+}
+
+/**
+ * Helper function to create appropriate HTTP error based on status code
  * @param {number} statusCode - HTTP status code
  * @param {string} message - Error message
- * @param {number} [code] - Error code from errorCodes constant
- * @param {Object} [data] - Additional error data
+ * @param {Object} details - Error details
  * @returns {AppError} Appropriate error instance
  */
-function createHttpError(statusCode, message, code, data) {
+function createHttpError(statusCode, message = null, details = null) {
   switch (statusCode) {
     case 400:
-      return new BadRequestError(message, code, data);
+      return new BadRequestError(message, details);
     case 401:
-      return new UnauthorizedError(message, code, data);
+      return new UnauthorizedError(message, details);
     case 403:
-      return new ForbiddenError(message, code, data);
+      return new ForbiddenError(message, details);
     case 404:
-      return new NotFoundError(message, code, data);
+      return new NotFoundError(message, details);
     case 409:
-      return new ConflictError(message, code, data);
-    case 422:
-      return new ValidationError(message, code, data);
+      return new ConflictError(message, details);
     case 429:
-      return new TooManyRequestsError(message, code, data);
+      return new TooManyRequestsError(details?.retryAfter);
+    case 500:
+      return new InternalServerError(message);
+    case 501:
+      return new NotImplementedError(message);
     case 503:
-      return new ServiceUnavailableError(message, code, data);
+      return new ServiceUnavailableError(message, details?.retryAfter);
+    case 504:
+      return new GatewayTimeoutError(message);
     default:
-      return new InternalServerError(message, code, data);
+      if (statusCode >= 400 && statusCode < 500) {
+        return new BadRequestError(message || `Client error: ${statusCode}`, details);
+      } else if (statusCode >= 500) {
+        return new InternalServerError(message || `Server error: ${statusCode}`);
+      }
+      return new AppError(
+        ERROR_CODES.INTERNAL_SERVER_ERROR,
+        message || `Unexpected status code: ${statusCode}`,
+        details
+      );
   }
 }
 
@@ -137,5 +195,7 @@ module.exports = {
   TooManyRequestsError,
   InternalServerError,
   ServiceUnavailableError,
+  GatewayTimeoutError,
+  NotImplementedError,
   createHttpError
 };

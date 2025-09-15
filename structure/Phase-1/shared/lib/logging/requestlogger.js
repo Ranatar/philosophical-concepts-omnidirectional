@@ -1,184 +1,291 @@
 /**
- * HTTP request logging middleware
- * Provides standardized request logging for Express applications
+ * Request logging middleware for the Philosophy Service
+ * Provides detailed logging of HTTP requests and responses
  */
 
-const { defaultLogger, createChildLogger } = require('./logger');
+const morgan = require('morgan');
 const { v4: uuidv4 } = require('uuid');
+const { logger } = require('./logger');
 
 /**
- * Generate and attach a request ID if one doesn't exist
- * @param {Object} req - Express request object
- * @returns {string} Request ID
+ * Generate a unique request ID
+ * @returns {string} UUID v4
  */
-function getOrCreateRequestId(req) {
-  if (!req.id) {
-    req.id = req.headers['x-request-id'] || uuidv4();
-  }
-  
-  return req.id;
+function generateRequestId() {
+  return uuidv4();
 }
 
 /**
- * Get client IP address from request
- * @param {Object} req - Express request object
- * @returns {string} Client IP address
+ * Custom token to get request ID
  */
-function getClientIp(req) {
-  return req.headers['x-forwarded-for'] || req.ip || req.socket.remoteAddress || 'unknown';
-}
+morgan.token('request-id', (req) => req.id);
 
 /**
- * Sanitize sensitive request data for logging
- * @param {Object} req - Express request object
- * @returns {Object} Sanitized request data
+ * Custom token to get user ID if authenticated
  */
-function sanitizeRequest(req) {
-  const sanitized = {
-    method: req.method,
-    url: req.originalUrl || req.url,
-    params: { ...req.params },
-    query: { ...req.query },
-    headers: { ...req.headers },
-    body: { ...req.body }
-  };
+morgan.token('user-id', (req) => req.user?.user_id || 'anonymous');
+
+/**
+ * Custom token to get response time in milliseconds
+ */
+morgan.token('response-time-ms', (req, res) => {
+  if (!req._startTime) return '0';
+  const diff = process.hrtime(req._startTime);
+  const ms = diff[0] * 1e3 + diff[1] * 1e-6;
+  return ms.toFixed(3);
+});
+
+/**
+ * Custom token to get request body (sanitized)
+ */
+morgan.token('body', (req) => {
+  if (!req.body || Object.keys(req.body).length === 0) return '-';
   
-  // Remove sensitive headers
-  const sensitiveHeaders = ['authorization', 'cookie', 'x-auth-token'];
-  sensitiveHeaders.forEach(header => {
-    if (sanitized.headers[header]) {
-      sanitized.headers[header] = '[REDACTED]';
+  // Sanitize sensitive data
+  const sanitized = { ...req.body };
+  const sensitiveFields = ['password', 'token', 'apiKey', 'secret', 'authorization'];
+  
+  sensitiveFields.forEach(field => {
+    if (sanitized[field]) {
+      sanitized[field] = '[REDACTED]';
     }
   });
   
-  // Remove sensitive fields from body
-  const sensitiveFields = ['password', 'token', 'key', 'secret', 'apiKey', 'apiSecret'];
-  if (typeof sanitized.body === 'object' && sanitized.body !== null) {
-    Object.keys(sanitized.body).forEach(key => {
-      if (sensitiveFields.some(field => key.toLowerCase().includes(field.toLowerCase()))) {
-        sanitized.body[key] = '[REDACTED]';
+  return JSON.stringify(sanitized);
+});
+
+/**
+ * Custom token to get query parameters
+ */
+morgan.token('query', (req) => {
+  if (!req.query || Object.keys(req.query).length === 0) return '-';
+  return JSON.stringify(req.query);
+});
+
+/**
+ * Custom token to get error message if any
+ */
+morgan.token('error-message', (req, res) => {
+  return res.locals.errorMessage || '-';
+});
+
+/**
+ * Custom token to get service name
+ */
+morgan.token('service', (req) => {
+  return req.app.get('service-name') || 'unknown-service';
+});
+
+/**
+ * Create custom Morgan format for structured logging
+ */
+const structuredFormat = (tokens, req, res) => {
+  const log = {
+    timestamp: new Date().toISOString(),
+    requestId: tokens['request-id'](req, res),
+    service: tokens['service'](req, res),
+    method: tokens.method(req, res),
+    url: tokens.url(req, res),
+    status: parseInt(tokens.status(req, res)),
+    contentLength: tokens.res(req, res, 'content-length') || '0',
+    responseTime: parseFloat(tokens['response-time-ms'](req, res)),
+    userAgent: tokens['user-agent'](req, res),
+    ip: tokens['remote-addr'](req, res),
+    userId: tokens['user-id'](req, res),
+    referrer: tokens.referrer(req, res) || '-',
+    httpVersion: tokens['http-version'](req, res),
+    query: tokens.query(req, res),
+    body: process.env.LOG_REQUEST_BODY === 'true' ? tokens.body(req, res) : '-',
+    error: tokens['error-message'](req, res)
+  };
+
+  return JSON.stringify(log);
+};
+
+/**
+ * Create request logging middleware
+ * @param {Object} options - Configuration options
+ * @returns {Function} Express middleware
+ */
+function createRequestLogger(options = {}) {
+  const {
+    skip = false,
+    skipPaths = ['/health', '/metrics', '/favicon.ico'],
+    skipMethods = ['OPTIONS'],
+    logBody = process.env.LOG_REQUEST_BODY === 'true',
+    immediate = false
+  } = options;
+
+  // Skip function
+  const skipFunction = (req, res) => {
+    if (skip) return true;
+    if (skipMethods.includes(req.method)) return true;
+    if (skipPaths.some(path => req.path.startsWith(path))) return true;
+    return false;
+  };
+
+  // Create Morgan middleware with custom format
+  const morganMiddleware = morgan(structuredFormat, {
+    skip: skipFunction,
+    immediate,
+    stream: {
+      write: (message) => {
+        try {
+          const log = JSON.parse(message);
+          
+          // Determine log level based on status code
+          let level = 'http';
+          if (log.status >= 500) level = 'error';
+          else if (log.status >= 400) level = 'warn';
+          
+          logger[level]('HTTP Request', log);
+        } catch (error) {
+          // Fallback to plain text logging
+          logger.http(message.trim());
+        }
       }
-    });
-  }
-  
-  return sanitized;
+    }
+  });
+
+  // Return middleware chain
+  return [
+    // Add request ID
+    (req, res, next) => {
+      req.id = req.headers['x-request-id'] || generateRequestId();
+      res.setHeader('X-Request-ID', req.id);
+      
+      // Store start time for accurate response time calculation
+      req._startTime = process.hrtime();
+      
+      // Add request ID to logger context for this request
+      req.logger = logger.child({ requestId: req.id });
+      
+      next();
+    },
+    
+    // Morgan middleware
+    morganMiddleware,
+    
+    // Log request details (if verbose logging enabled)
+    (req, res, next) => {
+      if (process.env.LOG_LEVEL === 'debug' || process.env.LOG_LEVEL === 'verbose') {
+        req.logger.verbose('Incoming request', {
+          method: req.method,
+          url: req.url,
+          headers: req.headers,
+          query: req.query,
+          body: logBody ? req.body : '[BODY LOGGING DISABLED]'
+        });
+      }
+      next();
+    }
+  ];
 }
 
 /**
- * Create a request logger middleware
- * @param {Object} options - Configuration options
- * @param {winston.Logger} [options.logger=defaultLogger] - Logger instance
- * @param {boolean} [options.logBody=true] - Whether to log request body
- * @param {boolean} [options.logResponse=false] - Whether to log response body
- * @param {number} [options.maxBodyLength=1000] - Maximum body length to log
- * @returns {Function} Express middleware function
+ * Error logging middleware
+ * Should be placed after all other middleware
  */
-function createRequestLogger({
-  logger = defaultLogger,
-  logBody = true,
-  logResponse = false,
-  maxBodyLength = 1000
-} = {}) {
-  return function requestLogger(req, res, next) {
-    // Generate or get request ID
-    const requestId = getOrCreateRequestId(req);
+function errorLoggingMiddleware(err, req, res, next) {
+  // Store error message for Morgan to pick up
+  res.locals.errorMessage = err.message;
+  
+  // Log the error with context
+  const errorContext = {
+    requestId: req.id,
+    method: req.method,
+    url: req.url,
+    userId: req.user?.user_id,
+    ip: req.ip,
+    userAgent: req.get('user-agent')
+  };
+  
+  req.logger.logError(err, errorContext);
+  
+  next(err);
+}
+
+/**
+ * Create slow request logging middleware
+ * Logs requests that exceed a certain threshold
+ */
+function createSlowRequestLogger(threshold = 1000) {
+  return (req, res, next) => {
+    const start = Date.now();
     
-    // Set request ID in response header
-    res.setHeader('X-Request-ID', requestId);
-    
-    // Create child logger with request context
-    const requestLogger = createChildLogger({
-      requestId,
-      method: req.method,
-      url: req.originalUrl || req.url,
-      ip: getClientIp(req)
-    }, logger);
-    
-    // Attach logger to request for use in other middlewares/routes
-    req.logger = requestLogger;
-    
-    // Record request start time
-    const startTime = process.hrtime();
-    
-    // Log request
-    const sanitizedReq = sanitizeRequest(req);
-    let requestLog = {
-      message: `Request started: ${req.method} ${req.originalUrl || req.url}`,
-      params: sanitizedReq.params,
-      query: sanitizedReq.query
+    // Override end method
+    const originalEnd = res.end;
+    res.end = function(...args) {
+      const duration = Date.now() - start;
+      
+      if (duration > threshold) {
+        req.logger.warn('Slow request detected', {
+          method: req.method,
+          url: req.url,
+          duration: `${duration}ms`,
+          threshold: `${threshold}ms`,
+          userId: req.user?.user_id,
+          query: req.query
+        });
+      }
+      
+      originalEnd.apply(res, args);
     };
     
-    // Include body if configured to do so
-    if (logBody && req.body) {
-      let bodyStr = JSON.stringify(sanitizedReq.body);
-      if (bodyStr.length > maxBodyLength) {
-        bodyStr = bodyStr.substring(0, maxBodyLength) + '... [truncated]';
-      }
-      
-      requestLog.body = JSON.parse(bodyStr);
-    }
+    next();
+  };
+}
+
+/**
+ * Create audit logging middleware for sensitive operations
+ */
+function createAuditLogger() {
+  const auditOperations = [
+    { method: 'POST', pattern: /\/users$/ },
+    { method: 'PUT', pattern: /\/users\/[\w-]+$/ },
+    { method: 'DELETE', pattern: /\/users\/[\w-]+$/ },
+    { method: 'POST', pattern: /\/concepts$/ },
+    { method: 'DELETE', pattern: /\/concepts\/[\w-]+$/ },
+    { method: 'POST', pattern: /\/synthesis$/ },
+    { method: 'POST', pattern: /\/api-keys$/ },
+    { method: 'DELETE', pattern: /\/api-keys\/[\w-]+$/ }
+  ];
+  
+  return (req, res, next) => {
+    const shouldAudit = auditOperations.some(op => 
+      op.method === req.method && op.pattern.test(req.path)
+    );
     
-    requestLogger.info(requestLog);
-    
-    // Capture response data if configured
-    if (logResponse) {
+    if (shouldAudit) {
       const originalSend = res.send;
-      res.send = function(body) {
-        res.responseBody = body;
-        return originalSend.apply(res, arguments);
+      res.send = function(data) {
+        const auditLog = {
+          timestamp: new Date().toISOString(),
+          requestId: req.id,
+          userId: req.user?.user_id || 'anonymous',
+          method: req.method,
+          path: req.path,
+          query: req.query,
+          body: req.body,
+          statusCode: res.statusCode,
+          ip: req.ip,
+          userAgent: req.get('user-agent')
+        };
+        
+        logger.info('AUDIT', auditLog);
+        
+        return originalSend.call(this, data);
       };
     }
-    
-    // Log on response finish
-    res.on('finish', () => {
-      // Calculate request duration
-      const hrDuration = process.hrtime(startTime);
-      const durationMs = (hrDuration[0] * 1000) + (hrDuration[1] / 1000000);
-      
-      let responseLog = {
-        message: `Request completed: ${req.method} ${req.originalUrl || req.url}`,
-        statusCode: res.statusCode,
-        duration: durationMs.toFixed(2) + 'ms'
-      };
-      
-      // Include response body if configured
-      if (logResponse && res.responseBody) {
-        try {
-          let responseBody = typeof res.responseBody === 'string' 
-            ? JSON.parse(res.responseBody) 
-            : res.responseBody;
-            
-          let bodyStr = JSON.stringify(responseBody);
-          if (bodyStr.length > maxBodyLength) {
-            bodyStr = bodyStr.substring(0, maxBodyLength) + '... [truncated]';
-          }
-          
-          responseLog.body = JSON.parse(bodyStr);
-        } catch (err) {
-          // If response is not JSON, include as string
-          let respStr = String(res.responseBody);
-          if (respStr.length > maxBodyLength) {
-            respStr = respStr.substring(0, maxBodyLength) + '... [truncated]';
-          }
-          
-          responseLog.body = respStr;
-        }
-      }
-      
-      // Log at appropriate level based on status code
-      if (res.statusCode >= 500) {
-        requestLogger.error(responseLog);
-      } else if (res.statusCode >= 400) {
-        requestLogger.warn(responseLog);
-      } else {
-        requestLogger.info(responseLog);
-      }
-    });
     
     next();
   };
 }
 
 module.exports = {
-  createRequestLogger
+  createRequestLogger,
+  errorLoggingMiddleware,
+  createSlowRequestLogger,
+  createAuditLogger,
+  generateRequestId
 };

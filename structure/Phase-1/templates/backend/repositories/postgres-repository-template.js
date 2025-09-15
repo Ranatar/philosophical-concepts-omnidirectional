@@ -1,379 +1,571 @@
 /**
- * Template for PostgreSQL repositories
- * Replace all instances of `Entity` with the actual entity name
- * Replace all instances of `entity` with the lowercase entity name
- * Replace all instances of `entities` with the plural lowercase entity name
- * Replace with appropriate table name and column names
+ * Шаблон репозитория PostgreSQL
+ * Базовый шаблон для создания репозиториев для работы с PostgreSQL
+ * 
+ * Использование:
+ * 1. Скопировать файл в нужную директорию
+ * 2. Заменить {{EntityName}} на название сущности (например, User)
+ * 3. Заменить {{entityName}} на название сущности в camelCase (например, user)
+ * 4. Заменить {{tableName}} на название таблицы в БД (например, users)
+ * 5. Заменить {{primaryKey}} на название первичного ключа (например, user_id)
+ * 6. Адаптировать поля и методы под специфику сущности
  */
 
-const { defaultLogger } = require('../../../shared/lib/logging/logger');
-const { client } = require('../../../shared/lib/db/postgres/client');
-const Entity = require('../../../shared/models/Entity');
+const { postgresClient } = require('../../../shared/lib/db/postgres/client');
+const { queryBuilder } = require('../../../shared/lib/db/postgres/queryBuilder');
+const logger = require('../../../shared/lib/logging/logger');
 
-/**
- * Repository for Entity in PostgreSQL
- */
-class PostgresEntityRepository {
-  /**
-   * Create a new PostgresEntityRepository
-   * @param {Object} [options={}] - Repository options
-   * @param {Object} [logger=defaultLogger] - Logger instance
-   */
-  constructor(options = {}, logger = defaultLogger) {
-    this.tableName = options.tableName || 'entities';
-    this.client = options.client || client;
-    this.logger = logger;
+class {{EntityName}}Repository {
+  constructor(dbClient = postgresClient) {
+    this.db = dbClient;
+    this.tableName = '{{tableName}}';
+    this.primaryKey = '{{primaryKey}}';
+    
+    // Маппинг полей для выборки
+    this.selectFields = [
+      '{{primaryKey}}',
+      'name',
+      'description',
+      'created_at',
+      'updated_at',
+      'created_by',
+      'is_active'
+      // Добавить специфичные поля
+    ];
+    
+    // Поля, которые можно обновлять
+    this.updateableFields = [
+      'name',
+      'description',
+      'updated_at',
+      'is_active'
+      // Добавить специфичные поля
+    ];
   }
 
   /**
-   * Find all entities with pagination and filtering
-   * @param {number} page - Page number
-   * @param {number} pageSize - Page size
-   * @param {string} [sortBy] - Sort field
-   * @param {string} [sortOrder='asc'] - Sort order ('asc' or 'desc')
-   * @param {Object} [filters={}] - Filter criteria
-   * @returns {Promise<Object>} Promise resolving to { items, total } object
+   * Получение всех записей с пагинацией и фильтрацией
    */
-  async findAll(page, pageSize, sortBy, sortOrder = 'asc', filters = {}) {
+  async findAll({ page = 1, limit = 20, sort = 'created_at', order = 'DESC', filters = {} }) {
+    const offset = (page - 1) * limit;
+    
     try {
-      // Calculate offset
-      const offset = (page - 1) * pageSize;
-      
-      // Build the query
-      let query = `SELECT * FROM ${this.tableName}`;
-      let countQuery = `SELECT COUNT(*) FROM ${this.tableName}`;
-      let queryParams = [];
-      
-      // Add filters if provided
-      if (Object.keys(filters).length > 0) {
-        const { whereClause, filterParams } = this._buildWhereClause(filters);
-        
-        if (whereClause) {
-          query += ` WHERE ${whereClause}`;
-          countQuery += ` WHERE ${whereClause}`;
-          queryParams = [...filterParams];
-        }
-      }
-      
-      // Add sorting if provided
-      if (sortBy) {
-        const sanitizedSortBy = this._sanitizeColumnName(sortBy);
-        const sanitizedSortOrder = sortOrder.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
-        
-        query += ` ORDER BY ${sanitizedSortBy} ${sanitizedSortOrder}`;
-      } else {
-        // Default sorting by ID or creation date
-        query += ` ORDER BY entity_id ASC`;
-      }
-      
-      // Add pagination
-      query += ` LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}`;
-      queryParams.push(pageSize, offset);
-      
-      // Execute the queries
-      const [itemsResult, countResult] = await Promise.all([
-        this.client.query(query, queryParams),
-        this.client.query(countQuery, queryParams.slice(0, -2)) // Exclude pagination params
-      ]);
-      
-      // Convert rows to entities
-      const items = itemsResult.rows.map(row => this._rowToEntity(row));
-      const total = parseInt(countResult.rows[0].count, 10);
-      
-      return { items, total };
-    } catch (error) {
-      this.logger.error(`Error finding entities: ${error.message}`, {
+      // Строим базовый запрос
+      let query = queryBuilder
+        .select(this.selectFields)
+        .from(this.tableName);
+
+      // Применяем фильтры
+      query = this.applyFilters(query, filters);
+
+      // Получаем общее количество
+      const countQuery = query.clone().count(`${this.primaryKey} as total`);
+      const [{ total }] = await this.db.raw(countQuery.toString());
+
+      // Добавляем сортировку и пагинацию
+      query = query
+        .orderBy(sort, order)
+        .limit(limit)
+        .offset(offset);
+
+      // Выполняем запрос
+      const items = await this.db.raw(query.toString());
+
+      logger.debug('{{EntityName}} findAll executed', {
+        total: parseInt(total),
         page,
-        pageSize,
-        sortBy,
-        sortOrder,
-        filters,
-        stack: error.stack
+        limit,
+        itemsCount: items.length
       });
+
+      return {
+        items,
+        total: parseInt(total),
+        page,
+        limit,
+        totalPages: Math.ceil(parseInt(total) / limit)
+      };
+    } catch (error) {
+      logger.error('Error in {{entityName}} findAll', { error });
       throw error;
     }
   }
 
   /**
-   * Find an entity by ID
-   * @param {string} id - Entity ID
-   * @returns {Promise<Entity|null>} Promise resolving to entity or null if not found
+   * Получение записи по ID
    */
   async findById(id) {
     try {
-      const query = `SELECT * FROM ${this.tableName} WHERE entity_id = $1`;
-      const result = await this.client.query(query, [id]);
+      const query = queryBuilder
+        .select(this.selectFields)
+        .from(this.tableName)
+        .where(this.primaryKey, id)
+        .limit(1);
+
+      const result = await this.db.raw(query.toString());
       
-      if (result.rows.length === 0) {
+      logger.debug('{{EntityName}} findById executed', { id, found: result.length > 0 });
+      
+      return result[0] || null;
+    } catch (error) {
+      logger.error('Error in {{entityName}} findById', { id, error });
+      throw error;
+    }
+  }
+
+  /**
+   * Получение записей по списку ID
+   */
+  async findByIds(ids) {
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return [];
+    }
+
+    try {
+      const query = queryBuilder
+        .select(this.selectFields)
+        .from(this.tableName)
+        .whereIn(this.primaryKey, ids);
+
+      const result = await this.db.raw(query.toString());
+      
+      logger.debug('{{EntityName}} findByIds executed', { 
+        requestedCount: ids.length,
+        foundCount: result.length 
+      });
+      
+      return result;
+    } catch (error) {
+      logger.error('Error in {{entityName}} findByIds', { ids, error });
+      throw error;
+    }
+  }
+
+  /**
+   * Создание новой записи
+   */
+  async create(data) {
+    try {
+      // Подготавливаем данные
+      const preparedData = this.prepareInsertData(data);
+      
+      const query = queryBuilder
+        .insert(preparedData)
+        .into(this.tableName)
+        .returning(this.selectFields);
+
+      const [created] = await this.db.raw(query.toString());
+      
+      logger.info('{{EntityName}} created', { id: created[this.primaryKey] });
+      
+      return created;
+    } catch (error) {
+      logger.error('Error in {{entityName}} create', { error });
+      
+      // Обработка специфичных ошибок PostgreSQL
+      if (error.code === '23505') {
+        throw new Error('Duplicate entry');
+      }
+      if (error.code === '23503') {
+        throw new Error('Foreign key constraint violation');
+      }
+      
+      throw error;
+    }
+  }
+
+  /**
+   * Массовое создание записей
+   */
+  async bulkCreate(dataArray) {
+    if (!Array.isArray(dataArray) || dataArray.length === 0) {
+      return [];
+    }
+
+    const client = await this.db.getClient();
+    
+    try {
+      await client.query('BEGIN');
+      
+      const created = [];
+      
+      for (const data of dataArray) {
+        const preparedData = this.prepareInsertData(data);
+        
+        const query = queryBuilder
+          .insert(preparedData)
+          .into(this.tableName)
+          .returning(this.selectFields);
+        
+        const result = await client.query(query.toString());
+        created.push(result.rows[0]);
+      }
+      
+      await client.query('COMMIT');
+      
+      logger.info('{{EntityName}} bulk created', { count: created.length });
+      
+      return created;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      logger.error('Error in {{entityName}} bulkCreate', { error });
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Обновление записи
+   */
+  async update(id, data) {
+    try {
+      // Подготавливаем данные
+      const preparedData = this.prepareUpdateData(data);
+      
+      const query = queryBuilder
+        .update(preparedData)
+        .table(this.tableName)
+        .where(this.primaryKey, id)
+        .returning(this.selectFields);
+
+      const [updated] = await this.db.raw(query.toString());
+      
+      if (!updated) {
         return null;
       }
       
-      return this._rowToEntity(result.rows[0]);
+      logger.info('{{EntityName}} updated', { id });
+      
+      return updated;
     } catch (error) {
-      this.logger.error(`Error finding entity by ID ${id}: ${error.message}`, {
-        id,
-        stack: error.stack
-      });
+      logger.error('Error in {{entityName}} update', { id, error });
       throw error;
     }
   }
 
   /**
-   * Check if an entity exists
-   * @param {string} id - Entity ID
-   * @returns {Promise<boolean>} Promise resolving to whether entity exists
+   * Частичное обновление записи
    */
-  async exists(id) {
+  async patch(id, data) {
     try {
-      const query = `SELECT EXISTS(SELECT 1 FROM ${this.tableName} WHERE entity_id = $1)`;
-      const result = await this.client.query(query, [id]);
+      // Фильтруем только разрешенные поля
+      const allowedData = {};
+      for (const [key, value] of Object.entries(data)) {
+        if (this.updateableFields.includes(key)) {
+          allowedData[key] = value;
+        }
+      }
       
-      return result.rows[0].exists;
-    } catch (error) {
-      this.logger.error(`Error checking if entity exists: ${error.message}`, {
-        id,
-        stack: error.stack
-      });
-      throw error;
-    }
-  }
+      if (Object.keys(allowedData).length === 0) {
+        // Нечего обновлять, возвращаем текущую запись
+        return this.findById(id);
+      }
+      
+      // Добавляем updated_at
+      allowedData.updated_at = new Date();
+      
+      const query = queryBuilder
+        .update(allowedData)
+        .table(this.tableName)
+        .where(this.primaryKey, id)
+        .returning(this.selectFields);
 
-  /**
-   * Create a new entity
-   * @param {Entity} entity - Entity to create
-   * @returns {Promise<Entity>} Promise resolving to created entity
-   */
-  async create(entity) {
-    try {
-      const dbEntity = this._entityToDb(entity);
+      const [patched] = await this.db.raw(query.toString());
       
-      // Build query
-      const columns = Object.keys(dbEntity);
-      const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
-      const values = columns.map(col => dbEntity[col]);
-      
-      const query = `
-        INSERT INTO ${this.tableName} (${columns.join(', ')})
-        VALUES (${placeholders})
-        RETURNING *;
-      `;
-      
-      const result = await this.client.query(query, values);
-      
-      return this._rowToEntity(result.rows[0]);
-    } catch (error) {
-      this.logger.error(`Error creating entity: ${error.message}`, {
-        entity,
-        stack: error.stack
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Update an entity
-   * @param {string} id - Entity ID
-   * @param {Entity} entity - Entity with updated values
-   * @returns {Promise<Entity>} Promise resolving to updated entity
-   */
-  async update(id, entity) {
-    try {
-      const dbEntity = this._entityToDb(entity);
-      
-      // Remove id from values to update (since we're using it in the WHERE clause)
-      delete dbEntity.entity_id;
-      
-      // Build query
-      const columns = Object.keys(dbEntity);
-      const setClause = columns.map((col, i) => `${col} = $${i + 1}`).join(', ');
-      const values = columns.map(col => dbEntity[col]);
-      
-      // Add ID as the last parameter
-      values.push(id);
-      
-      const query = `
-        UPDATE ${this.tableName}
-        SET ${setClause}
-        WHERE entity_id = $${values.length}
-        RETURNING *;
-      `;
-      
-      const result = await this.client.query(query, values);
-      
-      if (result.rows.length === 0) {
+      if (!patched) {
         return null;
       }
       
-      return this._rowToEntity(result.rows[0]);
+      logger.info('{{EntityName}} patched', { id, fields: Object.keys(allowedData) });
+      
+      return patched;
     } catch (error) {
-      this.logger.error(`Error updating entity ${id}: ${error.message}`, {
-        id,
-        entity,
-        stack: error.stack
-      });
+      logger.error('Error in {{entityName}} patch', { id, error });
       throw error;
     }
   }
 
   /**
-   * Delete an entity
-   * @param {string} id - Entity ID
-   * @returns {Promise<boolean>} Promise resolving to whether the entity was deleted
+   * Удаление записи
    */
   async delete(id) {
     try {
-      const query = `DELETE FROM ${this.tableName} WHERE entity_id = $1 RETURNING entity_id`;
-      const result = await this.client.query(query, [id]);
+      const query = queryBuilder
+        .delete()
+        .from(this.tableName)
+        .where(this.primaryKey, id);
+
+      const result = await this.db.raw(query.toString());
       
-      return result.rows.length > 0;
+      const deleted = result.rowCount > 0;
+      
+      logger.info('{{EntityName}} delete attempted', { id, deleted });
+      
+      return deleted;
     } catch (error) {
-      this.logger.error(`Error deleting entity ${id}: ${error.message}`, {
-        id,
-        stack: error.stack
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Find entities by a field value
-   * @param {string} field - Field name
-   * @param {*} value - Field value
-   * @returns {Promise<Array<Entity>>} Promise resolving to array of entities
-   */
-  async findByField(field, value) {
-    try {
-      const sanitizedField = this._sanitizeColumnName(field);
+      logger.error('Error in {{entityName}} delete', { id, error });
       
-      const query = `SELECT * FROM ${this.tableName} WHERE ${sanitizedField} = $1`;
-      const result = await this.client.query(query, [value]);
-      
-      return result.rows.map(row => this._rowToEntity(row));
-    } catch (error) {
-      this.logger.error(`Error finding entities by field ${field}: ${error.message}`, {
-        field,
-        value,
-        stack: error.stack
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Convert a database row to an entity
-   * @param {Object} row - Database row
-   * @returns {Entity} Entity instance
-   * @private
-   */
-  _rowToEntity(row) {
-    // Map from DB column names to Entity property names
-    return new Entity({
-      id: row.entity_id,
-      name: row.name,
-      description: row.description,
-      // Map other fields as needed
-      createdAt: row.created_at,
-      updatedAt: row.updated_at
-    });
-  }
-
-  /**
-   * Convert an entity to a database object
-   * @param {Entity} entity - Entity instance
-   * @returns {Object} Database object
-   * @private
-   */
-  _entityToDb(entity) {
-    // Map from Entity property names to DB column names
-    return {
-      entity_id: entity.id,
-      name: entity.name,
-      description: entity.description,
-      // Map other fields as needed
-      created_at: entity.createdAt,
-      updated_at: entity.updatedAt
-    };
-  }
-
-  /**
-   * Build a WHERE clause from filters
-   * @param {Object} filters - Filter criteria
-   * @returns {Object} Object with whereClause and filterParams
-   * @private
-   */
-  _buildWhereClause(filters) {
-    const clauses = [];
-    const filterParams = [];
-    
-    // Process each filter
-    Object.entries(filters).forEach(([key, value]) => {
-      const sanitizedKey = this._sanitizeColumnName(key);
-      
-      if (value === null) {
-        clauses.push(`${sanitizedKey} IS NULL`);
-      } else if (Array.isArray(value)) {
-        if (value.length > 0) {
-          const placeholders = value.map((_, i) => `$${filterParams.length + i + 1}`).join(', ');
-          clauses.push(`${sanitizedKey} IN (${placeholders})`);
-          filterParams.push(...value);
-        }
-      } else if (typeof value === 'object') {
-        // Handle special operators
-        if (value.$lt !== undefined) {
-          clauses.push(`${sanitizedKey} < $${filterParams.length + 1}`);
-          filterParams.push(value.$lt);
-        }
-        if (value.$lte !== undefined) {
-          clauses.push(`${sanitizedKey} <= $${filterParams.length + 1}`);
-          filterParams.push(value.$lte);
-        }
-        if (value.$gt !== undefined) {
-          clauses.push(`${sanitizedKey} > $${filterParams.length + 1}`);
-          filterParams.push(value.$gt);
-        }
-        if (value.$gte !== undefined) {
-          clauses.push(`${sanitizedKey} >= $${filterParams.length + 1}`);
-          filterParams.push(value.$gte);
-        }
-        if (value.$ne !== undefined) {
-          clauses.push(`${sanitizedKey} != $${filterParams.length + 1}`);
-          filterParams.push(value.$ne);
-        }
-        if (value.$like !== undefined) {
-          clauses.push(`${sanitizedKey} LIKE $${filterParams.length + 1}`);
-          filterParams.push(value.$like);
-        }
-        if (value.$ilike !== undefined) {
-          clauses.push(`${sanitizedKey} ILIKE $${filterParams.length + 1}`);
-          filterParams.push(value.$ilike);
-        }
-      } else {
-        clauses.push(`${sanitizedKey} = $${filterParams.length + 1}`);
-        filterParams.push(value);
+      // Обработка ошибки внешнего ключа
+      if (error.code === '23503') {
+        throw new Error('Cannot delete: record is referenced by other entities');
       }
-    });
+      
+      throw error;
+    }
+  }
+
+  /**
+   * Массовое удаление записей
+   */
+  async bulkDelete(ids) {
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return 0;
+    }
+
+    try {
+      const query = queryBuilder
+        .delete()
+        .from(this.tableName)
+        .whereIn(this.primaryKey, ids);
+
+      const result = await this.db.raw(query.toString());
+      
+      logger.info('{{EntityName}} bulk deleted', { 
+        requestedCount: ids.length,
+        deletedCount: result.rowCount 
+      });
+      
+      return result.rowCount;
+    } catch (error) {
+      logger.error('Error in {{entityName}} bulkDelete', { ids, error });
+      throw error;
+    }
+  }
+
+  /**
+   * Поиск записей
+   */
+  async search({ query, fields = ['name', 'description'], page = 1, limit = 20 }) {
+    const offset = (page - 1) * limit;
+    
+    try {
+      // Построение поискового запроса
+      let searchQuery = queryBuilder
+        .select(this.selectFields)
+        .from(this.tableName);
+
+      // Добавляем условия поиска по каждому полю
+      if (query && query.trim()) {
+        const searchConditions = fields.map(field => 
+          `LOWER(${field}) LIKE LOWER('%${query}%')`
+        ).join(' OR ');
+        
+        searchQuery = searchQuery.whereRaw(`(${searchConditions})`);
+      }
+
+      // Получаем общее количество
+      const countQuery = searchQuery.clone().count(`${this.primaryKey} as total`);
+      const [{ total }] = await this.db.raw(countQuery.toString());
+
+      // Добавляем пагинацию
+      searchQuery = searchQuery
+        .orderBy('created_at', 'DESC')
+        .limit(limit)
+        .offset(offset);
+
+      // Выполняем запрос
+      const items = await this.db.raw(searchQuery.toString());
+
+      logger.debug('{{EntityName}} search executed', {
+        query,
+        total: parseInt(total),
+        itemsCount: items.length
+      });
+
+      return {
+        items,
+        total: parseInt(total),
+        page,
+        limit,
+        totalPages: Math.ceil(parseInt(total) / limit)
+      };
+    } catch (error) {
+      logger.error('Error in {{entityName}} search', { query, error });
+      throw error;
+    }
+  }
+
+  /**
+   * Проверка существования записи
+   */
+  async exists(id) {
+    try {
+      const query = queryBuilder
+        .select(this.primaryKey)
+        .from(this.tableName)
+        .where(this.primaryKey, id)
+        .limit(1);
+
+      const result = await this.db.raw(query.toString());
+      
+      return result.length > 0;
+    } catch (error) {
+      logger.error('Error in {{entityName}} exists', { id, error });
+      throw error;
+    }
+  }
+
+  /**
+   * Получение количества записей
+   */
+  async count(filters = {}) {
+    try {
+      let query = queryBuilder
+        .count(`${this.primaryKey} as total`)
+        .from(this.tableName);
+
+      // Применяем фильтры
+      query = this.applyFilters(query, filters);
+
+      const [{ total }] = await this.db.raw(query.toString());
+      
+      return parseInt(total);
+    } catch (error) {
+      logger.error('Error in {{entityName}} count', { error });
+      throw error;
+    }
+  }
+
+  /**
+   * Получение записей для экспорта
+   */
+  async findAllForExport(filters = {}) {
+    try {
+      let query = queryBuilder
+        .select('*') // Выбираем все поля для экспорта
+        .from(this.tableName);
+
+      // Применяем фильтры
+      query = this.applyFilters(query, filters);
+
+      // Сортировка для консистентности
+      query = query.orderBy('created_at', 'ASC');
+
+      const result = await this.db.raw(query.toString());
+      
+      logger.info('{{EntityName}} export data retrieved', { count: result.length });
+      
+      return result;
+    } catch (error) {
+      logger.error('Error in {{entityName}} findAllForExport', { error });
+      throw error;
+    }
+  }
+
+  /**
+   * Выполнение произвольного запроса
+   */
+  async executeRawQuery(sql, params = []) {
+    try {
+      const result = await this.db.raw(sql, params);
+      
+      logger.debug('Raw query executed', { 
+        sql: sql.substring(0, 100) + '...',
+        rowCount: result.rowCount 
+      });
+      
+      return result;
+    } catch (error) {
+      logger.error('Error executing raw query', { sql, error });
+      throw error;
+    }
+  }
+
+  /**
+   * Начало транзакции
+   */
+  async beginTransaction() {
+    const client = await this.db.getClient();
+    await client.query('BEGIN');
+    return client;
+  }
+
+  /**
+   * Коммит транзакции
+   */
+  async commitTransaction(client) {
+    await client.query('COMMIT');
+    client.release();
+  }
+
+  /**
+   * Откат транзакции
+   */
+  async rollbackTransaction(client) {
+    await client.query('ROLLBACK');
+    client.release();
+  }
+
+  // Вспомогательные методы
+
+  /**
+   * Применение фильтров к запросу
+   */
+  applyFilters(query, filters) {
+    for (const [field, value] of Object.entries(filters)) {
+      if (value === undefined || value === null) continue;
+      
+      // Специальная обработка для некоторых типов фильтров
+      if (field.endsWith('_from')) {
+        const actualField = field.replace('_from', '');
+        query = query.where(actualField, '>=', value);
+      } else if (field.endsWith('_to')) {
+        const actualField = field.replace('_to', '');
+        query = query.where(actualField, '<=', value);
+      } else if (field.endsWith('_like')) {
+        const actualField = field.replace('_like', '');
+        query = query.whereRaw(`LOWER(${actualField}) LIKE LOWER(?)`, [`%${value}%`]);
+      } else if (Array.isArray(value)) {
+        query = query.whereIn(field, value);
+      } else {
+        query = query.where(field, value);
+      }
+    }
+    
+    return query;
+  }
+
+  /**
+   * Подготовка данных для вставки
+   */
+  prepareInsertData(data) {
+    const now = new Date();
     
     return {
-      whereClause: clauses.join(' AND '),
-      filterParams
+      ...data,
+      created_at: data.created_at || now,
+      updated_at: data.updated_at || now,
+      is_active: data.is_active !== undefined ? data.is_active : true
     };
   }
 
   /**
-   * Sanitize a column name to prevent SQL injection
-   * @param {string} columnName - Column name to sanitize
-   * @returns {string} Sanitized column name
-   * @private
+   * Подготовка данных для обновления
    */
-  _sanitizeColumnName(columnName) {
-    // Simple validation to prevent SQL injection in column names
-    // Only allow alphanumeric characters, underscores, and snake_case
-    if (!/^[a-zA-Z0-9_]+$/.test(columnName)) {
-      throw new Error(`Invalid column name: ${columnName}`);
-    }
+  prepareUpdateData(data) {
+    const prepared = {
+      ...data,
+      updated_at: new Date()
+    };
     
-    return columnName;
+    // Удаляем поля, которые нельзя обновлять
+    delete prepared[this.primaryKey];
+    delete prepared.created_at;
+    delete prepared.created_by;
+    
+    return prepared;
   }
 }
 
-module.exports = PostgresEntityRepository;
+module.exports = {{EntityName}}Repository;

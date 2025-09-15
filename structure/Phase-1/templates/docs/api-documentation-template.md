@@ -1,70 +1,73 @@
-# SERVICE_NAME API Documentation
+# [Service Name] API Documentation
 
 ## Overview
 
-The SERVICE_NAME API provides RESTful endpoints for managing RESOURCE_NAME resources in the Philosophy Service platform. This API enables applications to create, read, update, and delete RESOURCE_NAME resources, as well as perform specialized operations related to philosophical analysis and synthesis.
+[Brief description of the service and its purpose in the system]
 
-**Base URL**: `https://api.example.com/v1`
+**Base URL**: `https://api.philosophy-concepts.com/v1/[service-path]`
 
-**API Version**: v1
+**Version**: 1.0.0
+
+**Last Updated**: [Date]
+
+## Table of Contents
+
+1. [Authentication](#authentication)
+2. [Common Headers](#common-headers)
+3. [Error Handling](#error-handling)
+4. [Rate Limiting](#rate-limiting)
+5. [Endpoints](#endpoints)
+   - [Resource 1](#resource-1)
+   - [Resource 2](#resource-2)
+6. [Data Models](#data-models)
+7. [Examples](#examples)
+8. [Webhooks](#webhooks)
+9. [Changelog](#changelog)
 
 ## Authentication
 
-All API requests require authentication using JWT (JSON Web Token). Include the token in the `Authorization` header of your requests:
+This API uses JWT Bearer token authentication. Include the token in the Authorization header:
 
 ```
-Authorization: Bearer YOUR_JWT_TOKEN
+Authorization: Bearer <your_jwt_token>
 ```
 
-To obtain a token, use the authentication endpoint `/auth/login` with valid credentials.
+### Obtaining a Token
 
-### Token Lifetime
+```http
+POST /auth/login
+Content-Type: application/json
 
-Tokens are valid for 1 hour after issuance. To continue using the API after a token expires, you need to request a new token.
+{
+  "email": "user@example.com",
+  "password": "your_password"
+}
+```
 
-### Refresh Tokens
-
-To avoid requiring users to log in again after token expiration, use refresh tokens. Send a request to `/auth/refresh` with the refresh token to obtain a new access token.
-
-## Authorization
-
-This API uses role-based access control with the following roles:
-
-- **admin**: Full access to all endpoints and operations
-- **moderator**: Can read all resources, update some resources, but cannot delete
-- **user**: Can create, read, update, and delete their own resources
-- **guest**: Limited to read-only access for public resources
-
-Different endpoints require different permissions. Requirements are specified in each endpoint's documentation.
-
-## Rate Limiting
-
-API usage is subject to rate limiting to ensure service stability. Limits are applied per API key or IP address. Current limits are:
-
-- 100 requests per minute for authenticated users
-- 20 requests per minute for unauthenticated requests
-
-When rate limits are exceeded, the API will respond with a `429 Too Many Requests` status code.
-
-## Response Format
-
-All API responses are returned in JSON format with a standardized structure:
-
-### Success Response Format
-
+**Response**:
 ```json
 {
   "success": true,
   "data": {
-    // Resource data or operation result
-  },
-  "meta": {
-    // Metadata about the response (pagination, etc.)
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "expiresIn": 3600,
+    "refreshToken": "..."
   }
 }
 ```
 
-### Error Response Format
+## Common Headers
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `Authorization` | Yes | Bearer token for authentication |
+| `Content-Type` | Yes* | Required for POST/PUT/PATCH requests. Use `application/json` |
+| `X-Request-ID` | No | Optional request ID for tracking |
+| `Accept-Language` | No | Preferred language for error messages (default: en) |
+
+## Error Handling
+
+All errors follow a consistent format:
 
 ```json
 {
@@ -72,442 +75,435 @@ All API responses are returned in JSON format with a standardized structure:
   "error": {
     "code": "ERROR_CODE",
     "message": "Human-readable error message",
-    "details": {
-      // Additional error details (optional)
-    }
+    "details": [
+      {
+        "field": "fieldName",
+        "message": "Specific field error"
+      }
+    ],
+    "timestamp": "2024-01-01T00:00:00.000Z",
+    "requestId": "uuid-v4"
   }
 }
 ```
 
-## Pagination
+### Common Error Codes
 
-List endpoints support pagination through the following query parameters:
+| Code | HTTP Status | Description |
+|------|-------------|-------------|
+| `UNAUTHORIZED` | 401 | Missing or invalid authentication token |
+| `FORBIDDEN` | 403 | Valid token but insufficient permissions |
+| `NOT_FOUND` | 404 | Requested resource not found |
+| `VALIDATION_ERROR` | 400 | Request validation failed |
+| `DUPLICATE_ENTRY` | 409 | Resource already exists |
+| `RATE_LIMIT_EXCEEDED` | 429 | Too many requests |
+| `INTERNAL_SERVER_ERROR` | 500 | Server error |
+| `SERVICE_UNAVAILABLE` | 503 | Service temporarily unavailable |
 
-- `page`: Page number (1-based, default: 1)
-- `pageSize`: Number of items per page (default: 20, max: 100)
+## Rate Limiting
 
-Paginated responses include metadata in the `meta` field:
+API requests are rate limited per user:
 
-```json
-{
-  "success": true,
-  "data": [...],
-  "meta": {
-    "pagination": {
-      "total": 50,
-      "page": 2,
-      "pageSize": 10,
-      "pageCount": 5
-    }
-  }
-}
+- **Standard tier**: 100 requests per minute
+- **Premium tier**: 1000 requests per minute
+
+Rate limit information is included in response headers:
+
 ```
-
-## Filtering and Sorting
-
-Most list endpoints support filtering and sorting through query parameters:
-
-- Filtering: `?field=value&otherField=otherValue`
-- Sorting: `?sort=field&order=asc` (or `desc`)
-
-Specific filtering options are documented with each endpoint.
-
-## Common Query Parameters
-
-- `include`: Comma-separated list of related resources to include in the response
-- `fields`: Comma-separated list of fields to include in the response (partial responses)
-- `filter`: Complex filtering criteria
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 95
+X-RateLimit-Reset: 1640995200
+```
 
 ## Endpoints
 
-### Resource Collection Endpoints
+### Resource 1: [Entities]
 
-#### List Resources
-
-```
-GET /RESOURCE_PATH
-```
-
-Retrieves a paginated list of resources.
-
-**Parameters**:
-- `page` (optional): Page number (default: 1)
-- `pageSize` (optional): Items per page (default: 20, max: 100)
-- `filter[FIELD]` (optional): Filter by field value
-- `sort` (optional): Field to sort by
-- `order` (optional): Sort order (`asc` or `desc`, default: `asc`)
-
-**Response** (200 OK):
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": "00000000-0000-0000-0000-000000000001",
-      "name": "Resource Name",
-      // Other resource fields
-      "created_at": "2023-01-01T00:00:00Z",
-      "updated_at": "2023-01-02T00:00:00Z"
-    },
-    // More resources
-  ],
-  "meta": {
-    "pagination": {
-      "total": 100,
-      "page": 1,
-      "pageSize": 20,
-      "pageCount": 5
-    }
-  }
-}
-```
-
-**Required Permission**: `RESOURCE_NAME:read`
-
-#### Create Resource
-
-```
-POST /RESOURCE_PATH
-```
-
-Creates a new resource.
-
-**Request Body**:
-```json
-{
-  "name": "New Resource",
-  "description": "Resource description",
-  // Other required fields
-}
-```
-
-**Response** (201 Created):
-```json
-{
-  "success": true,
-  "data": {
-    "id": "00000000-0000-0000-0000-000000000001",
-    "name": "New Resource",
-    "description": "Resource description",
-    // Other resource fields
-    "created_at": "2023-01-01T00:00:00Z",
-    "updated_at": "2023-01-01T00:00:00Z"
-  }
-}
-```
-
-**Required Permission**: `RESOURCE_NAME:create`
-
-### Resource Instance Endpoints
-
-#### Get Resource
-
-```
-GET /RESOURCE_PATH/{id}
-```
-
-Retrieves a specific resource by ID.
-
-**Path Parameters**:
-- `id`: Resource ID (UUID format)
-
-**Response** (200 OK):
-```json
-{
-  "success": true,
-  "data": {
-    "id": "00000000-0000-0000-0000-000000000001",
-    "name": "Resource Name",
-    "description": "Resource description",
-    // Other resource fields
-    "created_at": "2023-01-01T00:00:00Z",
-    "updated_at": "2023-01-02T00:00:00Z"
-  }
-}
-```
-
-**Required Permission**: `RESOURCE_NAME:read`
-
-#### Update Resource
-
-```
-PUT /RESOURCE_PATH/{id}
-```
-
-Updates an existing resource.
-
-**Path Parameters**:
-- `id`: Resource ID (UUID format)
-
-**Request Body**:
-```json
-{
-  "name": "Updated Resource Name",
-  "description": "Updated description",
-  // Other fields to update
-}
-```
-
-**Response** (200 OK):
-```json
-{
-  "success": true,
-  "data": {
-    "id": "00000000-0000-0000-0000-000000000001",
-    "name": "Updated Resource Name",
-    "description": "Updated description",
-    // Other resource fields
-    "created_at": "2023-01-01T00:00:00Z",
-    "updated_at": "2023-01-03T00:00:00Z"
-  }
-}
-```
-
-**Required Permission**: `RESOURCE_NAME:update`
-
-#### Delete Resource
-
-```
-DELETE /RESOURCE_PATH/{id}
-```
-
-Deletes a specific resource.
-
-**Path Parameters**:
-- `id`: Resource ID (UUID format)
-
-**Response** (200 OK):
-```json
-{
-  "success": true,
-  "data": {
-    "message": "Resource successfully deleted"
-  }
-}
-```
-
-**Required Permission**: `RESOURCE_NAME:delete`
-
-### Specialized Endpoints
-
-#### Special Action
-
-```
-POST /RESOURCE_PATH/{id}/special-action
-```
-
-Performs a special action on the resource.
-
-**Path Parameters**:
-- `id`: Resource ID (UUID format)
-
-**Request Body**:
-```json
-{
-  "parameter1": "value1",
-  "parameter2": "value2"
-}
-```
-
-**Response** (200 OK):
-```json
-{
-  "success": true,
-  "data": {
-    "result": "Action result",
-    // Other result data
-  }
-}
-```
-
-**Required Permission**: `RESOURCE_NAME:special-action`
-
-#### Get Related Resources
-
-```
-GET /RESOURCE_PATH/{id}/related-resources
-```
-
-Retrieves resources related to the specified resource.
-
-**Path Parameters**:
-- `id`: Resource ID (UUID format)
-
-**Response** (200 OK):
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": "00000000-0000-0000-0000-000000000002",
-      "name": "Related Resource",
-      // Other resource fields
-      "relationship_type": "type",
-      "created_at": "2023-01-01T00:00:00Z",
-      "updated_at": "2023-01-02T00:00:00Z"
-    },
-    // More related resources
-  ],
-  "meta": {
-    "pagination": {
-      "total": 5,
-      "page": 1,
-      "pageSize": 20,
-      "pageCount": 1
-    }
-  }
-}
-```
-
-**Required Permission**: `RESOURCE_NAME:read`
-
-## Error Codes
-
-| Code                | HTTP Status | Description                                                  |
-|---------------------|-------------|--------------------------------------------------------------|
-| `UNAUTHORIZED`      | 401         | Authentication required or authentication failed             |
-| `FORBIDDEN`         | 403         | Authenticated user lacks required permissions                |
-| `NOT_FOUND`         | 404         | The requested resource does not exist                        |
-| `VALIDATION_ERROR`  | 422         | The request data failed validation                           |
-| `CONFLICT`          | 409         | The request conflicts with the current state of the resource |
-| `RATE_LIMIT`        | 429         | Rate limit exceeded                                          |
-| `INTERNAL_ERROR`    | 500         | Internal server error                                        |
-| `SERVICE_UNAVAILABLE`| 503         | Service temporarily unavailable                              |
-
-## Validation Errors
-
-Validation errors provide details about which fields failed validation and why:
-
-```json
-{
-  "success": false,
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Validation failed",
-    "details": {
-      "validationErrors": {
-        "field1": ["Error message for field1"],
-        "field2": ["Error message 1 for field2", "Error message 2 for field2"]
-      }
-    }
-  }
-}
-```
-
-## Data Models
-
-### RESOURCE_NAME Model
-
-| Field          | Type      | Description                                   | Required |
-|----------------|-----------|-----------------------------------------------|----------|
-| `id`           | UUID      | Unique identifier                             | Generated|
-| `name`         | String    | Name of the resource                          | Yes      |
-| `description`  | String    | Description of the resource                   | No       |
-| `type`         | String    | Type of the resource                          | Yes      |
-| `status`       | String    | Status of the resource                        | Yes      |
-| `creator_id`   | UUID      | ID of the user who created the resource       | Generated|
-| `created_at`   | DateTime  | Timestamp of creation                         | Generated|
-| `updated_at`   | DateTime  | Timestamp of last update                      | Generated|
-| `metadata`     | Object    | Additional metadata                           | No       |
-
-## Examples
-
-### Example: Creating a Resource
-
-**Request**:
+#### List All [Entities]
 
 ```http
-POST /RESOURCE_PATH HTTP/1.1
-Host: api.example.com
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-Content-Type: application/json
+GET /[entities]
+```
 
+Retrieve a paginated list of [entities].
+
+**Query Parameters**:
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `page` | integer | No | 1 | Page number |
+| `limit` | integer | No | 20 | Items per page (max: 100) |
+| `search` | string | No | - | Search query |
+| `sort` | string | No | createdAt | Sort field |
+| `order` | string | No | desc | Sort order (asc/desc) |
+| `filter[field]` | string | No | - | Filter by specific field |
+
+**Response**:
+
+```json
 {
-  "name": "Example Resource",
-  "description": "This is an example resource",
-  "type": "example",
-  "status": "active",
+  "success": true,
+  "data": [
+    {
+      "id": "uuid-v4",
+      "name": "Entity Name",
+      "description": "Entity description",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 100,
+    "pages": 5
+  }
+}
+```
+
+#### Get Single [Entity]
+
+```http
+GET /[entities]/{id}
+```
+
+Retrieve a specific [entity] by ID.
+
+**Path Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `id` | string | Yes | Entity UUID |
+
+**Response**:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid-v4",
+    "name": "Entity Name",
+    "description": "Detailed entity description",
+    "metadata": {
+      "key": "value"
+    },
+    "relationships": {
+      "relatedEntities": [...]
+    },
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2024-01-01T00:00:00.000Z",
+    "createdBy": "user-uuid",
+    "lastModifiedBy": "user-uuid"
+  }
+}
+```
+
+#### Create [Entity]
+
+```http
+POST /[entities]
+```
+
+Create a new [entity].
+
+**Request Body**:
+
+```json
+{
+  "name": "New Entity",
+  "description": "Entity description",
   "metadata": {
-    "key1": "value1",
-    "key2": "value2"
+    "key": "value"
+  },
+  "additionalField": "optional"
+}
+```
+
+**Validation Rules**:
+
+- `name`: Required, string, 3-255 characters
+- `description`: Optional, string, max 1000 characters
+- `metadata`: Optional, object
+
+**Response** (201 Created):
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "new-uuid-v4",
+    "name": "New Entity",
+    "description": "Entity description",
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2024-01-01T00:00:00.000Z"
+  }
+}
+```
+
+#### Update [Entity]
+
+```http
+PUT /[entities]/{id}
+```
+
+Update an existing [entity] (full update).
+
+**Path Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `id` | string | Yes | Entity UUID |
+
+**Request Body**:
+
+```json
+{
+  "name": "Updated Entity",
+  "description": "Updated description",
+  "metadata": {
+    "key": "new value"
   }
 }
 ```
 
 **Response**:
 
-```http
-HTTP/1.1 201 Created
-Content-Type: application/json
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid-v4",
+    "name": "Updated Entity",
+    "description": "Updated description",
+    "updatedAt": "2024-01-01T00:00:00.000Z"
+  }
+}
+```
 
+#### Partial Update [Entity]
+
+```http
+PATCH /[entities]/{id}
+```
+
+Partially update an existing [entity].
+
+**Path Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `id` | string | Yes | Entity UUID |
+
+**Request Body** (only fields to update):
+
+```json
+{
+  "description": "Only updating description"
+}
+```
+
+**Response**: Same as full update
+
+#### Delete [Entity]
+
+```http
+DELETE /[entities]/{id}
+```
+
+Delete an [entity].
+
+**Path Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `id` | string | Yes | Entity UUID |
+
+**Response**:
+
+```json
+{
+  "success": true,
+  "message": "Entity successfully deleted"
+}
+```
+
+### Resource 2: [Related Resource]
+
+[Document additional resources following the same pattern]
+
+## Data Models
+
+### [Entity] Model
+
+```typescript
+interface Entity {
+  id: string;                    // UUID v4
+  name: string;                  // 3-255 characters
+  description?: string;          // Max 1000 characters
+  metadata?: Record<string, any>;// Custom metadata
+  status: 'active' | 'inactive' | 'archived';
+  createdAt: string;            // ISO 8601 datetime
+  updatedAt: string;            // ISO 8601 datetime
+  createdBy: string;            // User UUID
+  lastModifiedBy: string;       // User UUID
+}
+```
+
+### Pagination Model
+
+```typescript
+interface Pagination {
+  page: number;      // Current page
+  limit: number;     // Items per page
+  total: number;     // Total items
+  pages: number;     // Total pages
+}
+```
+
+### Error Model
+
+```typescript
+interface ErrorResponse {
+  success: false;
+  error: {
+    code: string;
+    message: string;
+    details?: Array<{
+      field: string;
+      message: string;
+    }>;
+    timestamp: string;
+    requestId: string;
+  };
+}
+```
+
+## Examples
+
+### Example 1: Creating and Updating an Entity
+
+```bash
+# Create a new entity
+curl -X POST https://api.philosophy-concepts.com/v1/[entities] \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Example Entity",
+    "description": "This is an example"
+  }'
+
+# Response
 {
   "success": true,
   "data": {
     "id": "123e4567-e89b-12d3-a456-426614174000",
-    "name": "Example Resource",
-    "description": "This is an example resource",
-    "type": "example",
-    "status": "active",
-    "creator_id": "abcdef12-3456-7890-abcd-ef1234567890",
-    "created_at": "2023-01-15T12:34:56Z",
-    "updated_at": "2023-01-15T12:34:56Z",
-    "metadata": {
-      "key1": "value1",
-      "key2": "value2"
-    }
+    "name": "Example Entity",
+    "description": "This is an example",
+    "createdAt": "2024-01-01T12:00:00.000Z"
+  }
+}
+
+# Update the entity
+curl -X PATCH https://api.philosophy-concepts.com/v1/[entities]/123e4567-e89b-12d3-a456-426614174000 \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "Updated description"
+  }'
+```
+
+### Example 2: Searching and Filtering
+
+```bash
+# Search for entities with pagination and filtering
+curl -X GET "https://api.philosophy-concepts.com/v1/[entities]?search=philosophy&filter[status]=active&page=2&limit=10" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Response
+{
+  "success": true,
+  "data": [...],
+  "pagination": {
+    "page": 2,
+    "limit": 10,
+    "total": 45,
+    "pages": 5
   }
 }
 ```
 
-### Example: Getting a Paginated List with Filters
+### Example 3: Error Handling
 
-**Request**:
+```bash
+# Attempt to create entity with invalid data
+curl -X POST https://api.philosophy-concepts.com/v1/[entities] \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "a"  # Too short
+  }'
 
-```http
-GET /RESOURCE_PATH?page=2&pageSize=10&filter[type]=example&sort=name&order=asc HTTP/1.1
-Host: api.example.com
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+# Error Response
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed",
+    "details": [
+      {
+        "field": "name",
+        "message": "Name must be at least 3 characters long"
+      }
+    ],
+    "timestamp": "2024-01-01T12:00:00.000Z",
+    "requestId": "456e7890-e89b-12d3-a456-426614174000"
+  }
+}
 ```
 
-**Response**:
+## Webhooks
+
+[If applicable, document webhook events]
+
+### Available Events
+
+| Event | Description | Payload |
+|-------|-------------|---------|
+| `entity.created` | Fired when entity is created | Full entity object |
+| `entity.updated` | Fired when entity is updated | Updated fields + entity ID |
+| `entity.deleted` | Fired when entity is deleted | Entity ID |
+
+### Webhook Configuration
 
 ```http
-HTTP/1.1 200 OK
+POST /webhooks
 Content-Type: application/json
 
 {
-  "success": true,
-  "data": [
-    {
-      "id": "123e4567-e89b-12d3-a456-426614174000",
-      "name": "Example Resource A",
-      "description": "This is example resource A",
-      "type": "example",
-      "status": "active",
-      "creator_id": "abcdef12-3456-7890-abcd-ef1234567890",
-      "created_at": "2023-01-14T10:34:56Z",
-      "updated_at": "2023-01-15T15:34:56Z",
-      "metadata": { /* ... */ }
-    },
-    // More resources...
-  ],
-  "meta": {
-    "pagination": {
-      "total": 45,
-      "page": 2,
-      "pageSize": 10,
-      "pageCount": 5
-    }
-  }
+  "url": "https://your-server.com/webhook",
+  "events": ["entity.created", "entity.updated"],
+  "secret": "your-webhook-secret"
 }
 ```
 
 ## Changelog
 
-### Version 1.0.0 (2023-01-01)
-- Initial API release
+### Version 1.0.0 (2024-01-01)
+- Initial release
+- Basic CRUD operations for [entities]
+- Authentication and authorization
+- Rate limiting implementation
 
-### Version 1.1.0 (2023-06-01)
-- Added `special-action` endpoint
-- Extended model with `metadata` field
-- Improved error responses
+### Version 0.9.0 (2023-12-01)
+- Beta release
+- Core functionality implemented
+- Testing phase
+
+---
+
+## Support
+
+For API support, please contact:
+- Email: api-support@philosophy-concepts.com
+- Documentation: https://docs.philosophy-concepts.com
+- Status Page: https://status.philosophy-concepts.com

@@ -1,368 +1,528 @@
 /**
- * Response formatter for API responses
- * Provides standardized formatting for all API responses
+ * Response Formatter
+ * Утилиты для стандартизированного форматирования HTTP-ответов
  */
 
-const AppError = require('../errors/AppError');
-const errorCodes = require('../../constants/errorCodes');
+const { STATUSES } = require('../../constants/statuses');
+const logger = require('../logging/logger');
 
-/**
- * Format a successful response
- * @param {*} data - Response data
- * @param {Object} [meta={}] - Additional metadata
- * @param {string} [message] - Success message
- * @returns {Object} Formatted success response
- */
-function success(data, meta = {}, message) {
-  const response = {
-    success: true,
-    data
-  };
-  
-  if (message) {
-    response.message = message;
-  }
-  
-  if (Object.keys(meta).length > 0) {
-    response.meta = meta;
-  }
-  
-  return response;
-}
-
-/**
- * Format a paginated response
- * @param {Array} data - Paginated data
- * @param {Object} pagination - Pagination information
- * @param {number} pagination.total - Total number of items
- * @param {number} pagination.page - Current page number
- * @param {number} pagination.pageSize - Page size
- * @param {number} [pagination.pageCount] - Total number of pages
- * @param {Object} [meta={}] - Additional metadata
- * @param {string} [message] - Success message
- * @returns {Object} Formatted paginated response
- */
-function paginated(data, pagination, meta = {}, message) {
-  const pageCount = pagination.pageCount || 
-    Math.ceil(pagination.total / pagination.pageSize);
-  
-  return success(
-    data,
-    {
-      pagination: {
-        total: pagination.total,
-        page: pagination.page,
-        pageSize: pagination.pageSize,
-        pageCount
-      },
-      ...meta
-    },
-    message
-  );
-}
-
-/**
- * Format an error response
- * @param {Error|AppError} error - Error object
- * @param {Object} [meta={}] - Additional metadata
- * @returns {Object} Formatted error response
- */
-function error(error, meta = {}) {
-  // If it's an AppError, use its properties
-  if (error instanceof AppError) {
+class ResponseFormatter {
+  /**
+   * Форматирование успешного ответа
+   */
+  static success(data = null, options = {}) {
     const response = {
-      success: false,
-      error: {
-        code: error.code,
-        message: error.message
-      }
+      success: true,
+      status: options.status || STATUSES.SUCCESS,
+      message: options.message || 'Operation completed successfully'
     };
-    
-    if (error.data) {
-      response.error.details = error.data;
+
+    if (data !== null && data !== undefined) {
+      response.data = data;
     }
-    
-    if (Object.keys(meta).length > 0) {
-      response.meta = meta;
+
+    // Добавление метаданных, если есть
+    if (options.meta) {
+      response.meta = options.meta;
     }
-    
+
+    // Добавление пагинации, если есть
+    if (options.pagination) {
+      response.pagination = this._formatPagination(options.pagination);
+    }
+
+    // Добавление времени выполнения, если есть
+    if (options.duration) {
+      response.duration = options.duration;
+    }
+
+    // Добавление request ID для трассировки
+    if (options.requestId) {
+      response.requestId = options.requestId;
+    }
+
     return response;
   }
-  
-  // Otherwise, create a generic error response
-  const response = {
-    success: false,
-    error: {
-      code: errorCodes.UNKNOWN_ERROR,
-      message: error.message || 'An unexpected error occurred'
-    }
-  };
-  
-  if (Object.keys(meta).length > 0) {
-    response.meta = meta;
-  }
-  
-  return response;
-}
 
-/**
- * Format a validation error response
- * @param {Object|Array} validationErrors - Validation errors
- * @param {string} [message='Validation failed'] - Error message
- * @param {Object} [meta={}] - Additional metadata
- * @returns {Object} Formatted validation error response
- */
-function validationError(validationErrors, message = 'Validation failed', meta = {}) {
-  const response = {
-    success: false,
-    error: {
-      code: errorCodes.VALIDATION_ERROR,
-      message,
-      details: {
-        validationErrors
+  /**
+   * Форматирование ответа с ошибкой
+   */
+  static error(error, options = {}) {
+    const response = {
+      success: false,
+      status: options.status || STATUSES.ERROR,
+      message: error.message || 'An error occurred',
+      error: {
+        code: error.code || 'UNKNOWN_ERROR',
+        type: error.constructor.name || 'Error'
       }
+    };
+
+    // Добавление деталей ошибки в режиме разработки
+    if (process.env.NODE_ENV !== 'production' && error.stack) {
+      response.error.stack = error.stack.split('\n');
     }
-  };
-  
-  if (Object.keys(meta).length > 0) {
-    response.meta = meta;
-  }
-  
-  return response;
-}
 
-/**
- * Format a not found error response
- * @param {string} [resource='Resource'] - Resource type that was not found
- * @param {string|number} [identifier] - Resource identifier
- * @param {Object} [meta={}] - Additional metadata
- * @returns {Object} Formatted not found error response
- */
-function notFound(resource = 'Resource', identifier, meta = {}) {
-  const message = identifier
-    ? `${resource} with identifier '${identifier}' not found`
-    : `${resource} not found`;
-  
-  const response = {
-    success: false,
-    error: {
-      code: errorCodes.NOT_FOUND,
-      message
+    // Добавление дополнительных деталей ошибки
+    if (error.details) {
+      response.error.details = error.details;
     }
-  };
-  
-  if (Object.keys(meta).length > 0) {
-    response.meta = meta;
-  }
-  
-  return response;
-}
 
-/**
- * Format an unauthorized error response
- * @param {string} [message='Unauthorized'] - Error message
- * @param {Object} [meta={}] - Additional metadata
- * @returns {Object} Formatted unauthorized error response
- */
-function unauthorized(message = 'Unauthorized', meta = {}) {
-  const response = {
-    success: false,
-    error: {
-      code: errorCodes.UNAUTHORIZED,
-      message
+    // Добавление полей валидации для ошибок валидации
+    if (error.validationErrors) {
+      response.error.validationErrors = error.validationErrors;
     }
-  };
-  
-  if (Object.keys(meta).length > 0) {
-    response.meta = meta;
-  }
-  
-  return response;
-}
 
-/**
- * Format a forbidden error response
- * @param {string} [message='Forbidden'] - Error message
- * @param {Object} [meta={}] - Additional metadata
- * @returns {Object} Formatted forbidden error response
- */
-function forbidden(message = 'Forbidden', meta = {}) {
-  const response = {
-    success: false,
-    error: {
-      code: errorCodes.FORBIDDEN,
-      message
+    // Добавление request ID для трассировки
+    if (options.requestId) {
+      response.requestId = options.requestId;
     }
-  };
-  
-  if (Object.keys(meta).length > 0) {
-    response.meta = meta;
-  }
-  
-  return response;
-}
 
-/**
- * Format a conflict error response
- * @param {string} [message='Conflict'] - Error message
- * @param {Object} [meta={}] - Additional metadata
- * @returns {Object} Formatted conflict error response
- */
-function conflict(message = 'Conflict', meta = {}) {
-  const response = {
-    success: false,
-    error: {
-      code: errorCodes.CONFLICT,
-      message
+    // Логирование ошибки
+    logger.error('Response error', {
+      error: response.error,
+      requestId: options.requestId
+    });
+
+    return response;
+  }
+
+  /**
+   * Форматирование списка с пагинацией
+   */
+  static list(items, pagination, options = {}) {
+    return this.success(items, {
+      ...options,
+      pagination,
+      meta: {
+        ...options.meta,
+        count: items.length
+      }
+    });
+  }
+
+  /**
+   * Форматирование пустого успешного ответа (204 No Content)
+   */
+  static noContent(options = {}) {
+    return {
+      success: true,
+      status: options.status || STATUSES.SUCCESS,
+      message: options.message || 'No content'
+    };
+  }
+
+  /**
+   * Форматирование ответа создания ресурса (201 Created)
+   */
+  static created(data, options = {}) {
+    return this.success(data, {
+      ...options,
+      status: STATUSES.CREATED,
+      message: options.message || 'Resource created successfully'
+    });
+  }
+
+  /**
+   * Форматирование ответа обновления ресурса
+   */
+  static updated(data, options = {}) {
+    return this.success(data, {
+      ...options,
+      message: options.message || 'Resource updated successfully'
+    });
+  }
+
+  /**
+   * Форматирование ответа удаления ресурса
+   */
+  static deleted(options = {}) {
+    return this.success(null, {
+      ...options,
+      message: options.message || 'Resource deleted successfully'
+    });
+  }
+
+  /**
+   * Форматирование ответа валидации
+   */
+  static validationError(errors, options = {}) {
+    const formattedErrors = this._formatValidationErrors(errors);
+    
+    return {
+      success: false,
+      status: STATUSES.VALIDATION_ERROR,
+      message: options.message || 'Validation failed',
+      error: {
+        code: 'VALIDATION_ERROR',
+        type: 'ValidationError',
+        validationErrors: formattedErrors
+      },
+      requestId: options.requestId
+    };
+  }
+
+  /**
+   * Форматирование ответа для неавторизованного доступа
+   */
+  static unauthorized(message = 'Unauthorized access', options = {}) {
+    return {
+      success: false,
+      status: STATUSES.UNAUTHORIZED,
+      message,
+      error: {
+        code: 'UNAUTHORIZED',
+        type: 'UnauthorizedError'
+      },
+      requestId: options.requestId
+    };
+  }
+
+  /**
+   * Форматирование ответа для запрещенного доступа
+   */
+  static forbidden(message = 'Access forbidden', options = {}) {
+    return {
+      success: false,
+      status: STATUSES.FORBIDDEN,
+      message,
+      error: {
+        code: 'FORBIDDEN',
+        type: 'ForbiddenError'
+      },
+      requestId: options.requestId
+    };
+  }
+
+  /**
+   * Форматирование ответа для не найденного ресурса
+   */
+  static notFound(resource = 'Resource', options = {}) {
+    return {
+      success: false,
+      status: STATUSES.NOT_FOUND,
+      message: `${resource} not found`,
+      error: {
+        code: 'NOT_FOUND',
+        type: 'NotFoundError',
+        resource
+      },
+      requestId: options.requestId
+    };
+  }
+
+  /**
+   * Форматирование ответа для конфликта
+   */
+  static conflict(message = 'Resource conflict', options = {}) {
+    return {
+      success: false,
+      status: STATUSES.CONFLICT,
+      message,
+      error: {
+        code: 'CONFLICT',
+        type: 'ConflictError',
+        details: options.details
+      },
+      requestId: options.requestId
+    };
+  }
+
+  /**
+   * Форматирование ответа для слишком большого количества запросов
+   */
+  static tooManyRequests(options = {}) {
+    const response = {
+      success: false,
+      status: STATUSES.TOO_MANY_REQUESTS,
+      message: options.message || 'Too many requests',
+      error: {
+        code: 'RATE_LIMIT_EXCEEDED',
+        type: 'RateLimitError'
+      },
+      requestId: options.requestId
+    };
+
+    // Добавление информации о лимите
+    if (options.retryAfter) {
+      response.error.retryAfter = options.retryAfter;
     }
-  };
-  
-  if (Object.keys(meta).length > 0) {
-    response.meta = meta;
-  }
-  
-  return response;
-}
 
-/**
- * Format a service unavailable error response
- * @param {string} [message='Service unavailable'] - Error message
- * @param {Object} [meta={}] - Additional metadata
- * @returns {Object} Formatted service unavailable error response
- */
-function serviceUnavailable(message = 'Service unavailable', meta = {}) {
-  const response = {
-    success: false,
-    error: {
-      code: errorCodes.SERVICE_UNAVAILABLE,
-      message
+    if (options.limit) {
+      response.error.limit = options.limit;
     }
-  };
-  
-  if (Object.keys(meta).length > 0) {
-    response.meta = meta;
+
+    return response;
   }
+
+  /**
+   * Форматирование ответа для внутренней ошибки сервера
+   */
+  static serverError(error, options = {}) {
+    const response = {
+      success: false,
+      status: STATUSES.INTERNAL_ERROR,
+      message: 'Internal server error',
+      error: {
+        code: 'INTERNAL_ERROR',
+        type: 'ServerError'
+      },
+      requestId: options.requestId
+    };
+
+    // В production скрываем детали ошибки
+    if (process.env.NODE_ENV !== 'production') {
+      response.error.message = error.message;
+      response.error.stack = error.stack?.split('\n');
+    }
+
+    // Логирование критической ошибки
+    logger.error('Internal server error', {
+      error: {
+        message: error.message,
+        stack: error.stack
+      },
+      requestId: options.requestId
+    });
+
+    return response;
+  }
+
+  /**
+   * Форматирование ответа для недоступного сервиса
+   */
+  static serviceUnavailable(service = 'Service', options = {}) {
+    return {
+      success: false,
+      status: STATUSES.SERVICE_UNAVAILABLE,
+      message: `${service} is temporarily unavailable`,
+      error: {
+        code: 'SERVICE_UNAVAILABLE',
+        type: 'ServiceUnavailableError',
+        service
+      },
+      requestId: options.requestId
+    };
+  }
+
+  /**
+   * Форматирование асинхронного задания
+   */
+  static asyncJob(jobId, options = {}) {
+    return this.success({
+      jobId,
+      status: 'pending',
+      message: options.message || 'Job has been queued for processing'
+    }, {
+      ...options,
+      status: STATUSES.ACCEPTED
+    });
+  }
+
+  /**
+   * Форматирование результата batch операции
+   */
+  static batchResult(results, options = {}) {
+    const succeeded = results.filter(r => r.success).length;
+    const failed = results.filter(r => !r.success).length;
+    
+    return this.success({
+      results,
+      summary: {
+        total: results.length,
+        succeeded,
+        failed
+      }
+    }, {
+      ...options,
+      message: `Batch operation completed: ${succeeded} succeeded, ${failed} failed`
+    });
+  }
+
+  /**
+   * Форматирование health check ответа
+   */
+  static healthCheck(checks, options = {}) {
+    const allHealthy = Object.values(checks).every(check => check.healthy);
+    
+    return {
+      success: allHealthy,
+      status: allHealthy ? STATUSES.SUCCESS : STATUSES.SERVICE_UNAVAILABLE,
+      message: allHealthy ? 'All systems operational' : 'Some systems are unhealthy',
+      data: {
+        healthy: allHealthy,
+        checks,
+        timestamp: new Date().toISOString()
+      },
+      requestId: options.requestId
+    };
+  }
+
+  /**
+   * Форматирование частичного успеха
+   */
+  static partial(data, errors, options = {}) {
+    return {
+      success: true,
+      status: STATUSES.PARTIAL_SUCCESS,
+      message: options.message || 'Operation partially completed',
+      data,
+      errors: errors.map(error => ({
+        message: error.message,
+        code: error.code,
+        details: error.details
+      })),
+      requestId: options.requestId
+    };
+  }
+
+  /**
+   * Обертка для Express middleware
+   */
+  static expressWrapper(handler) {
+    return async (req, res, next) => {
+      try {
+        const result = await handler(req, res, next);
+        
+        // Если обработчик уже отправил ответ, ничего не делаем
+        if (res.headersSent) {
+          return;
+        }
+
+        // Если результат - это форматированный ответ
+        if (result && typeof result === 'object' && 'success' in result) {
+          const statusCode = this._getHttpStatusCode(result.status);
+          return res.status(statusCode).json(result);
+        }
+
+        // Иначе форматируем как успешный ответ
+        const response = this.success(result, {
+          requestId: req.id || req.headers['x-request-id']
+        });
+        
+        return res.status(200).json(response);
+      } catch (error) {
+        // Передаем ошибку следующему middleware
+        next(error);
+      }
+    };
+  }
+
+  /**
+   * Обработчик ошибок для Express
+   */
+  static errorHandler() {
+    return (err, req, res, next) => {
+      // Если ответ уже отправлен, передаем ошибку дальше
+      if (res.headersSent) {
+        return next(err);
+      }
+
+      const requestId = req.id || req.headers['x-request-id'];
+      let response;
+      let statusCode;
+
+      // Определяем тип ошибки и форматируем соответственно
+      if (err.name === 'ValidationError' || err.isValidation) {
+        response = this.validationError(err.errors || err.details, { requestId });
+        statusCode = 400;
+      } else if (err.name === 'UnauthorizedError' || err.statusCode === 401) {
+        response = this.unauthorized(err.message, { requestId });
+        statusCode = 401;
+      } else if (err.name === 'ForbiddenError' || err.statusCode === 403) {
+        response = this.forbidden(err.message, { requestId });
+        statusCode = 403;
+      } else if (err.name === 'NotFoundError' || err.statusCode === 404) {
+        response = this.notFound(err.resource || 'Resource', { requestId });
+        statusCode = 404;
+      } else if (err.name === 'ConflictError' || err.statusCode === 409) {
+        response = this.conflict(err.message, { requestId, details: err.details });
+        statusCode = 409;
+      } else if (err.statusCode === 429) {
+        response = this.tooManyRequests({ 
+          requestId,
+          retryAfter: err.retryAfter,
+          limit: err.limit 
+        });
+        statusCode = 429;
+      } else {
+        response = this.serverError(err, { requestId });
+        statusCode = err.statusCode || 500;
+      }
+
+      res.status(statusCode).json(response);
+    };
+  }
+
+  /**
+   * Вспомогательные методы
+   */
   
-  return response;
+  static _formatPagination(pagination) {
+    return {
+      page: pagination.page || 1,
+      perPage: pagination.perPage || pagination.limit || 20,
+      total: pagination.total || 0,
+      totalPages: Math.ceil(
+        (pagination.total || 0) / (pagination.perPage || pagination.limit || 20)
+      ),
+      hasNext: pagination.hasNext !== undefined 
+        ? pagination.hasNext 
+        : pagination.page < Math.ceil(
+            (pagination.total || 0) / (pagination.perPage || pagination.limit || 20)
+          ),
+      hasPrev: pagination.hasPrev !== undefined
+        ? pagination.hasPrev
+        : pagination.page > 1
+    };
+  }
+
+  static _formatValidationErrors(errors) {
+    if (Array.isArray(errors)) {
+      return errors.map(error => ({
+        field: error.field || error.path || 'unknown',
+        message: error.message || 'Invalid value',
+        value: error.value,
+        code: error.code || 'INVALID'
+      }));
+    }
+
+    // Если errors - это объект (например, от Joi)
+    if (typeof errors === 'object') {
+      return Object.entries(errors).map(([field, error]) => ({
+        field,
+        message: error.message || error,
+        code: error.code || 'INVALID'
+      }));
+    }
+
+    return [{
+      field: 'unknown',
+      message: String(errors),
+      code: 'INVALID'
+    }];
+  }
+
+  static _getHttpStatusCode(status) {
+    const statusMap = {
+      [STATUSES.SUCCESS]: 200,
+      [STATUSES.CREATED]: 201,
+      [STATUSES.ACCEPTED]: 202,
+      [STATUSES.NO_CONTENT]: 204,
+      [STATUSES.PARTIAL_SUCCESS]: 207,
+      [STATUSES.BAD_REQUEST]: 400,
+      [STATUSES.UNAUTHORIZED]: 401,
+      [STATUSES.FORBIDDEN]: 403,
+      [STATUSES.NOT_FOUND]: 404,
+      [STATUSES.CONFLICT]: 409,
+      [STATUSES.VALIDATION_ERROR]: 422,
+      [STATUSES.TOO_MANY_REQUESTS]: 429,
+      [STATUSES.INTERNAL_ERROR]: 500,
+      [STATUSES.SERVICE_UNAVAILABLE]: 503
+    };
+
+    return statusMap[status] || 200;
+  }
 }
 
-/**
- * Create an Express middleware to format responses
- * @returns {Function} Express middleware function
- */
-function createResponseFormatter() {
-  return function responseFormatter(req, res, next) {
-    // Add format methods to res object
-    
-    /**
-     * Send a success response
-     * @param {*} data - Response data
-     * @param {Object} [meta={}] - Additional metadata
-     * @param {string} [message] - Success message
-     * @returns {Object} Express response
-     */
-    res.sendSuccess = function(data, meta = {}, message) {
-      return res.json(success(data, meta, message));
-    };
-    
-    /**
-     * Send a paginated response
-     * @param {Array} data - Paginated data
-     * @param {Object} pagination - Pagination information
-     * @param {Object} [meta={}] - Additional metadata
-     * @param {string} [message] - Success message
-     * @returns {Object} Express response
-     */
-    res.sendPaginated = function(data, pagination, meta = {}, message) {
-      return res.json(paginated(data, pagination, meta, message));
-    };
-    
-    /**
-     * Send an error response
-     * @param {Error|AppError} error - Error object
-     * @param {Object} [meta={}] - Additional metadata
-     * @returns {Object} Express response
-     */
-    res.sendError = function(error, meta = {}) {
-      const statusCode = error instanceof AppError ? error.statusCode : 500;
-      return res.status(statusCode).json(error(error, meta));
-    };
-    
-    /**
-     * Send a validation error response
-     * @param {Object|Array} validationErrors - Validation errors
-     * @param {string} [message='Validation failed'] - Error message
-     * @param {Object} [meta={}] - Additional metadata
-     * @returns {Object} Express response
-     */
-    res.sendValidationError = function(validationErrors, message = 'Validation failed', meta = {}) {
-      return res.status(422).json(validationError(validationErrors, message, meta));
-    };
-    
-    /**
-     * Send a not found error response
-     * @param {string} [resource='Resource'] - Resource type that was not found
-     * @param {string|number} [identifier] - Resource identifier
-     * @param {Object} [meta={}] - Additional metadata
-     * @returns {Object} Express response
-     */
-    res.sendNotFound = function(resource = 'Resource', identifier, meta = {}) {
-      return res.status(404).json(notFound(resource, identifier, meta));
-    };
-    
-    /**
-     * Send an unauthorized error response
-     * @param {string} [message='Unauthorized'] - Error message
-     * @param {Object} [meta={}] - Additional metadata
-     * @returns {Object} Express response
-     */
-    res.sendUnauthorized = function(message = 'Unauthorized', meta = {}) {
-      return res.status(401).json(unauthorized(message, meta));
-    };
-    
-    /**
-     * Send a forbidden error response
-     * @param {string} [message='Forbidden'] - Error message
-     * @param {Object} [meta={}] - Additional metadata
-     * @returns {Object} Express response
-     */
-    res.sendForbidden = function(message = 'Forbidden', meta = {}) {
-      return res.status(403).json(forbidden(message, meta));
-    };
-    
-    /**
-     * Send a conflict error response
-     * @param {string} [message='Conflict'] - Error message
-     * @param {Object} [meta={}] - Additional metadata
-     * @returns {Object} Express response
-     */
-    res.sendConflict = function(message = 'Conflict', meta = {}) {
-      return res.status(409).json(conflict(message, meta));
-    };
-    
-    /**
-     * Send a service unavailable error response
-     * @param {string} [message='Service unavailable'] - Error message
-     * @param {Object} [meta={}] - Additional metadata
-     * @returns {Object} Express response
-     */
-    res.sendServiceUnavailable = function(message = 'Service unavailable', meta = {}) {
-      return res.status(503).json(serviceUnavailable(message, meta));
-    };
-    
-    next();
-  };
-}
-
-module.exports = {
-  success,
-  paginated,
-  error,
-  validationError,
-  notFound,
-  unauthorized,
-  forbidden,
-  conflict,
-  serviceUnavailable,
-  createResponseFormatter
-};
+module.exports = ResponseFormatter;

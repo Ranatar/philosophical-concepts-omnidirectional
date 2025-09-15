@@ -1,312 +1,651 @@
 /**
- * Template for CRUD services
- * Replace all instances of `Entity` with the actual entity name
- * Replace all instances of `entity` with the lowercase entity name
- * Replace all references to entityRepository with the actual repository
+ * Шаблон CRUD сервиса
+ * Базовый шаблон для создания сервисов с типовыми CRUD операциями
+ * 
+ * Использование:
+ * 1. Скопировать файл в нужную директорию
+ * 2. Заменить {{EntityName}} на название сущности (например, User)
+ * 3. Заменить {{entityName}} на название сущности в camelCase (например, user)
+ * 4. Заменить {{tableName}} на название таблицы в БД (например, users)
+ * 5. Адаптировать под специфику сущности
  */
 
-const { defaultLogger } = require('../../../shared/lib/logging/logger');
-const { defaultEventProducer } = require('../../../shared/lib/messaging/producers');
-const { ValidationError } = require('../../../shared/lib/errors/HttpErrors');
-const Entity = require('../../../shared/models/Entity');
+const logger = require('../../../shared/lib/logging/logger');
+const { ValidationError, NotFoundError } = require('../../../shared/lib/errors');
+const { cacheHelper } = require('../../../shared/lib/db/redis/cacheHelper');
+const { publishMessage } = require('../../../shared/lib/messaging/producers');
 
-/**
- * Service for Entity CRUD operations
- */
-class EntityService {
-  /**
-   * Create a new EntityService
-   * @param {Object} entityRepository - Entity repository instance
-   * @param {Object} [eventProducer=defaultEventProducer] - Event producer for domain events
-   * @param {Object} [logger=defaultLogger] - Logger instance
-   */
-  constructor(entityRepository, eventProducer = defaultEventProducer, logger = defaultLogger) {
-    this.entityRepository = entityRepository;
-    this.eventProducer = eventProducer;
-    this.logger = logger;
+class {{EntityName}}Service {
+  constructor({{entityName}}Repository, validators = {}) {
+    this.{{entityName}}Repository = {{entityName}}Repository;
+    this.validators = validators;
+    this.cachePrefix = '{{entityName}}';
+    this.cacheTTL = 3600; // 1 час
   }
 
   /**
-   * Find all entities with pagination and filtering
-   * @param {Object} options - Query options
-   * @param {number} [options.page=1] - Page number
-   * @param {number} [options.pageSize=20] - Page size
-   * @param {string} [options.sortBy] - Sort field
-   * @param {string} [options.sortOrder='asc'] - Sort order ('asc' or 'desc')
-   * @param {Object} [options.filters] - Filter criteria
-   * @returns {Promise<Object>} Promise resolving to { items, total } object
+   * Получение списка с пагинацией и фильтрацией
    */
-  async findAll(options = {}) {
-    const { page = 1, pageSize = 20, sortBy, sortOrder = 'asc', filters = {} } = options;
-    
+  async list({ page = 1, limit = 20, sort = 'created_at', order = 'DESC', filters = {} }) {
     try {
-      const result = await this.entityRepository.findAll(
-        page,
-        pageSize,
-        sortBy,
-        sortOrder,
-        filters
-      );
+      // Формируем ключ кэша
+      const cacheKey = this.getCacheKey('list', { page, limit, sort, order, filters });
       
-      return {
-        items: result.items.map(item => {
-          // Convert repository model to domain model if needed
-          return this._toDomainModel(item);
-        }),
-        total: result.total
-      };
-    } catch (error) {
-      this.logger.error(`Error finding entities: ${error.message}`, {
-        options,
-        stack: error.stack
+      // Пытаемся получить из кэша
+      const cached = await cacheHelper.get(cacheKey);
+      if (cached) {
+        logger.debug('{{EntityName}} list retrieved from cache');
+        return cached;
+      }
+
+      // Валидация параметров
+      this.validatePaginationParams({ page, limit });
+      
+      // Получаем данные из репозитория
+      const result = await this.{{entityName}}Repository.findAll({
+        page,
+        limit,
+        sort,
+        order,
+        filters
       });
+
+      // Обогащаем данные, если необходимо
+      result.items = await this.enrichItems(result.items);
+
+      // Сохраняем в кэш
+      await cacheHelper.set(cacheKey, result, this.cacheTTL);
+
+      logger.info('{{EntityName}} list retrieved', {
+        count: result.items.length,
+        total: result.total
+      });
+
+      return result;
+    } catch (error) {
+      logger.error('Error retrieving {{entityName}} list', error);
       throw error;
     }
   }
 
   /**
-   * Find entity by ID
-   * @param {string} id - Entity ID
-   * @returns {Promise<Entity|null>} Promise resolving to entity or null if not found
+   * Получение по ID
    */
-  async findById(id) {
+  async getById(id) {
     try {
-      const entity = await this.entityRepository.findById(id);
+      // Проверяем кэш
+      const cacheKey = this.getCacheKey('item', id);
+      const cached = await cacheHelper.get(cacheKey);
+      if (cached) {
+        logger.debug('{{EntityName}} retrieved from cache', { id });
+        return cached;
+      }
+
+      // Получаем из БД
+      const {{entityName}} = await this.{{entityName}}Repository.findById(id);
       
-      if (!entity) {
+      if (!{{entityName}}) {
         return null;
       }
-      
-      return this._toDomainModel(entity);
+
+      // Обогащаем данные
+      const enriched = await this.enrichItem({{entityName}});
+
+      // Сохраняем в кэш
+      await cacheHelper.set(cacheKey, enriched, this.cacheTTL);
+
+      logger.info('{{EntityName}} retrieved', { id });
+      return enriched;
     } catch (error) {
-      this.logger.error(`Error finding entity by ID ${id}: ${error.message}`, {
-        id,
-        stack: error.stack
-      });
+      logger.error('Error retrieving {{entityName}}', { id, error });
       throw error;
     }
   }
 
   /**
-   * Check if entity exists
-   * @param {string} id - Entity ID
-   * @returns {Promise<boolean>} Promise resolving to whether entity exists
+   * Получение по списку ID
    */
-  async exists(id) {
+  async getByIds(ids) {
     try {
-      return await this.entityRepository.exists(id);
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return [];
+      }
+
+      // Получаем из кэша то, что есть
+      const cachedItems = [];
+      const missingIds = [];
+
+      for (const id of ids) {
+        const cacheKey = this.getCacheKey('item', id);
+        const cached = await cacheHelper.get(cacheKey);
+        if (cached) {
+          cachedItems.push(cached);
+        } else {
+          missingIds.push(id);
+        }
+      }
+
+      // Получаем недостающие из БД
+      let dbItems = [];
+      if (missingIds.length > 0) {
+        dbItems = await this.{{entityName}}Repository.findByIds(missingIds);
+        
+        // Обогащаем и кэшируем
+        for (const item of dbItems) {
+          const enriched = await this.enrichItem(item);
+          const cacheKey = this.getCacheKey('item', item.id);
+          await cacheHelper.set(cacheKey, enriched, this.cacheTTL);
+        }
+      }
+
+      return [...cachedItems, ...dbItems];
     } catch (error) {
-      this.logger.error(`Error checking if entity exists: ${error.message}`, {
-        id,
-        stack: error.stack
-      });
+      logger.error('Error retrieving {{tableName}} by ids', { ids, error });
       throw error;
     }
   }
 
   /**
-   * Create a new entity
-   * @param {Object} data - Entity data
-   * @returns {Promise<Entity>} Promise resolving to created entity
+   * Создание
    */
   async create(data) {
     try {
-      // Additional validation if needed
-      this._validateCreate(data);
-      
-      // Create domain model
-      const entity = new Entity(data);
-      
-      // Save to repository
-      const savedEntity = await this.entityRepository.create(entity);
-      
-      // Publish domain event
-      await this._publishDomainEvent('created', savedEntity);
-      
-      return this._toDomainModel(savedEntity);
+      // Валидация данных
+      await this.validateCreateData(data);
+
+      // Подготовка данных
+      const preparedData = await this.prepareCreateData(data);
+
+      // Создание в БД
+      const created = await this.{{entityName}}Repository.create(preparedData);
+
+      // Обогащение данных
+      const enriched = await this.enrichItem(created);
+
+      // Инвалидация кэша списков
+      await this.invalidateListCache();
+
+      // Публикация события
+      await this.publishEvent('created', enriched);
+
+      logger.info('{{EntityName}} created', { id: created.id });
+      return enriched;
     } catch (error) {
-      this.logger.error(`Error creating entity: ${error.message}`, {
-        data,
-        stack: error.stack
-      });
+      logger.error('Error creating {{entityName}}', { error });
       throw error;
     }
   }
 
   /**
-   * Update an entity
-   * @param {string} id - Entity ID
-   * @param {Object} data - Entity data to update
-   * @returns {Promise<Entity|null>} Promise resolving to updated entity or null if not found
+   * Обновление
    */
   async update(id, data) {
     try {
-      // Check if entity exists
-      const existingEntity = await this.entityRepository.findById(id);
-      
-      if (!existingEntity) {
-        return null;
+      // Проверяем существование
+      const existing = await this.getById(id);
+      if (!existing) {
+        throw new NotFoundError('{{EntityName}} not found');
       }
-      
-      // Additional validation if needed
-      this._validateUpdate(data, existingEntity);
-      
-      // Update domain model
-      const updatedEntity = this._toDomainModel(existingEntity).update(data);
-      
-      // Save to repository
-      const savedEntity = await this.entityRepository.update(id, updatedEntity);
-      
-      // Publish domain event
-      await this._publishDomainEvent('updated', savedEntity);
-      
-      return this._toDomainModel(savedEntity);
+
+      // Валидация данных
+      await this.validateUpdateData(data, existing);
+
+      // Подготовка данных
+      const preparedData = await this.prepareUpdateData(data, existing);
+
+      // Обновление в БД
+      const updated = await this.{{entityName}}Repository.update(id, preparedData);
+
+      // Обогащение данных
+      const enriched = await this.enrichItem(updated);
+
+      // Инвалидация кэша
+      await this.invalidateItemCache(id);
+      await this.invalidateListCache();
+
+      // Публикация события
+      await this.publishEvent('updated', enriched, existing);
+
+      logger.info('{{EntityName}} updated', { id });
+      return enriched;
     } catch (error) {
-      this.logger.error(`Error updating entity ${id}: ${error.message}`, {
-        id,
-        data,
-        stack: error.stack
-      });
+      logger.error('Error updating {{entityName}}', { id, error });
       throw error;
     }
   }
 
   /**
-   * Delete an entity
-   * @param {string} id - Entity ID
-   * @returns {Promise<boolean>} Promise resolving to whether the entity was deleted
+   * Частичное обновление
+   */
+  async patch(id, data) {
+    try {
+      // Проверяем существование
+      const existing = await this.getById(id);
+      if (!existing) {
+        throw new NotFoundError('{{EntityName}} not found');
+      }
+
+      // Валидация только переданных полей
+      await this.validatePatchData(data, existing);
+
+      // Подготовка данных
+      const preparedData = await this.preparePatchData(data, existing);
+
+      // Обновление в БД
+      const patched = await this.{{entityName}}Repository.patch(id, preparedData);
+
+      // Обогащение данных
+      const enriched = await this.enrichItem(patched);
+
+      // Инвалидация кэша
+      await this.invalidateItemCache(id);
+      await this.invalidateListCache();
+
+      // Публикация события
+      await this.publishEvent('patched', enriched, existing);
+
+      logger.info('{{EntityName}} patched', { id });
+      return enriched;
+    } catch (error) {
+      logger.error('Error patching {{entityName}}', { id, error });
+      throw error;
+    }
+  }
+
+  /**
+   * Удаление
    */
   async delete(id) {
     try {
-      // Check if entity exists
-      const existingEntity = await this.entityRepository.findById(id);
-      
-      if (!existingEntity) {
-        return false;
+      // Проверяем существование
+      const existing = await this.getById(id);
+      if (!existing) {
+        throw new NotFoundError('{{EntityName}} not found');
       }
-      
-      // Delete from repository
-      const deleted = await this.entityRepository.delete(id);
-      
-      if (deleted) {
-        // Publish domain event
-        await this._publishDomainEvent('deleted', this._toDomainModel(existingEntity));
-      }
-      
-      return deleted;
+
+      // Проверяем возможность удаления
+      await this.checkCanDelete(existing);
+
+      // Удаление из БД
+      await this.{{entityName}}Repository.delete(id);
+
+      // Инвалидация кэша
+      await this.invalidateItemCache(id);
+      await this.invalidateListCache();
+
+      // Публикация события
+      await this.publishEvent('deleted', { id }, existing);
+
+      logger.info('{{EntityName}} deleted', { id });
+      return true;
     } catch (error) {
-      this.logger.error(`Error deleting entity ${id}: ${error.message}`, {
-        id,
-        stack: error.stack
-      });
+      logger.error('Error deleting {{entityName}}', { id, error });
       throw error;
     }
   }
 
   /**
-   * Validate entity data for creation
-   * @param {Object} data - Entity data
-   * @throws {ValidationError} If validation fails
-   * @private
+   * Массовое удаление
    */
-  _validateCreate(data) {
-    // Add custom validation logic not covered by schema validation
-    // Example: Check for unique fields, business rules, etc.
-    
-    // Example: Check if name is unique
-    if (data.name && this._isNameTaken(data.name)) {
-      throw new ValidationError('Name is already taken');
-    }
-  }
-
-  /**
-   * Validate entity data for update
-   * @param {Object} data - Entity data
-   * @param {Object} existingEntity - Existing entity
-   * @throws {ValidationError} If validation fails
-   * @private
-   */
-  _validateUpdate(data, existingEntity) {
-    // Add custom validation logic not covered by schema validation
-    
-    // Example: Check if name is unique (but allow unchanged name)
-    if (data.name && data.name !== existingEntity.name && this._isNameTaken(data.name)) {
-      throw new ValidationError('Name is already taken');
-    }
-  }
-
-  /**
-   * Check if a name is already taken
-   * @param {string} name - Name to check
-   * @returns {Promise<boolean>} Promise resolving to whether name is taken
-   * @private
-   */
-  async _isNameTaken(name) {
-    // Implement logic to check if name is taken
-    // This is just a placeholder
-    return false;
-  }
-
-  /**
-   * Convert repository model to domain model
-   * @param {Object} repositoryModel - Repository model
-   * @returns {Entity} Domain model
-   * @private
-   */
-  _toDomainModel(repositoryModel) {
-    // If repository returns plain objects, convert to domain model
-    if (!(repositoryModel instanceof Entity)) {
-      return new Entity(repositoryModel);
-    }
-    
-    return repositoryModel;
-  }
-
-  /**
-   * Publish a domain event for the entity
-   * @param {string} action - Action performed ('created', 'updated', 'deleted', etc.)
-   * @param {Entity} entity - Entity involved
-   * @returns {Promise<string>} Promise resolving to event ID
-   * @private
-   */
-  async _publishDomainEvent(action, entity) {
+  async bulkDelete(ids) {
     try {
-      // Skip if no event producer
-      if (!this.eventProducer) {
-        return null;
+      // Получаем существующие элементы
+      const items = await this.getByIds(ids);
+      
+      // Проверяем возможность удаления для каждого
+      for (const item of items) {
+        await this.checkCanDelete(item);
       }
-      
-      // Define entity type (lowercase entity name, e.g., 'user', 'concept', etc.)
-      const entityType = 'entity';
-      
-      // Basic entity data for event
-      const entityData = {
-        id: entity.id,
-        name: entity.name,
-        // Include other relevant fields
-      };
-      
-      // Publish the domain event
-      const eventId = await this.eventProducer.publishDomainEvent(
-        entityType,
-        action,
-        entityData
-      );
-      
-      this.logger.debug(`Published domain event: ${entityType}.${action}`, { eventId });
-      
-      return eventId;
+
+      // Удаление из БД
+      const deletedCount = await this.{{entityName}}Repository.bulkDelete(ids);
+
+      // Инвалидация кэша
+      for (const id of ids) {
+        await this.invalidateItemCache(id);
+      }
+      await this.invalidateListCache();
+
+      // Публикация событий
+      for (const item of items) {
+        await this.publishEvent('deleted', { id: item.id }, item);
+      }
+
+      logger.info('{{EntityName}}s bulk deleted', { count: deletedCount });
+      return deletedCount;
     } catch (error) {
-      // Log but don't throw - event publishing should not affect the main flow
-      this.logger.error(`Error publishing domain event: ${error.message}`, {
-        action,
-        entityId: entity.id,
-        stack: error.stack
-      });
-      
-      return null;
+      logger.error('Error bulk deleting {{tableName}}', { ids, error });
+      throw error;
     }
+  }
+
+  /**
+   * Поиск
+   */
+  async search({ query, page = 1, limit = 20, ...options }) {
+    try {
+      // Валидация параметров
+      this.validateSearchParams({ query, page, limit });
+
+      // Поиск в БД
+      const result = await this.{{entityName}}Repository.search({
+        query,
+        page,
+        limit,
+        ...options
+      });
+
+      // Обогащение результатов
+      result.items = await this.enrichItems(result.items);
+
+      logger.info('{{EntityName}} search completed', {
+        query,
+        found: result.total
+      });
+
+      return result;
+    } catch (error) {
+      logger.error('Error searching {{tableName}}', { query, error });
+      throw error;
+    }
+  }
+
+  /**
+   * Экспорт данных
+   */
+  async export({ format = 'json', filters = {} }) {
+    try {
+      // Получаем все данные с учетом фильтров
+      const data = await this.{{entityName}}Repository.findAllForExport(filters);
+
+      // Форматируем данные
+      const formatted = await this.formatForExport(data, format);
+
+      logger.info('{{EntityName}} data exported', {
+        format,
+        count: data.length
+      });
+
+      return formatted;
+    } catch (error) {
+      logger.error('Error exporting {{tableName}}', { format, error });
+      throw error;
+    }
+  }
+
+  /**
+   * Импорт данных
+   */
+  async import({ data, format = 'json', userId, ...options }) {
+    try {
+      // Парсим данные в зависимости от формата
+      const parsed = await this.parseImportData(data, format);
+
+      // Валидируем все записи
+      const validationResults = await this.validateImportData(parsed);
+      
+      const validItems = validationResults.filter(r => r.valid).map(r => r.data);
+      const errors = validationResults.filter(r => !r.valid);
+
+      // Импортируем валидные записи
+      const imported = [];
+      for (const item of validItems) {
+        try {
+          const created = await this.create({
+            ...item,
+            creator_id: userId,
+            imported_at: new Date()
+          });
+          imported.push(created);
+        } catch (error) {
+          errors.push({
+            data: item,
+            error: error.message
+          });
+        }
+      }
+
+      logger.info('{{EntityName}} data imported', {
+        total: parsed.length,
+        imported: imported.length,
+        errors: errors.length
+      });
+
+      return {
+        total: parsed.length,
+        imported: imported.length,
+        errors: errors.length,
+        importedItems: imported,
+        errorDetails: errors
+      };
+    } catch (error) {
+      logger.error('Error importing {{tableName}}', { format, error });
+      throw error;
+    }
+  }
+
+  // Вспомогательные методы
+
+  /**
+   * Валидация параметров пагинации
+   */
+  validatePaginationParams({ page, limit }) {
+    if (page < 1) {
+      throw new ValidationError('Page must be greater than 0');
+    }
+    if (limit < 1 || limit > 100) {
+      throw new ValidationError('Limit must be between 1 and 100');
+    }
+  }
+
+  /**
+   * Валидация данных для создания
+   */
+  async validateCreateData(data) {
+    if (this.validators.create) {
+      await this.validators.create(data);
+    }
+    // Дополнительная валидация специфичная для сущности
+  }
+
+  /**
+   * Валидация данных для обновления
+   */
+  async validateUpdateData(data, existing) {
+    if (this.validators.update) {
+      await this.validators.update(data, existing);
+    }
+    // Дополнительная валидация специфичная для сущности
+  }
+
+  /**
+   * Валидация данных для частичного обновления
+   */
+  async validatePatchData(data, existing) {
+    if (this.validators.patch) {
+      await this.validators.patch(data, existing);
+    }
+    // Дополнительная валидация специфичная для сущности
+  }
+
+  /**
+   * Валидация параметров поиска
+   */
+  validateSearchParams({ query, page, limit }) {
+    if (!query || query.trim().length < 2) {
+      throw new ValidationError('Search query must be at least 2 characters');
+    }
+    this.validatePaginationParams({ page, limit });
+  }
+
+  /**
+   * Проверка возможности удаления
+   */
+  async checkCanDelete(item) {
+    // Реализация проверки зависимостей и ограничений
+    // Например, нельзя удалить если есть связанные записи
+  }
+
+  /**
+   * Подготовка данных для создания
+   */
+  async prepareCreateData(data) {
+    return {
+      ...data,
+      created_at: new Date(),
+      updated_at: new Date()
+    };
+  }
+
+  /**
+   * Подготовка данных для обновления
+   */
+  async prepareUpdateData(data, existing) {
+    return {
+      ...data,
+      updated_at: new Date()
+    };
+  }
+
+  /**
+   * Подготовка данных для частичного обновления
+   */
+  async preparePatchData(data, existing) {
+    return {
+      ...data,
+      updated_at: new Date()
+    };
+  }
+
+  /**
+   * Обогащение одного элемента
+   */
+  async enrichItem(item) {
+    // Реализация обогащения данными из связанных сущностей
+    return item;
+  }
+
+  /**
+   * Обогащение списка элементов
+   */
+  async enrichItems(items) {
+    // Оптимизированное обогащение для списка
+    return Promise.all(items.map(item => this.enrichItem(item)));
+  }
+
+  /**
+   * Форматирование для экспорта
+   */
+  async formatForExport(data, format) {
+    switch (format) {
+      case 'csv':
+        return this.formatAsCsv(data);
+      case 'json':
+      default:
+        return JSON.stringify(data, null, 2);
+    }
+  }
+
+  /**
+   * Форматирование в CSV
+   */
+  formatAsCsv(data) {
+    // Простая реализация CSV
+    if (data.length === 0) return '';
+    
+    const headers = Object.keys(data[0]);
+    const rows = data.map(item => 
+      headers.map(header => JSON.stringify(item[header] || '')).join(',')
+    );
+    
+    return [headers.join(','), ...rows].join('\n');
+  }
+
+  /**
+   * Парсинг импортируемых данных
+   */
+  async parseImportData(data, format) {
+    switch (format) {
+      case 'csv':
+        return this.parseCsv(data);
+      case 'json':
+      default:
+        return JSON.parse(data);
+    }
+  }
+
+  /**
+   * Парсинг CSV
+   */
+  parseCsv(csvData) {
+    // Простая реализация парсинга CSV
+    const lines = csvData.split('\n');
+    const headers = lines[0].split(',');
+    
+    return lines.slice(1).map(line => {
+      const values = line.split(',');
+      return headers.reduce((obj, header, index) => {
+        obj[header] = values[index];
+        return obj;
+      }, {});
+    });
+  }
+
+  /**
+   * Валидация импортируемых данных
+   */
+  async validateImportData(items) {
+    return Promise.all(items.map(async (item) => {
+      try {
+        await this.validateCreateData(item);
+        return { valid: true, data: item };
+      } catch (error) {
+        return { valid: false, data: item, error: error.message };
+      }
+    }));
+  }
+
+  /**
+   * Формирование ключа кэша
+   */
+  getCacheKey(type, params) {
+    const key = `${this.cachePrefix}:${type}`;
+    if (typeof params === 'string') {
+      return `${key}:${params}`;
+    }
+    return `${key}:${JSON.stringify(params)}`;
+  }
+
+  /**
+   * Инвалидация кэша элемента
+   */
+  async invalidateItemCache(id) {
+    const cacheKey = this.getCacheKey('item', id);
+    await cacheHelper.delete(cacheKey);
+  }
+
+  /**
+   * Инвалидация кэша списков
+   */
+  async invalidateListCache() {
+    // Удаляем все ключи списков
+    const pattern = `${this.cachePrefix}:list:*`;
+    await cacheHelper.deletePattern(pattern);
+  }
+
+  /**
+   * Публикация события
+   */
+  async publishEvent(eventType, data, previousData = null) {
+    const event = {
+      type: `{{entityName}}_${eventType}`,
+      timestamp: new Date().toISOString(),
+      data,
+      previousData
+    };
+
+    await publishMessage('system.events', event);
   }
 }
 
-module.exports = EntityService;
+module.exports = {{EntityName}}Service;

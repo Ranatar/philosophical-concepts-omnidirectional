@@ -1,510 +1,536 @@
 /**
- * Cache helper utilities for Redis
- * Provides common caching patterns and helpers
+ * Cache Helper
+ * Утилиты для работы с кэшем, включая стратегии кэширования,
+ * автоматическую сериализацию/десериализацию и паттерны кэширования
  */
 
-const { defaultClient } = require('./client');
-const { defaultLogger } = require('../../logging/logger');
+const redisClient = require('./client');
+const logger = require('../../logging/logger');
+const { incrementCounter, observeHistogram } = require('../../metrics/counters');
 
-/**
- * Default cache TTL (time to live) in seconds
- * @type {number}
- */
-const DEFAULT_TTL = 3600; // 1 hour
-
-/**
- * Generate a cache key with the configured prefix
- * @param {string} service - Service name
- * @param {string} entity - Entity type
- * @param {string|number} id - Entity ID
- * @param {string} [suffix] - Optional key suffix
- * @returns {string} Generated cache key
- */
-function generateCacheKey(service, entity, id, suffix) {
-  let key = `${service}:${entity}:${id}`;
-  
-  if (suffix) {
-    key += `:${suffix}`;
+class CacheHelper {
+  constructor(options = {}) {
+    this.defaultTTL = options.defaultTTL || 3600; // 1 час по умолчанию
+    this.keyPrefix = options.keyPrefix || 'cache:';
+    this.enableCompression = options.enableCompression || false;
+    this.compressionThreshold = options.compressionThreshold || 1024; // 1KB
   }
-  
-  return key;
-}
 
-/**
- * Normalize a cache key to handle edge cases (e.g., null values, arrays)
- * @param {*} key - Key to normalize
- * @returns {string} Normalized key
- */
-function normalizeCacheKey(key) {
-  if (key === null || key === undefined) {
-    return 'null';
+  /**
+   * Генерация ключа с префиксом
+   */
+  generateKey(namespace, identifier) {
+    const parts = [this.keyPrefix, namespace];
+    
+    if (identifier !== undefined) {
+      if (typeof identifier === 'object') {
+        parts.push(this._hashObject(identifier));
+      } else {
+        parts.push(identifier);
+      }
+    }
+    
+    return parts.join(':');
   }
-  
-  if (Array.isArray(key)) {
-    return key.map(k => normalizeCacheKey(k)).join(':');
-  }
-  
-  if (typeof key === 'object') {
+
+  /**
+   * Кэширование с автоматической сериализацией
+   */
+  async set(key, value, options = {}) {
+    const startTime = Date.now();
+    
     try {
-      const sortedKeys = Object.keys(key).sort();
-      const normalizedObj = {};
+      const ttl = options.ttl || this.defaultTTL;
+      const fullKey = options.raw ? key : this.generateKey(options.namespace || 'default', key);
       
-      for (const k of sortedKeys) {
-        normalizedObj[k] = key[k];
+      // Сериализация значения
+      let serialized = JSON.stringify(value);
+      
+      // Сжатие, если включено и размер превышает порог
+      if (this.enableCompression && serialized.length > this.compressionThreshold) {
+        serialized = await this._compress(serialized);
       }
       
-      return JSON.stringify(normalizedObj);
-    } catch (err) {
-      return String(key);
-    }
-  }
-  
-  return String(key);
-}
-
-/**
- * Generate a hash key for caching query results
- * @param {string} service - Service name
- * @param {string} entity - Entity type
- * @param {string} action - Query action
- * @param {Object} params - Query parameters
- * @returns {string} Generated cache key
- */
-function generateQueryCacheKey(service, entity, action, params) {
-  const normalizedParams = normalizeCacheKey(params);
-  return `${service}:${entity}:${action}:${normalizedParams}`;
-}
-
-/**
- * Cache item by ID
- * @param {string} service - Service name
- * @param {string} entity - Entity type
- * @param {string|number} id - Entity ID
- * @param {Object} data - Data to cache
- * @param {number} [ttl=DEFAULT_TTL] - Cache TTL in seconds
- * @param {Object} [options={}] - Additional options
- * @returns {Promise<boolean>} Whether the operation succeeded
- */
-async function cacheItem(service, entity, id, data, ttl = DEFAULT_TTL, options = {}) {
-  const key = generateCacheKey(service, entity, id);
-  
-  try {
-    const { client = defaultClient, logger = defaultLogger } = options;
-    
-    const result = await client.setJson(key, data, ttl);
-    
-    if (result) {
-      logger.debug('Item cached successfully', {
-        service,
-        entity,
-        id,
-        ttl
-      });
-    }
-    
-    return result;
-  } catch (err) {
-    options.logger?.error('Error caching item', {
-      service,
-      entity,
-      id,
-      error: err.message
-    });
-    
-    return false;
-  }
-}
-
-/**
- * Cache multiple items by ID
- * @param {string} service - Service name
- * @param {string} entity - Entity type
- * @param {Array<Object>} items - Items to cache
- * @param {string} idField - Field name for the ID
- * @param {number} [ttl=DEFAULT_TTL] - Cache TTL in seconds
- * @param {Object} [options={}] - Additional options
- * @returns {Promise<number>} Number of successfully cached items
- */
-async function cacheItems(service, entity, items, idField, ttl = DEFAULT_TTL, options = {}) {
-  try {
-    const { client = defaultClient, logger = defaultLogger } = options;
-    
-    let successCount = 0;
-    
-    for (const item of items) {
-      const id = item[idField];
+      await redisClient.set(fullKey, serialized, ttl);
       
-      if (id) {
-        const key = generateCacheKey(service, entity, id);
-        const result = await client.setJson(key, item, ttl);
-        
-        if (result) {
-          successCount++;
+      const duration = Date.now() - startTime;
+      observeHistogram('cache_operation_duration_ms', duration, { operation: 'set' });
+      incrementCounter('cache_sets_total');
+      
+      logger.debug('Cache set', { key: fullKey, ttl, size: serialized.length });
+      
+      return true;
+    } catch (error) {
+      incrementCounter('cache_errors_total', { operation: 'set' });
+      logger.error('Cache set error', { key, error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Получение из кэша с автоматической десериализацией
+   */
+  async get(key, options = {}) {
+    const startTime = Date.now();
+    
+    try {
+      const fullKey = options.raw ? key : this.generateKey(options.namespace || 'default', key);
+      const cached = await redisClient.get(fullKey);
+      
+      const duration = Date.now() - startTime;
+      observeHistogram('cache_operation_duration_ms', duration, { operation: 'get' });
+      
+      if (cached === null) {
+        incrementCounter('cache_misses_total');
+        return null;
+      }
+      
+      incrementCounter('cache_hits_total');
+      
+      // Декомпрессия, если необходимо
+      let decompressed = cached;
+      if (this._isCompressed(cached)) {
+        decompressed = await this._decompress(cached);
+      }
+      
+      // Десериализация
+      try {
+        return JSON.parse(decompressed);
+      } catch (parseError) {
+        // Если не удалось распарсить, возвращаем как есть
+        logger.warn('Cache parse error, returning raw value', { key: fullKey });
+        return decompressed;
+      }
+    } catch (error) {
+      incrementCounter('cache_errors_total', { operation: 'get' });
+      logger.error('Cache get error', { key, error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Получение нескольких значений
+   */
+  async mget(keys, options = {}) {
+    const startTime = Date.now();
+    
+    try {
+      const namespace = options.namespace || 'default';
+      const fullKeys = keys.map(key => 
+        options.raw ? key : this.generateKey(namespace, key)
+      );
+      
+      const client = await redisClient.getClient();
+      const values = await client.mget(...fullKeys);
+      
+      const duration = Date.now() - startTime;
+      observeHistogram('cache_operation_duration_ms', duration, { operation: 'mget' });
+      
+      const results = {};
+      keys.forEach((key, index) => {
+        const value = values[index];
+        if (value !== null) {
+          try {
+            let decompressed = value;
+            if (this._isCompressed(value)) {
+              decompressed = this._decompress(value);
+            }
+            results[key] = JSON.parse(decompressed);
+            incrementCounter('cache_hits_total');
+          } catch (error) {
+            logger.warn('Cache parse error in mget', { key, error: error.message });
+            results[key] = null;
+            incrementCounter('cache_misses_total');
+          }
+        } else {
+          results[key] = null;
+          incrementCounter('cache_misses_total');
         }
-      }
-    }
-    
-    logger.debug('Multiple items cached', {
-      service,
-      entity,
-      total: items.length,
-      success: successCount,
-      ttl
-    });
-    
-    return successCount;
-  } catch (err) {
-    options.logger?.error('Error caching multiple items', {
-      service,
-      entity,
-      error: err.message
-    });
-    
-    return 0;
-  }
-}
-
-/**
- * Cache query results
- * @param {string} service - Service name
- * @param {string} entity - Entity type
- * @param {string} action - Query action
- * @param {Object} params - Query parameters
- * @param {Object} data - Query results to cache
- * @param {number} [ttl=DEFAULT_TTL] - Cache TTL in seconds
- * @param {Object} [options={}] - Additional options
- * @returns {Promise<boolean>} Whether the operation succeeded
- */
-async function cacheQuery(service, entity, action, params, data, ttl = DEFAULT_TTL, options = {}) {
-  const key = generateQueryCacheKey(service, entity, action, params);
-  
-  try {
-    const { client = defaultClient, logger = defaultLogger } = options;
-    
-    const result = await client.setJson(key, data, ttl);
-    
-    if (result) {
-      logger.debug('Query results cached successfully', {
-        service,
-        entity,
-        action,
-        ttl
       });
-    }
-    
-    return result;
-  } catch (err) {
-    options.logger?.error('Error caching query results', {
-      service,
-      entity,
-      action,
-      error: err.message
-    });
-    
-    return false;
-  }
-}
-
-/**
- * Get a cached item by ID
- * @param {string} service - Service name
- * @param {string} entity - Entity type
- * @param {string|number} id - Entity ID
- * @param {Object} [options={}] - Additional options
- * @returns {Promise<Object|null>} Cached item or null if not found
- */
-async function getCachedItem(service, entity, id, options = {}) {
-  const key = generateCacheKey(service, entity, id);
-  
-  try {
-    const { client = defaultClient, logger = defaultLogger } = options;
-    
-    const data = await client.getJson(key);
-    
-    if (data) {
-      logger.debug('Cache hit for item', {
-        service,
-        entity,
-        id
-      });
-    } else {
-      logger.debug('Cache miss for item', {
-        service,
-        entity,
-        id
-      });
-    }
-    
-    return data;
-  } catch (err) {
-    options.logger?.error('Error getting cached item', {
-      service,
-      entity,
-      id,
-      error: err.message
-    });
-    
-    return null;
-  }
-}
-
-/**
- * Get cached query results
- * @param {string} service - Service name
- * @param {string} entity - Entity type
- * @param {string} action - Query action
- * @param {Object} params - Query parameters
- * @param {Object} [options={}] - Additional options
- * @returns {Promise<Object|null>} Cached query results or null if not found
- */
-async function getCachedQuery(service, entity, action, params, options = {}) {
-  const key = generateQueryCacheKey(service, entity, action, params);
-  
-  try {
-    const { client = defaultClient, logger = defaultLogger } = options;
-    
-    const data = await client.getJson(key);
-    
-    if (data) {
-      logger.debug('Cache hit for query', {
-        service,
-        entity,
-        action
-      });
-    } else {
-      logger.debug('Cache miss for query', {
-        service,
-        entity,
-        action
-      });
-    }
-    
-    return data;
-  } catch (err) {
-    options.logger?.error('Error getting cached query results', {
-      service,
-      entity,
-      action,
-      error: err.message
-    });
-    
-    return null;
-  }
-}
-
-/**
- * Invalidate a cached item by ID
- * @param {string} service - Service name
- * @param {string} entity - Entity type
- * @param {string|number} id - Entity ID
- * @param {Object} [options={}] - Additional options
- * @returns {Promise<boolean>} Whether the operation succeeded
- */
-async function invalidateCachedItem(service, entity, id, options = {}) {
-  const key = generateCacheKey(service, entity, id);
-  
-  try {
-    const { client = defaultClient, logger = defaultLogger } = options;
-    
-    const result = await client.del(key);
-    
-    logger.debug('Cache invalidated for item', {
-      service,
-      entity,
-      id,
-      success: result > 0
-    });
-    
-    return result > 0;
-  } catch (err) {
-    options.logger?.error('Error invalidating cached item', {
-      service,
-      entity,
-      id,
-      error: err.message
-    });
-    
-    return false;
-  }
-}
-
-/**
- * Invalidate cached query results
- * @param {string} service - Service name
- * @param {string} entity - Entity type
- * @param {string} action - Query action
- * @param {Object} params - Query parameters
- * @param {Object} [options={}] - Additional options
- * @returns {Promise<boolean>} Whether the operation succeeded
- */
-async function invalidateCachedQuery(service, entity, action, params, options = {}) {
-  const key = generateQueryCacheKey(service, entity, action, params);
-  
-  try {
-    const { client = defaultClient, logger = defaultLogger } = options;
-    
-    const result = await client.del(key);
-    
-    logger.debug('Cache invalidated for query', {
-      service,
-      entity,
-      action,
-      success: result > 0
-    });
-    
-    return result > 0;
-  } catch (err) {
-    options.logger?.error('Error invalidating cached query', {
-      service,
-      entity,
-      action,
-      error: err.message
-    });
-    
-    return false;
-  }
-}
-
-/**
- * Invalidate all cached queries for an entity
- * @param {string} service - Service name
- * @param {string} entity - Entity type
- * @param {Object} [options={}] - Additional options
- * @returns {Promise<boolean>} Whether the operation succeeded
- */
-async function invalidateEntityQueries(service, entity, options = {}) {
-  try {
-    const { client = defaultClient, logger = defaultLogger } = options;
-    
-    const pattern = `${service}:${entity}:*`;
-    let cursor = '0';
-    let keys = [];
-    
-    // Scan for all keys matching the pattern
-    do {
-      const result = await client.asyncMethods.scan(cursor, 'MATCH', pattern, 'COUNT', '100');
-      cursor = result[0];
-      keys = keys.concat(result[1]);
-    } while (cursor !== '0');
-    
-    if (keys.length > 0) {
-      const result = await client.del(keys);
       
-      logger.debug('Cache invalidated for entity queries', {
-        service,
-        entity,
-        keysFound: keys.length,
-        keysDeleted: result
-      });
+      return results;
+    } catch (error) {
+      incrementCounter('cache_errors_total', { operation: 'mget' });
+      logger.error('Cache mget error', { keys, error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Удаление из кэша
+   */
+  async del(key, options = {}) {
+    try {
+      const fullKey = options.raw ? key : this.generateKey(options.namespace || 'default', key);
+      const result = await redisClient.del(fullKey);
+      
+      incrementCounter('cache_deletes_total');
+      logger.debug('Cache delete', { key: fullKey, deleted: result > 0 });
       
       return result > 0;
+    } catch (error) {
+      incrementCounter('cache_errors_total', { operation: 'del' });
+      logger.error('Cache delete error', { key, error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Очистка кэша по паттерну
+   */
+  async clear(pattern, options = {}) {
+    try {
+      const namespace = options.namespace || 'default';
+      const searchPattern = pattern 
+        ? this.generateKey(namespace, pattern)
+        : this.generateKey(namespace, '*');
+      
+      const client = await redisClient.getClient();
+      const stream = client.scanStream({
+        match: searchPattern,
+        count: 100
+      });
+      
+      let deletedCount = 0;
+      
+      stream.on('data', async (keys) => {
+        if (keys.length) {
+          const deleted = await client.del(...keys);
+          deletedCount += deleted;
+        }
+      });
+      
+      return new Promise((resolve, reject) => {
+        stream.on('end', () => {
+          incrementCounter('cache_clears_total', { count: deletedCount });
+          logger.info('Cache cleared', { pattern: searchPattern, deletedCount });
+          resolve(deletedCount);
+        });
+        
+        stream.on('error', (error) => {
+          incrementCounter('cache_errors_total', { operation: 'clear' });
+          logger.error('Cache clear error', { pattern, error: error.message });
+          reject(error);
+        });
+      });
+    } catch (error) {
+      incrementCounter('cache_errors_total', { operation: 'clear' });
+      logger.error('Cache clear error', { pattern, error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Кэширование с автоматическим обновлением (cache-aside pattern)
+   */
+  async getOrSet(key, fetchFunction, options = {}) {
+    const startTime = Date.now();
+    
+    try {
+      // Пытаемся получить из кэша
+      const cached = await this.get(key, options);
+      if (cached !== null) {
+        return cached;
+      }
+      
+      // Если не найдено, вызываем функцию получения данных
+      const freshData = await fetchFunction();
+      
+      // Сохраняем в кэш
+      if (freshData !== null && freshData !== undefined) {
+        await this.set(key, freshData, options);
+      }
+      
+      const duration = Date.now() - startTime;
+      observeHistogram('cache_fetch_duration_ms', duration);
+      
+      return freshData;
+    } catch (error) {
+      logger.error('Cache getOrSet error', { key, error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Кэширование с блокировкой для предотвращения cache stampede
+   */
+  async getOrSetWithLock(key, fetchFunction, options = {}) {
+    const lockKey = `lock:${key}`;
+    const lockTTL = options.lockTTL || 10; // 10 секунд по умолчанию
+    const lockRetryDelay = options.lockRetryDelay || 100; // 100ms
+    const maxLockRetries = options.maxLockRetries || 50; // 5 секунд максимум
+    
+    try {
+      // Пытаемся получить из кэша
+      const cached = await this.get(key, options);
+      if (cached !== null) {
+        return cached;
+      }
+      
+      // Пытаемся получить блокировку
+      let lockAcquired = false;
+      let retries = 0;
+      
+      while (!lockAcquired && retries < maxLockRetries) {
+        lockAcquired = await redisClient.setWithOptions(lockKey, '1', {
+          ttl: lockTTL,
+          onlyIfNotExists: true
+        });
+        
+        if (!lockAcquired) {
+          // Ждем и проверяем кэш снова
+          await this._sleep(lockRetryDelay);
+          
+          const cachedAfterWait = await this.get(key, options);
+          if (cachedAfterWait !== null) {
+            return cachedAfterWait;
+          }
+          
+          retries++;
+        }
+      }
+      
+      if (!lockAcquired) {
+        throw new Error('Failed to acquire cache lock');
+      }
+      
+      try {
+        // Двойная проверка после получения блокировки
+        const cachedAfterLock = await this.get(key, options);
+        if (cachedAfterLock !== null) {
+          return cachedAfterLock;
+        }
+        
+        // Получаем свежие данные
+        const freshData = await fetchFunction();
+        
+        // Сохраняем в кэш
+        if (freshData !== null && freshData !== undefined) {
+          await this.set(key, freshData, options);
+        }
+        
+        return freshData;
+      } finally {
+        // Освобождаем блокировку
+        await redisClient.del(lockKey);
+      }
+    } catch (error) {
+      logger.error('Cache getOrSetWithLock error', { key, error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Инвалидация кэша с тегами
+   */
+  async tag(tags, key) {
+    if (!Array.isArray(tags)) {
+      tags = [tags];
     }
     
-    return true;
-  } catch (err) {
-    options.logger?.error('Error invalidating entity queries', {
-      service,
-      entity,
-      error: err.message
+    try {
+      const promises = tags.map(tag => 
+        redisClient.sadd(`tag:${tag}`, key)
+      );
+      
+      await Promise.all(promises);
+      incrementCounter('cache_tags_added_total', { count: tags.length });
+    } catch (error) {
+      logger.error('Cache tagging error', { tags, key, error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Инвалидация по тегу
+   */
+  async invalidateByTag(tag) {
+    try {
+      const keys = await redisClient.smembers(`tag:${tag}`);
+      
+      if (keys.length > 0) {
+        await redisClient.del(...keys);
+        await redisClient.del(`tag:${tag}`);
+        
+        incrementCounter('cache_tag_invalidations_total', { tag, count: keys.length });
+        logger.info('Cache invalidated by tag', { tag, count: keys.length });
+      }
+      
+      return keys.length;
+    } catch (error) {
+      logger.error('Cache tag invalidation error', { tag, error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Прогрев кэша
+   */
+  async warmUp(items, fetchFunction, options = {}) {
+    const results = {
+      success: 0,
+      failed: 0,
+      errors: []
+    };
+    
+    const startTime = Date.now();
+    
+    for (const item of items) {
+      try {
+        const key = typeof item === 'object' ? item.key : item;
+        const fetchOptions = typeof item === 'object' ? item.options : {};
+        
+        const data = await fetchFunction(key, fetchOptions);
+        
+        if (data !== null && data !== undefined) {
+          await this.set(key, data, { ...options, ...fetchOptions });
+          results.success++;
+        }
+      } catch (error) {
+        results.failed++;
+        results.errors.push({
+          item,
+          error: error.message
+        });
+        logger.error('Cache warm-up error', { item, error: error.message });
+      }
+    }
+    
+    const duration = Date.now() - startTime;
+    logger.info('Cache warm-up completed', { 
+      ...results, 
+      duration,
+      totalItems: items.length 
     });
     
-    return false;
+    return results;
+  }
+
+  /**
+   * Получение статистики кэша
+   */
+  async getStats(namespace = null) {
+    try {
+      const pattern = namespace 
+        ? this.generateKey(namespace, '*')
+        : this.generateKey('*', '*');
+      
+      const client = await redisClient.getClient();
+      let keyCount = 0;
+      let totalSize = 0;
+      const typeCounts = {};
+      
+      const stream = client.scanStream({
+        match: pattern,
+        count: 100
+      });
+      
+      return new Promise((resolve, reject) => {
+        stream.on('data', async (keys) => {
+          keyCount += keys.length;
+          
+          for (const key of keys) {
+            try {
+              const type = await client.type(key);
+              typeCounts[type] = (typeCounts[type] || 0) + 1;
+              
+              // Примерный подсчет размера для строковых ключей
+              if (type === 'string') {
+                const value = await client.get(key);
+                if (value) {
+                  totalSize += Buffer.byteLength(value);
+                }
+              }
+            } catch (error) {
+              logger.warn('Error getting stats for key', { key, error: error.message });
+            }
+          }
+        });
+        
+        stream.on('end', () => {
+          const stats = {
+            namespace,
+            keyCount,
+            totalSize,
+            avgSize: keyCount > 0 ? Math.round(totalSize / keyCount) : 0,
+            typeCounts,
+            pattern
+          };
+          
+          logger.debug('Cache stats retrieved', stats);
+          resolve(stats);
+        });
+        
+        stream.on('error', reject);
+      });
+    } catch (error) {
+      logger.error('Cache stats error', { namespace, error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Хеширование объекта для использования в качестве ключа
+   */
+  _hashObject(obj) {
+    const crypto = require('crypto');
+    const str = JSON.stringify(obj, Object.keys(obj).sort());
+    return crypto.createHash('md5').update(str).digest('hex');
+  }
+
+  /**
+   * Проверка, сжаты ли данные
+   */
+  _isCompressed(data) {
+    // Простая проверка по префиксу
+    return data && data.startsWith('COMPRESSED:');
+  }
+
+  /**
+   * Сжатие данных
+   */
+  async _compress(data) {
+    const zlib = require('zlib');
+    const compressed = await new Promise((resolve, reject) => {
+      zlib.deflate(data, (err, buffer) => {
+        if (err) reject(err);
+        else resolve(buffer);
+      });
+    });
+    
+    return 'COMPRESSED:' + compressed.toString('base64');
+  }
+
+  /**
+   * Распаковка данных
+   */
+  async _decompress(data) {
+    const zlib = require('zlib');
+    const compressed = data.replace('COMPRESSED:', '');
+    const buffer = Buffer.from(compressed, 'base64');
+    
+    const decompressed = await new Promise((resolve, reject) => {
+      zlib.inflate(buffer, (err, result) => {
+        if (err) reject(err);
+        else resolve(result);
+      });
+    });
+    
+    return decompressed.toString();
+  }
+
+  /**
+   * Утилита для ожидания
+   */
+  _sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 }
 
-/**
- * Cache function with automatic key generation
- * @param {function} fn - Function to cache
- * @param {Object} cacheOptions - Cache options
- * @param {string} cacheOptions.service - Service name
- * @param {string} cacheOptions.entity - Entity type
- * @param {string} cacheOptions.action - Action name
- * @param {number} [cacheOptions.ttl=DEFAULT_TTL] - Cache TTL in seconds
- * @param {function} [cacheOptions.keyGenerator] - Custom key generator function
- * @returns {function} Wrapped function with caching
- */
-function cachify(fn, cacheOptions) {
-  const {
-    service,
-    entity,
-    action,
-    ttl = DEFAULT_TTL,
-    keyGenerator = generateQueryCacheKey,
-    client = defaultClient,
-    logger = defaultLogger
-  } = cacheOptions;
-  
-  return async function(...args) {
-    try {
-      // Generate cache key
-      const key = typeof keyGenerator === 'function'
-        ? keyGenerator(service, entity, action, args)
-        : generateQueryCacheKey(service, entity, action, args);
-      
-      // Try to get from cache
-      const cachedResult = await client.getJson(key);
-      
-      if (cachedResult !== null) {
-        logger.debug('Cache hit', {
-          service,
-          entity,
-          action,
-          key
-        });
-        
-        return cachedResult;
-      }
-      
-      logger.debug('Cache miss', {
-        service,
-        entity,
-        action,
-        key
-      });
-      
-      // Execute the function
-      const result = await fn(...args);
-      
-      // Cache the result
-      if (result !== null && result !== undefined) {
-        await client.setJson(key, result, ttl);
-        
-        logger.debug('Cached function result', {
-          service,
-          entity,
-          action,
-          key,
-          ttl
-        });
-      }
-      
-      return result;
-    } catch (err) {
-      logger.error('Error in cachify', {
-        service,
-        entity,
-        action,
-        error: err.message
-      });
-      
-      // Fall back to the original function
-      return fn(...args);
-    }
-  };
-}
+// Создание экземпляра с настройками по умолчанию
+const cacheHelper = new CacheHelper();
 
-module.exports = {
-  DEFAULT_TTL,
-  generateCacheKey,
-  normalizeCacheKey,
-  generateQueryCacheKey,
-  cacheItem,
-  cacheItems,
-  cacheQuery,
-  getCachedItem,
-  getCachedQuery,
-  invalidateCachedItem,
-  invalidateCachedQuery,
-  invalidateEntityQueries,
-  cachify
-};
+module.exports = cacheHelper;
+
+// Экспорт класса для создания дополнительных экземпляров
+module.exports.CacheHelper = CacheHelper;

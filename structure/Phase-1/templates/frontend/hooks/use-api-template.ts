@@ -1,621 +1,582 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import axios, { AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
+/**
+ * Шаблон хука для работы с API
+ * Базовый шаблон для создания хуков для взаимодействия с API
+ * 
+ * Использование:
+ * 1. Скопировать файл в директорию hooks
+ * 2. Заменить {{HookName}} на название хука (например, useUserApi)
+ * 3. Заменить {{EntityName}} на название сущности (например, User)
+ * 4. Заменить {{endpoint}} на базовый endpoint API (например, /api/users)
+ * 5. Адаптировать методы и типы под специфику API
+ */
+
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import axios, { AxiosError, CancelTokenSource } from 'axios';
+import { useAuth } from './useAuth';
+import { useNotification } from './useNotification';
 
 /**
- * API response interface
+ * Конфигурация хука
  */
-interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: {
-    code: string;
-    message: string;
-    details?: any;
-  };
-  meta?: Record<string, any>;
+interface {{HookName}}Options<T = any> {
+  // Автоматически выполнить запрос при монтировании
+  enabled?: boolean;
+  // Начальные данные
+  initialData?: T;
+  // Параметры запроса
+  params?: Record<string, any>;
+  // Колбэки
+  onSuccess?: (data: T) => void;
+  onError?: (error: Error) => void;
+  onSettled?: () => void;
+  // Настройки кэширования
+  cacheTime?: number;
+  staleTime?: number;
+  // Настройки повторных попыток
+  retry?: boolean | number;
+  retryDelay?: number;
+  // Преобразование данных
+  transform?: (data: any) => T;
+  // Дополнительные заголовки
+  headers?: Record<string, string>;
 }
 
 /**
- * Pagination response interface
+ * Состояние хука
  */
-interface PaginatedResponse<T> extends ApiResponse<T[]> {
-  meta: {
-    pagination: {
-      total: number;
-      page: number;
-      pageSize: number;
-      pageCount: number;
-    };
-    [key: string]: any;
-  };
-}
-
-/**
- * API state interface
- */
-interface ApiState<T> {
+interface {{HookName}}State<T> {
   data: T | null;
   loading: boolean;
-  error: string | null;
-  status: 'idle' | 'loading' | 'success' | 'error';
-  statusCode: number | null;
-  meta: Record<string, any> | null;
+  error: Error | null;
+  isValidating: boolean;
+  isStale: boolean;
 }
 
 /**
- * Error details from API
+ * Возвращаемое значение хука
  */
-interface ApiErrorDetails {
-  code: string;
-  message: string;
-  details?: any;
-  statusCode: number;
-}
-
-/**
- * API options interface
- */
-interface ApiOptions<T> extends AxiosRequestConfig {
-  /** Mock response for testing */
-  mockResponse?: ApiResponse<T>;
-  /** Whether to enable mock response */
-  enableMock?: boolean;
-  /** Delay for mock response (ms) */
-  mockDelay?: number;
-  /** Whether to skip automatic execution */
-  skip?: boolean;
-  /** Automatic retry configuration */
-  retry?: {
-    /** Maximum number of retry attempts */
-    maxRetries: number;
-    /** Delay between retries (ms) */
-    retryDelay: number;
-    /** Whether to use exponential backoff */
-    useExponentialBackoff?: boolean;
-    /** Status codes that should be retried */
-    retryStatusCodes?: number[];
-  };
-  /** Callback when request is successful */
-  onSuccess?: (data: T, response: AxiosResponse<ApiResponse<T>>) => void;
-  /** Callback when request fails */
-  onError?: (error: ApiErrorDetails) => void;
-  /** Transform response data before setting state */
-  transformResponse?: (data: T) => any;
-  /** Cache key for result caching */
-  cacheKey?: string;
-  /** Cache time in ms (default: 5 minutes) */
-  cacheTime?: number;
-}
-
-/**
- * Default API state
- */
-const defaultApiState = {
-  data: null,
-  loading: false,
-  error: null,
-  status: 'idle' as const,
-  statusCode: null,
-  meta: null,
-};
-
-/**
- * In-memory cache for API responses
- */
-const apiCache: Record<string, {
-  data: any;
-  timestamp: number;
-  meta: any;
-}> = {};
-
-/**
- * Process API error
- */
-function processApiError(error: AxiosError<ApiResponse<any>>): ApiErrorDetails {
-  // Get status code
-  const statusCode = error.response?.status || 0;
-  
-  // Get error details from response if available
-  if (error.response?.data?.error) {
-    return {
-      code: error.response.data.error.code || 'unknown_error',
-      message: error.response.data.error.message || error.message,
-      details: error.response.data.error.details,
-      statusCode
-    };
-  }
-  
-  // Network error
-  if (error.code === 'ECONNABORTED') {
-    return {
-      code: 'timeout',
-      message: 'Request timed out',
-      statusCode
-    };
-  }
-  
-  if (!error.response) {
-    return {
-      code: 'network_error',
-      message: 'Network error',
-      statusCode
-    };
-  }
-  
-  // Default error
-  return {
-    code: `http_${statusCode}`,
-    message: error.message || 'Unknown error',
-    statusCode
-  };
-}
-
-/**
- * Custom hook for making API requests
- * 
- * @example Basic usage
- * ```ts
- * const { data, loading, error, executeRequest } = useApi<User[]>({
- *   url: '/api/users',
- *   method: 'GET'
- * });
- * ```
- * 
- * @example With pagination
- * ```ts
- * const { data, loading, error, meta, executeRequest } = useApi<User[]>({
- *   url: '/api/users',
- *   method: 'GET',
- *   params: { page: 1, pageSize: 10 }
- * });
- * 
- * // Access pagination info
- * const { total, page, pageSize } = meta?.pagination || {};
- * ```
- * 
- * @example With manual execution
- * ```ts
- * const { data, loading, executeRequest } = useApi<User>({
- *   url: '/api/users',
- *   method: 'POST',
- *   skip: true // Skip automatic execution
- * });
- * 
- * const handleSubmit = (userData) => {
- *   executeRequest({ data: userData });
- * };
- * ```
- */
-function useApi<T = any>(options: ApiOptions<T>): ApiState<T> & {
-  executeRequest: (overrideOptions?: Partial<ApiOptions<T>>) => Promise<T | null>;
+interface {{HookName}}Result<T> extends {{HookName}}State<T> {
+  refetch: () => Promise<T | null>;
+  mutate: (data: Partial<T>) => void;
   reset: () => void;
-} {
-  // Request state
-  const [state, setState] = useState<ApiState<T>>({
-    ...defaultApiState
+  cancel: () => void;
+}
+
+/**
+ * Кэш для хранения данных
+ */
+const cache = new Map<string, { data: any; timestamp: number }>();
+
+/**
+ * Хук для работы с API {{EntityName}}
+ * 
+ * @example
+ * ```tsx
+ * const { data, loading, error, refetch } = {{HookName}}('/users/123', {
+ *   onSuccess: (user) => console.log('User loaded:', user),
+ *   transform: (data) => ({ ...data, fullName: `${data.firstName} ${data.lastName}` })
+ * });
+ * ```
+ */
+export function {{HookName}}<T = any>(
+  endpoint: string | null,
+  options: {{HookName}}Options<T> = {}
+): {{HookName}}Result<T> {
+  const {
+    enabled = true,
+    initialData = null,
+    params = {},
+    onSuccess,
+    onError,
+    onSettled,
+    cacheTime = 5 * 60 * 1000, // 5 минут
+    staleTime = 60 * 1000, // 1 минута
+    retry = 3,
+    retryDelay = 1000,
+    transform,
+    headers = {}
+  } = options;
+
+  const { token } = useAuth();
+  const { showNotification } = useNotification();
+  
+  // Состояние
+  const [state, setState] = useState<{{HookName}}State<T>>({
+    data: initialData,
+    loading: false,
+    error: null,
+    isValidating: false,
+    isStale: false
   });
-  
-  // Reference to the current options
-  const optionsRef = useRef(options);
-  
-  // Last request time for caching
-  const lastRequestTimeRef = useRef<number>(0);
-  
-  // Track if component is mounted
-  const isMountedRef = useRef(true);
-  
-  // Track current retry count
+
+  // Рефы
+  const cancelTokenRef = useRef<CancelTokenSource | null>(null);
   const retryCountRef = useRef(0);
-  
-  // Update options when they change
-  useEffect(() => {
-    optionsRef.current = options;
-  }, [options]);
-  
-  // Check if we should use cached data
-  const getCachedData = useCallback(() => {
-    const { cacheKey, cacheTime = 5 * 60 * 1000 } = optionsRef.current;
-    
+  const mountedRef = useRef(true);
+  const lastFetchTimeRef = useRef<number>(0);
+
+  // Генерация ключа для кэша
+  const cacheKey = useMemo(() => {
+    if (!endpoint) return null;
+    const paramString = JSON.stringify(params);
+    return `${endpoint}:${paramString}`;
+  }, [endpoint, params]);
+
+  /**
+   * Проверка, устарели ли данные
+   */
+  const checkIfStale = useCallback(() => {
+    if (!lastFetchTimeRef.current) return true;
+    const now = Date.now();
+    return now - lastFetchTimeRef.current > staleTime;
+  }, [staleTime]);
+
+  /**
+   * Получение данных из кэша
+   */
+  const getCachedData = useCallback((): T | null => {
     if (!cacheKey) return null;
     
-    const cachedItem = apiCache[cacheKey];
+    const cached = cache.get(cacheKey);
+    if (!cached) return null;
     
-    if (
-      cachedItem &&
-      Date.now() - cachedItem.timestamp < cacheTime
-    ) {
-      return cachedItem;
+    const now = Date.now();
+    if (now - cached.timestamp > cacheTime) {
+      cache.delete(cacheKey);
+      return null;
     }
     
-    return null;
-  }, []);
-  
-  // Store data in cache
-  const setCacheData = useCallback((data: T, meta: any) => {
-    const { cacheKey } = optionsRef.current;
+    return cached.data;
+  }, [cacheKey, cacheTime]);
+
+  /**
+   * Сохранение данных в кэш
+   */
+  const setCachedData = useCallback((data: T) => {
+    if (!cacheKey) return;
+    
+    cache.set(cacheKey, {
+      data,
+      timestamp: Date.now()
+    });
+  }, [cacheKey]);
+
+  /**
+   * Выполнение запроса к API
+   */
+  const fetchData = useCallback(async (): Promise<T | null> => {
+    if (!endpoint) return null;
+
+    // Отменяем предыдущий запрос
+    if (cancelTokenRef.current) {
+      cancelTokenRef.current.cancel('New request initiated');
+    }
+
+    // Создаем новый токен отмены
+    cancelTokenRef.current = axios.CancelToken.source();
+
+    setState(prev => ({
+      ...prev,
+      loading: !prev.data,
+      isValidating: !!prev.data,
+      error: null
+    }));
+
+    try {
+      const response = await axios({
+        method: 'GET',
+        url: endpoint,
+        params,
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : '',
+          'Content-Type': 'application/json',
+          ...headers
+        },
+        cancelToken: cancelTokenRef.current.token
+      });
+
+      const data = transform ? transform(response.data) : response.data;
+      
+      if (mountedRef.current) {
+        setState(prev => ({
+          ...prev,
+          data,
+          loading: false,
+          isValidating: false,
+          error: null,
+          isStale: false
+        }));
+
+        setCachedData(data);
+        lastFetchTimeRef.current = Date.now();
+        retryCountRef.current = 0;
+        
+        onSuccess?.(data);
+        onSettled?.();
+      }
+
+      return data;
+    } catch (error) {
+      if (axios.isCancel(error)) {
+        console.log('Request cancelled:', error.message);
+        return null;
+      }
+
+      const axiosError = error as AxiosError;
+      const errorMessage = axiosError.response?.data?.message || 
+                          axiosError.message || 
+                          'An error occurred';
+      
+      const appError = new Error(errorMessage);
+      
+      if (mountedRef.current) {
+        // Обработка повторных попыток
+        const shouldRetry = typeof retry === 'boolean' ? retry : retryCountRef.current < retry;
+        const isRetryableError = !axiosError.response || 
+                                axiosError.response.status >= 500 ||
+                                axiosError.code === 'ECONNABORTED';
+
+        if (shouldRetry && isRetryableError) {
+          retryCountRef.current++;
+          const delay = retryDelay * Math.pow(2, retryCountRef.current - 1); // Экспоненциальная задержка
+          
+          console.log(`Retrying request (attempt ${retryCountRef.current})...`);
+          
+          setTimeout(() => {
+            if (mountedRef.current) {
+              fetchData();
+            }
+          }, delay);
+          
+          return null;
+        }
+
+        setState(prev => ({
+          ...prev,
+          loading: false,
+          isValidating: false,
+          error: appError
+        }));
+
+        onError?.(appError);
+        onSettled?.();
+      }
+
+      return null;
+    }
+  }, [endpoint, params, token, headers, transform, onSuccess, onError, onSettled, 
+      retry, retryDelay, setCachedData]);
+
+  /**
+   * Обновление данных
+   */
+  const refetch = useCallback(async (): Promise<T | null> => {
+    retryCountRef.current = 0;
+    return fetchData();
+  }, [fetchData]);
+
+  /**
+   * Мутация данных (оптимистичное обновление)
+   */
+  const mutate = useCallback((newData: Partial<T>) => {
+    setState(prev => ({
+      ...prev,
+      data: prev.data ? { ...prev.data, ...newData } : (newData as T),
+      isStale: true
+    }));
     
     if (cacheKey) {
-      apiCache[cacheKey] = {
-        data,
-        meta,
-        timestamp: Date.now()
-      };
+      const cached = cache.get(cacheKey);
+      if (cached) {
+        cache.set(cacheKey, {
+          ...cached,
+          data: { ...cached.data, ...newData }
+        });
+      }
+    }
+  }, [cacheKey]);
+
+  /**
+   * Сброс состояния
+   */
+  const reset = useCallback(() => {
+    setState({
+      data: initialData,
+      loading: false,
+      error: null,
+      isValidating: false,
+      isStale: false
+    });
+    retryCountRef.current = 0;
+    lastFetchTimeRef.current = 0;
+  }, [initialData]);
+
+  /**
+   * Отмена запроса
+   */
+  const cancel = useCallback(() => {
+    if (cancelTokenRef.current) {
+      cancelTokenRef.current.cancel('Request cancelled by user');
+      cancelTokenRef.current = null;
     }
   }, []);
-  
-  // Main request function
-  const makeRequest = useCallback(async (
-    requestOptions: ApiOptions<T> = optionsRef.current
-  ): Promise<T | null> => {
-    // Skip if explicitly requested
-    if (requestOptions.skip) {
-      return null;
-    }
-    
-    // Check for cached data
+
+  /**
+   * Эффект для автоматического выполнения запроса
+   */
+  useEffect(() => {
+    if (!enabled || !endpoint) return;
+
+    // Проверяем кэш
     const cachedData = getCachedData();
     if (cachedData) {
-      if (isMountedRef.current) {
-        setState({
-          data: cachedData.data,
-          meta: cachedData.meta,
-          loading: false,
-          error: null,
-          status: 'success',
-          statusCode: 200
-        });
-      }
-      return cachedData.data;
-    }
-    
-    // Show loading state
-    if (isMountedRef.current) {
       setState(prev => ({
         ...prev,
-        loading: true,
-        status: 'loading',
-        error: null
+        data: cachedData,
+        isStale: checkIfStale()
       }));
+      
+      // Если данные устарели, обновляем в фоне
+      if (checkIfStale()) {
+        fetchData();
+      }
+    } else {
+      fetchData();
     }
-    
-    try {
-      let response;
-      
-      // Use mock response if provided
-      if (requestOptions.enableMock && requestOptions.mockResponse) {
-        // Simulate network delay
-        await new Promise(resolve => 
-          setTimeout(resolve, requestOptions.mockDelay || 500)
-        );
-        
-        response = {
-          data: requestOptions.mockResponse,
-          status: 200
-        } as AxiosResponse<ApiResponse<T>>;
-      } else {
-        // Remove hook-specific options before making the request
-        const {
-          mockResponse,
-          enableMock,
-          mockDelay,
-          skip,
-          retry,
-          onSuccess,
-          onError,
-          transformResponse,
-          cacheKey,
-          cacheTime,
-          ...axiosOptions
-        } = requestOptions;
-        
-        // Make the request
-        lastRequestTimeRef.current = Date.now();
-        response = await axios.request<ApiResponse<T>>(axiosOptions);
-      }
-      
-      // Reset retry count on success
-      retryCountRef.current = 0;
-      
-      // Extract data and metadata
-      let responseData = response.data.data || null;
-      const meta = response.data.meta || null;
-      
-      // Apply transform if provided
-      if (requestOptions.transformResponse && responseData) {
-        responseData = requestOptions.transformResponse(responseData as T);
-      }
-      
-      // Store in cache
-      setCacheData(responseData as T, meta);
-      
-      // Call success callback
-      if (requestOptions.onSuccess && responseData) {
-        requestOptions.onSuccess(responseData as T, response);
-      }
-      
-      // Update state if component is still mounted
-      if (isMountedRef.current) {
-        setState({
-          data: responseData as T,
-          meta,
-          loading: false,
-          error: null,
-          status: 'success',
-          statusCode: response.status
-        });
-      }
-      
-      return responseData as T;
-    } catch (err) {
-      const error = err as AxiosError<ApiResponse<T>>;
-      const errorDetails = processApiError(error);
-      
-      // Check if we should retry
-      const { retry } = requestOptions;
-      if (
-        retry &&
-        retryCountRef.current < retry.maxRetries &&
-        (!retry.retryStatusCodes || retry.retryStatusCodes.includes(errorDetails.statusCode))
-      ) {
-        retryCountRef.current++;
-        
-        // Calculate retry delay
-        let delay = retry.retryDelay;
-        if (retry.useExponentialBackoff) {
-          delay = retry.retryDelay * Math.pow(2, retryCountRef.current - 1);
-        }
-        
-        // Wait and retry
-        await new Promise(resolve => setTimeout(resolve, delay));
-        return makeRequest(requestOptions);
-      }
-      
-      // Reset retry count
-      retryCountRef.current = 0;
-      
-      // Call error callback
-      if (requestOptions.onError) {
-        requestOptions.onError(errorDetails);
-      }
-      
-      // Update state if component is still mounted
-      if (isMountedRef.current) {
-        setState({
-          data: null,
-          loading: false,
-          error: errorDetails.message,
-          status: 'error',
-          statusCode: errorDetails.statusCode,
-          meta: null
-        });
-      }
-      
-      return null;
-    }
-  }, [getCachedData, setCacheData]);
-  
-  // Public API to execute request with optional overrides
-  const executeRequest = useCallback(
-    async (overrideOptions?: Partial<ApiOptions<T>>) => {
-      const mergedOptions = {
-        ...optionsRef.current,
-        ...overrideOptions
-      };
-      
-      return makeRequest(mergedOptions);
-    }, 
-    [makeRequest]
-  );
-  
-  // Reset state
-  const reset = useCallback(() => {
-    if (isMountedRef.current) {
-      setState({ ...defaultApiState });
-    }
-  }, []);
-  
-  // Automatically execute on mount or when URL changes
-  useEffect(() => {
-    // Skip if explicitly requested
-    if (options.skip) {
-      return;
-    }
-    
-    makeRequest();
-    
-    // Cleanup
+
     return () => {
-      isMountedRef.current = false;
+      cancel();
     };
-  }, [options.url, options.method, makeRequest, options.skip]);
-  
+  }, [enabled, endpoint, cacheKey]); // Исключаем функции из зависимостей
+
+  /**
+   * Эффект для отслеживания монтирования компонента
+   */
+  useEffect(() => {
+    mountedRef.current = true;
+    
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  /**
+   * Периодическая проверка устаревания данных
+   */
+  useEffect(() => {
+    if (!state.data || state.loading || state.isValidating) return;
+
+    const intervalId = setInterval(() => {
+      if (checkIfStale() && !state.isStale) {
+        setState(prev => ({ ...prev, isStale: true }));
+      }
+    }, 10000); // Проверяем каждые 10 секунд
+
+    return () => clearInterval(intervalId);
+  }, [state.data, state.loading, state.isValidating, state.isStale, checkIfStale]);
+
   return {
     ...state,
-    executeRequest,
+    refetch,
+    mutate,
+    reset,
+    cancel
+  };
+}
+
+/**
+ * Хук для выполнения мутаций (POST, PUT, DELETE)
+ */
+export function {{HookName}}Mutation<TData = any, TVariables = any>(
+  endpoint: string,
+  options: {
+    method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+    onSuccess?: (data: TData) => void;
+    onError?: (error: Error) => void;
+    transform?: (data: any) => TData;
+  } = {}
+) {
+  const { method = 'POST', onSuccess, onError, transform } = options;
+  const { token } = useAuth();
+  const { showNotification } = useNotification();
+  
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const mutate = useCallback(async (variables?: TVariables): Promise<TData | null> => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await axios({
+        method,
+        url: endpoint,
+        data: variables,
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : '',
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = transform ? transform(response.data) : response.data;
+      
+      onSuccess?.(data);
+      showNotification({
+        type: 'success',
+        message: 'Operation completed successfully'
+      });
+
+      return data;
+    } catch (error) {
+      const axiosError = error as AxiosError;
+      const errorMessage = axiosError.response?.data?.message || 
+                          axiosError.message || 
+                          'An error occurred';
+      
+      const appError = new Error(errorMessage);
+      setError(appError);
+      
+      onError?.(appError);
+      showNotification({
+        type: 'error',
+        message: errorMessage
+      });
+
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, [endpoint, method, token, transform, onSuccess, onError, showNotification]);
+
+  return {
+    mutate,
+    loading,
+    error
+  };
+}
+
+/**
+ * Хук для работы с пагинацией
+ */
+export function {{HookName}}Paginated<T = any>(
+  baseEndpoint: string,
+  options: {{HookName}}Options<T> & {
+    pageSize?: number;
+    initialPage?: number;
+  } = {}
+) {
+  const { pageSize = 20, initialPage = 1, ...apiOptions } = options;
+  const [page, setPage] = useState(initialPage);
+
+  const { data, loading, error, refetch } = {{HookName}}<{
+    items: T[];
+    total: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
+  }>(baseEndpoint, {
+    ...apiOptions,
+    params: {
+      ...apiOptions.params,
+      page,
+      limit: pageSize
+    }
+  });
+
+  const nextPage = useCallback(() => {
+    if (data && page < data.totalPages) {
+      setPage(prev => prev + 1);
+    }
+  }, [data, page]);
+
+  const previousPage = useCallback(() => {
+    if (page > 1) {
+      setPage(prev => prev - 1);
+    }
+  }, [page]);
+
+  const goToPage = useCallback((newPage: number) => {
+    if (data && newPage >= 1 && newPage <= data.totalPages) {
+      setPage(newPage);
+    }
+  }, [data]);
+
+  return {
+    items: data?.items || [],
+    total: data?.total || 0,
+    page: data?.page || page,
+    pageSize: data?.pageSize || pageSize,
+    totalPages: data?.totalPages || 0,
+    loading,
+    error,
+    refetch,
+    nextPage,
+    previousPage,
+    goToPage,
+    hasNextPage: data ? page < data.totalPages : false,
+    hasPreviousPage: page > 1
+  };
+}
+
+/**
+ * Хук для бесконечной прокрутки
+ */
+export function {{HookName}}InfiniteScroll<T = any>(
+  baseEndpoint: string,
+  options: {{HookName}}Options<T[]> & {
+    pageSize?: number;
+  } = {}
+) {
+  const { pageSize = 20, ...apiOptions } = options;
+  const [pages, setPages] = useState<T[][]>([]);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const currentPageRef = useRef(1);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+
+    setLoadingMore(true);
+
+    try {
+      const response = await axios({
+        method: 'GET',
+        url: baseEndpoint,
+        params: {
+          ...apiOptions.params,
+          page: currentPageRef.current,
+          limit: pageSize
+        }
+      });
+
+      const newItems = response.data.items || [];
+      
+      if (newItems.length < pageSize) {
+        setHasMore(false);
+      }
+
+      setPages(prev => [...prev, newItems]);
+      currentPageRef.current++;
+    } catch (error) {
+      console.error('Error loading more items:', error);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [baseEndpoint, apiOptions.params, pageSize, loadingMore, hasMore]);
+
+  const reset = useCallback(() => {
+    setPages([]);
+    setHasMore(true);
+    currentPageRef.current = 1;
+  }, []);
+
+  const allItems = useMemo(() => pages.flat(), [pages]);
+
+  return {
+    items: allItems,
+    loadMore,
+    loadingMore,
+    hasMore,
     reset
   };
 }
-
-/**
- * Hook for making GET requests
- */
-export function useGet<T = any>(
-  url: string,
-  params?: Record<string, any>,
-  options?: Omit<ApiOptions<T>, 'url' | 'method' | 'params'>
-) {
-  return useApi<T>({
-    url,
-    method: 'GET',
-    params,
-    ...options
-  });
-}
-
-/**
- * Hook for making POST requests
- */
-export function usePost<T = any>(
-  url: string,
-  data?: any,
-  options?: Omit<ApiOptions<T>, 'url' | 'method' | 'data'>
-) {
-  return useApi<T>({
-    url,
-    method: 'POST',
-    data,
-    skip: true, // Skip automatic execution for POST
-    ...options
-  });
-}
-
-/**
- * Hook for making PUT requests
- */
-export function usePut<T = any>(
-  url: string,
-  data?: any,
-  options?: Omit<ApiOptions<T>, 'url' | 'method' | 'data'>
-) {
-  return useApi<T>({
-    url,
-    method: 'PUT',
-    data,
-    skip: true, // Skip automatic execution for PUT
-    ...options
-  });
-}
-
-/**
- * Hook for making DELETE requests
- */
-export function useDelete<T = any>(
-  url: string,
-  options?: Omit<ApiOptions<T>, 'url' | 'method'>
-) {
-  return useApi<T>({
-    url,
-    method: 'DELETE',
-    skip: true, // Skip automatic execution for DELETE
-    ...options
-  });
-}
-
-/**
- * Hook for making paginated GET requests
- */
-export function usePagination<T = any>(
-  url: string,
-  options?: Omit<ApiOptions<T[]>, 'url' | 'method'> & {
-    page?: number;
-    pageSize?: number;
-    sortBy?: string;
-    sortOrder?: 'asc' | 'desc';
-    filters?: Record<string, any>;
-  }
-) {
-  const {
-    page = 1,
-    pageSize = 20,
-    sortBy,
-    sortOrder = 'asc',
-    filters = {},
-    ...restOptions
-  } = options || {};
-  
-  // Build params
-  const params: Record<string, any> = {
-    page,
-    pageSize,
-    ...filters
-  };
-  
-  // Add sorting if provided
-  if (sortBy) {
-    params.sortBy = sortBy;
-    params.sortOrder = sortOrder;
-  }
-  
-  // Use the main API hook
-  const apiResult = useApi<T[]>({
-    url,
-    method: 'GET',
-    params,
-    ...restOptions
-  });
-  
-  // Extract pagination info from metadata
-  const pagination = apiResult.meta?.pagination || {
-    total: 0,
-    page,
-    pageSize,
-    pageCount: 0
-  };
-  
-  // Change page handler
-  const changePage = useCallback(
-    (newPage: number) => {
-      return apiResult.executeRequest({
-        params: {
-          ...params,
-          page: newPage
-        }
-      });
-    },
-    [apiResult, params]
-  );
-  
-  // Change page size handler
-  const changePageSize = useCallback(
-    (newPageSize: number) => {
-      return apiResult.executeRequest({
-        params: {
-          ...params,
-          page: 1, // Reset to first page when changing page size
-          pageSize: newPageSize
-        }
-      });
-    },
-    [apiResult, params]
-  );
-  
-  // Change sorting handler
-  const changeSort = useCallback(
-    (newSortBy: string, newSortOrder: 'asc' | 'desc' = 'asc') => {
-      return apiResult.executeRequest({
-        params: {
-          ...params,
-          sortBy: newSortBy,
-          sortOrder: newSortOrder
-        }
-      });
-    },
-    [apiResult, params]
-  );
-  
-  // Change filters handler
-  const changeFilters = useCallback(
-    (newFilters: Record<string, any>) => {
-      return apiResult.executeRequest({
-        params: {
-          ...params,
-          page: 1, // Reset to first page when changing filters
-          ...filters,
-          ...newFilters
-        }
-      });
-    },
-    [apiResult, params, filters]
-  );
-  
-  return {
-    ...apiResult,
-    pagination,
-    changePage,
-    changePageSize,
-    changeSort,
-    changeFilters
-  };
-}
-
-export default useApi;

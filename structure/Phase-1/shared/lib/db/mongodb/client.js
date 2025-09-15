@@ -1,610 +1,722 @@
 /**
- * MongoDB client for the philosophy service
- * Provides a configured client instance and utility methods for database operations
+ * MongoDB client configuration for the Philosophy Service
+ * Provides connection management and query utilities
  */
 
 const { MongoClient, ObjectId } = require('mongodb');
-const { defaultLogger } = require('../../logging/logger');
+const { logger } = require('../../logging/logger');
+const { DatabaseMetrics } = require('../../metrics/prometheus');
 
-// Default configuration
-const DEFAULT_CONFIG = {
-  uri: process.env.MONGODB_URI || 'mongodb://mongo:mongo@localhost:27017/philosophy',
+// MongoDB connection configuration
+const defaultConfig = {
+  uri: process.env.MONGODB_URI || 'mongodb://localhost:27017',
+  database: process.env.MONGODB_DATABASE || 'philosophy_db',
+  
+  // Connection options
   options: {
     useNewUrlParser: true,
     useUnifiedTopology: true,
-    poolSize: process.env.MONGODB_POOL_SIZE ? parseInt(process.env.MONGODB_POOL_SIZE, 10) : 10,
-    connectTimeoutMS: 30000,
-    socketTimeoutMS: 30000,
-    serverSelectionTimeoutMS: 30000
-  },
-  database: process.env.MONGODB_DATABASE || 'philosophy'
+    maxPoolSize: parseInt(process.env.MONGODB_POOL_SIZE) || 10,
+    minPoolSize: parseInt(process.env.MONGODB_MIN_POOL_SIZE) || 2,
+    maxIdleTimeMS: parseInt(process.env.MONGODB_IDLE_TIMEOUT) || 60000,
+    waitQueueTimeoutMS: parseInt(process.env.MONGODB_WAIT_TIMEOUT) || 5000,
+    serverSelectionTimeoutMS: parseInt(process.env.MONGODB_SERVER_TIMEOUT) || 5000,
+    socketTimeoutMS: parseInt(process.env.MONGODB_SOCKET_TIMEOUT) || 30000,
+    
+    // Authentication
+    authSource: process.env.MONGODB_AUTH_SOURCE || 'admin',
+    
+    // Retry writes
+    retryWrites: process.env.MONGODB_RETRY_WRITES !== 'false',
+    
+    // Read preference
+    readPreference: process.env.MONGODB_READ_PREFERENCE || 'primary',
+    
+    // Application name
+    appName: process.env.SERVICE_NAME || 'philosophy-service'
+  }
 };
 
 /**
- * MongoDB client class
+ * MongoDB client wrapper with enhanced functionality
  */
-class MongoDbClient {
-  /**
-   * Create a new MongoDB client
-   * @param {Object} [config] - Configuration options
-   * @param {Object} [logger=defaultLogger] - Logger instance
-   */
-  constructor(config = {}, logger = defaultLogger) {
-    this.config = {
-      ...DEFAULT_CONFIG,
-      ...config,
-      options: { ...DEFAULT_CONFIG.options, ...(config.options || {}) }
-    };
-    this.logger = logger;
+class MongoDBClient {
+  constructor(config = {}, serviceName = 'unknown') {
+    this.config = { ...defaultConfig, ...config };
+    this.serviceName = serviceName;
     this.client = null;
     this.db = null;
+    this.metrics = new DatabaseMetrics('mongodb', serviceName);
     this.isConnected = false;
   }
-  
+
   /**
-   * Initialize the MongoDB client
-   * @returns {Promise<MongoClient>} The MongoDB client instance
+   * Connect to MongoDB
    */
-  async initialize() {
-    if (!this.client) {
-      this.logger.info('Initializing MongoDB client', {
-        uri: this.config.uri.replace(/\/\/[^:]+:[^@]+@/, '//***:***@'), // Hide credentials in logs
+  async connect() {
+    if (this.client && this.isConnected) {
+      logger.warn('MongoDB client already connected');
+      return;
+    }
+
+    try {
+      // Create MongoClient instance
+      this.client = new MongoClient(this.config.uri, this.config.options);
+      
+      // Connect to MongoDB
+      await this.client.connect();
+      
+      // Get database instance
+      this.db = this.client.db(this.config.database);
+      
+      // Test the connection
+      await this.db.admin().ping();
+      
+      this.isConnected = true;
+      
+      logger.info('MongoDB client connected', {
+        service: this.serviceName,
         database: this.config.database
       });
+
+      // Set up event listeners
+      this.setupEventListeners();
       
-      try {
-        this.client = new MongoClient(this.config.uri, this.config.options);
-        
-        await this.client.connect();
-        this.db = this.client.db(this.config.database);
-        this.isConnected = true;
-        
-        this.logger.info('MongoDB client connected successfully');
-      } catch (err) {
-        this.logger.error('Failed to initialize MongoDB client', {
-          error: err.message,
-          stack: err.stack
-        });
-        throw err;
-      }
+      // Start metrics collection
+      this.startMetricsCollection();
+      
+    } catch (error) {
+      logger.error('Failed to connect to MongoDB', {
+        error,
+        service: this.serviceName,
+        uri: this.config.uri.replace(/\/\/.*@/, '//<credentials>@') // Hide credentials in logs
+      });
+      throw error;
     }
-    
-    return this.client;
   }
-  
+
   /**
-   * Get the MongoDB client instance
-   * @returns {Promise<MongoClient>} The MongoDB client instance
+   * Get collection instance
+   * @param {string} collectionName - Collection name
+   * @returns {Collection} MongoDB collection
    */
-  async getClient() {
-    if (!this.client) {
-      return this.initialize();
-    }
-    return this.client;
-  }
-  
-  /**
-   * Get the MongoDB database instance
-   * @returns {Promise<Db>} The MongoDB database instance
-   */
-  async getDb() {
+  collection(collectionName) {
     if (!this.db) {
-      await this.initialize();
+      throw new Error('MongoDB client not connected');
     }
-    return this.db;
+    return this.db.collection(collectionName);
   }
-  
+
   /**
-   * Get a MongoDB collection
+   * Find documents
    * @param {string} collectionName - Collection name
-   * @returns {Promise<Collection>} MongoDB collection
+   * @param {Object} filter - Query filter
+   * @param {Object} options - Query options
+   * @returns {Promise<Array>} Array of documents
    */
-  async getCollection(collectionName) {
-    const db = await this.getDb();
-    return db.collection(collectionName);
-  }
-  
-  /**
-   * Create a new ObjectId
-   * @param {string} [id] - Existing ID string (optional)
-   * @returns {ObjectId} New ObjectId
-   */
-  createObjectId(id) {
-    return id ? new ObjectId(id) : new ObjectId();
-  }
-  
-  /**
-   * Find documents in a collection
-   * @param {string} collectionName - Collection name
-   * @param {Object} query - Query filter
-   * @param {Object} [options={}] - Query options
-   * @returns {Promise<Array>} Found documents
-   */
-  async find(collectionName, query, options = {}) {
+  async find(collectionName, filter = {}, options = {}) {
     const start = Date.now();
-    const collection = await this.getCollection(collectionName);
     
     try {
-      this.logger.debug('Executing MongoDB find', {
-        collection: collectionName,
-        query,
-        options
-      });
+      const collection = this.collection(collectionName);
+      const cursor = collection.find(filter, options);
       
-      const cursor = collection.find(query, options);
-      const result = await cursor.toArray();
+      // Apply options
+      if (options.sort) cursor.sort(options.sort);
+      if (options.limit) cursor.limit(options.limit);
+      if (options.skip) cursor.skip(options.skip);
+      if (options.projection) cursor.project(options.projection);
       
-      const duration = Date.now() - start;
-      this.logger.debug('MongoDB find completed', {
-        collection: collectionName,
-        duration,
-        count: result.length
-      });
+      const results = await cursor.toArray();
       
-      return result;
-    } catch (err) {
-      const duration = Date.now() - start;
-      this.logger.error('Error executing MongoDB find', {
-        collection: collectionName,
-        query,
-        options,
-        duration,
-        error: err.message,
-        stack: err.stack
-      });
+      // Record metrics
+      this.metrics.recordQuery('find', collectionName, Date.now() - start, true);
       
-      throw err;
+      return results;
+      
+    } catch (error) {
+      this.metrics.recordQuery('find', collectionName, Date.now() - start, false);
+      throw error;
     }
   }
-  
+
   /**
-   * Find a single document in a collection
+   * Find one document
    * @param {string} collectionName - Collection name
-   * @param {Object} query - Query filter
-   * @param {Object} [options={}] - Query options
-   * @returns {Promise<Object|null>} Found document or null
+   * @param {Object} filter - Query filter
+   * @param {Object} options - Query options
+   * @returns {Promise<Object|null>} Document or null
    */
-  async findOne(collectionName, query, options = {}) {
+  async findOne(collectionName, filter = {}, options = {}) {
     const start = Date.now();
-    const collection = await this.getCollection(collectionName);
     
     try {
-      this.logger.debug('Executing MongoDB findOne', {
-        collection: collectionName,
-        query,
-        options
-      });
+      const collection = this.collection(collectionName);
+      const result = await collection.findOne(filter, options);
       
-      const result = await collection.findOne(query, options);
-      
-      const duration = Date.now() - start;
-      this.logger.debug('MongoDB findOne completed', {
-        collection: collectionName,
-        duration,
-        found: result !== null
-      });
+      this.metrics.recordQuery('findOne', collectionName, Date.now() - start, true);
       
       return result;
-    } catch (err) {
-      const duration = Date.now() - start;
-      this.logger.error('Error executing MongoDB findOne', {
-        collection: collectionName,
-        query,
-        options,
-        duration,
-        error: err.message,
-        stack: err.stack
-      });
       
-      throw err;
+    } catch (error) {
+      this.metrics.recordQuery('findOne', collectionName, Date.now() - start, false);
+      throw error;
     }
   }
-  
+
   /**
-   * Find a document by ID
+   * Find document by ID
    * @param {string} collectionName - Collection name
    * @param {string|ObjectId} id - Document ID
-   * @param {Object} [options={}] - Query options
-   * @returns {Promise<Object|null>} Found document or null
+   * @param {Object} options - Query options
+   * @returns {Promise<Object|null>} Document or null
    */
   async findById(collectionName, id, options = {}) {
-    const objectId = typeof id === 'string' ? this.createObjectId(id) : id;
+    const objectId = typeof id === 'string' ? new ObjectId(id) : id;
     return this.findOne(collectionName, { _id: objectId }, options);
   }
-  
+
   /**
-   * Insert a document into a collection
+   * Insert one document
    * @param {string} collectionName - Collection name
    * @param {Object} document - Document to insert
-   * @returns {Promise<Object>} Inserted document
+   * @param {Object} options - Insert options
+   * @returns {Promise<Object>} Insert result
    */
-  async insertOne(collectionName, document) {
+  async insertOne(collectionName, document, options = {}) {
     const start = Date.now();
-    const collection = await this.getCollection(collectionName);
     
     try {
-      this.logger.debug('Executing MongoDB insertOne', {
-        collection: collectionName
-      });
+      const collection = this.collection(collectionName);
       
-      const result = await collection.insertOne(document);
+      // Add timestamps if not present
+      if (!document.created_at) {
+        document.created_at = new Date();
+      }
       
-      const duration = Date.now() - start;
-      this.logger.debug('MongoDB insertOne completed', {
-        collection: collectionName,
-        duration,
-        id: result.insertedId
-      });
+      const result = await collection.insertOne(document, options);
       
-      // Return the document with _id
-      return { ...document, _id: result.insertedId };
-    } catch (err) {
-      const duration = Date.now() - start;
-      this.logger.error('Error executing MongoDB insertOne', {
-        collection: collectionName,
-        duration,
-        error: err.message,
-        stack: err.stack
-      });
+      this.metrics.recordQuery('insertOne', collectionName, Date.now() - start, true);
       
-      throw err;
+      return {
+        insertedId: result.insertedId,
+        acknowledged: result.acknowledged,
+        document: { ...document, _id: result.insertedId }
+      };
+      
+    } catch (error) {
+      this.metrics.recordQuery('insertOne', collectionName, Date.now() - start, false);
+      throw error;
     }
   }
-  
+
   /**
-   * Insert multiple documents into a collection
+   * Insert many documents
    * @param {string} collectionName - Collection name
    * @param {Array<Object>} documents - Documents to insert
-   * @returns {Promise<Array<Object>>} Inserted documents
+   * @param {Object} options - Insert options
+   * @returns {Promise<Object>} Insert result
    */
-  async insertMany(collectionName, documents) {
+  async insertMany(collectionName, documents, options = {}) {
     const start = Date.now();
-    const collection = await this.getCollection(collectionName);
     
     try {
-      this.logger.debug('Executing MongoDB insertMany', {
-        collection: collectionName,
-        count: documents.length
-      });
+      const collection = this.collection(collectionName);
       
-      const result = await collection.insertMany(documents);
+      // Add timestamps if not present
+      const docsWithTimestamps = documents.map(doc => ({
+        ...doc,
+        created_at: doc.created_at || new Date()
+      }));
       
-      const duration = Date.now() - start;
-      this.logger.debug('MongoDB insertMany completed', {
-        collection: collectionName,
-        duration,
-        count: result.insertedCount
-      });
+      const result = await collection.insertMany(docsWithTimestamps, options);
       
-      // Return the documents with _id assigned
-      return documents.map((doc, i) => ({ ...doc, _id: result.insertedIds[i] }));
-    } catch (err) {
-      const duration = Date.now() - start;
-      this.logger.error('Error executing MongoDB insertMany', {
-        collection: collectionName,
-        count: documents.length,
-        duration,
-        error: err.message,
-        stack: err.stack
-      });
+      this.metrics.recordQuery('insertMany', collectionName, Date.now() - start, true);
       
-      throw err;
+      return {
+        insertedCount: result.insertedCount,
+        insertedIds: result.insertedIds,
+        acknowledged: result.acknowledged
+      };
+      
+    } catch (error) {
+      this.metrics.recordQuery('insertMany', collectionName, Date.now() - start, false);
+      throw error;
     }
   }
-  
+
   /**
-   * Update a document in a collection
+   * Update one document
    * @param {string} collectionName - Collection name
-   * @param {Object} query - Query filter
+   * @param {Object} filter - Query filter
    * @param {Object} update - Update operations
-   * @param {Object} [options={}] - Update options
+   * @param {Object} options - Update options
    * @returns {Promise<Object>} Update result
    */
-  async updateOne(collectionName, query, update, options = {}) {
+  async updateOne(collectionName, filter, update, options = {}) {
     const start = Date.now();
-    const collection = await this.getCollection(collectionName);
     
     try {
-      this.logger.debug('Executing MongoDB updateOne', {
-        collection: collectionName,
-        query
-      });
+      const collection = this.collection(collectionName);
       
-      const result = await collection.updateOne(query, update, options);
+      // Add updated_at timestamp
+      if (update.$set) {
+        update.$set.updated_at = new Date();
+      } else {
+        update.$set = { updated_at: new Date() };
+      }
       
-      const duration = Date.now() - start;
-      this.logger.debug('MongoDB updateOne completed', {
-        collection: collectionName,
-        duration,
+      const result = await collection.updateOne(filter, update, options);
+      
+      this.metrics.recordQuery('updateOne', collectionName, Date.now() - start, true);
+      
+      return {
         matchedCount: result.matchedCount,
-        modifiedCount: result.modifiedCount
-      });
+        modifiedCount: result.modifiedCount,
+        acknowledged: result.acknowledged,
+        upsertedId: result.upsertedId
+      };
       
-      return result;
-    } catch (err) {
-      const duration = Date.now() - start;
-      this.logger.error('Error executing MongoDB updateOne', {
-        collection: collectionName,
-        query,
-        duration,
-        error: err.message,
-        stack: err.stack
-      });
-      
-      throw err;
+    } catch (error) {
+      this.metrics.recordQuery('updateOne', collectionName, Date.now() - start, false);
+      throw error;
     }
   }
-  
+
   /**
-   * Update a document by ID
+   * Update many documents
    * @param {string} collectionName - Collection name
-   * @param {string|ObjectId} id - Document ID
+   * @param {Object} filter - Query filter
    * @param {Object} update - Update operations
-   * @param {Object} [options={}] - Update options
+   * @param {Object} options - Update options
    * @returns {Promise<Object>} Update result
    */
-  async updateById(collectionName, id, update, options = {}) {
-    const objectId = typeof id === 'string' ? this.createObjectId(id) : id;
-    return this.updateOne(collectionName, { _id: objectId }, update, options);
-  }
-  
-  /**
-   * Update multiple documents in a collection
-   * @param {string} collectionName - Collection name
-   * @param {Object} query - Query filter
-   * @param {Object} update - Update operations
-   * @param {Object} [options={}] - Update options
-   * @returns {Promise<Object>} Update result
-   */
-  async updateMany(collectionName, query, update, options = {}) {
+  async updateMany(collectionName, filter, update, options = {}) {
     const start = Date.now();
-    const collection = await this.getCollection(collectionName);
     
     try {
-      this.logger.debug('Executing MongoDB updateMany', {
-        collection: collectionName,
-        query
-      });
+      const collection = this.collection(collectionName);
       
-      const result = await collection.updateMany(query, update, options);
+      // Add updated_at timestamp
+      if (update.$set) {
+        update.$set.updated_at = new Date();
+      } else {
+        update.$set = { updated_at: new Date() };
+      }
       
-      const duration = Date.now() - start;
-      this.logger.debug('MongoDB updateMany completed', {
-        collection: collectionName,
-        duration,
+      const result = await collection.updateMany(filter, update, options);
+      
+      this.metrics.recordQuery('updateMany', collectionName, Date.now() - start, true);
+      
+      return {
         matchedCount: result.matchedCount,
-        modifiedCount: result.modifiedCount
-      });
+        modifiedCount: result.modifiedCount,
+        acknowledged: result.acknowledged
+      };
       
-      return result;
-    } catch (err) {
-      const duration = Date.now() - start;
-      this.logger.error('Error executing MongoDB updateMany', {
-        collection: collectionName,
-        query,
-        duration,
-        error: err.message,
-        stack: err.stack
-      });
-      
-      throw err;
+    } catch (error) {
+      this.metrics.recordQuery('updateMany', collectionName, Date.now() - start, false);
+      throw error;
     }
   }
-  
+
   /**
-   * Delete a document from a collection
+   * Replace one document
    * @param {string} collectionName - Collection name
-   * @param {Object} query - Query filter
-   * @param {Object} [options={}] - Delete options
-   * @returns {Promise<Object>} Delete result
+   * @param {Object} filter - Query filter
+   * @param {Object} replacement - Replacement document
+   * @param {Object} options - Replace options
+   * @returns {Promise<Object>} Replace result
    */
-  async deleteOne(collectionName, query, options = {}) {
+  async replaceOne(collectionName, filter, replacement, options = {}) {
     const start = Date.now();
-    const collection = await this.getCollection(collectionName);
     
     try {
-      this.logger.debug('Executing MongoDB deleteOne', {
-        collection: collectionName,
-        query
-      });
+      const collection = this.collection(collectionName);
       
-      const result = await collection.deleteOne(query, options);
+      // Add timestamps
+      replacement.updated_at = new Date();
+      if (!replacement.created_at) {
+        replacement.created_at = new Date();
+      }
       
-      const duration = Date.now() - start;
-      this.logger.debug('MongoDB deleteOne completed', {
-        collection: collectionName,
-        duration,
-        deletedCount: result.deletedCount
-      });
+      const result = await collection.replaceOne(filter, replacement, options);
       
-      return result;
-    } catch (err) {
-      const duration = Date.now() - start;
-      this.logger.error('Error executing MongoDB deleteOne', {
-        collection: collectionName,
-        query,
-        duration,
-        error: err.message,
-        stack: err.stack
-      });
+      this.metrics.recordQuery('replaceOne', collectionName, Date.now() - start, true);
       
-      throw err;
+      return {
+        matchedCount: result.matchedCount,
+        modifiedCount: result.modifiedCount,
+        acknowledged: result.acknowledged,
+        upsertedId: result.upsertedId
+      };
+      
+    } catch (error) {
+      this.metrics.recordQuery('replaceOne', collectionName, Date.now() - start, false);
+      throw error;
     }
   }
-  
+
   /**
-   * Delete a document by ID
+   * Delete one document
    * @param {string} collectionName - Collection name
-   * @param {string|ObjectId} id - Document ID
-   * @param {Object} [options={}] - Delete options
+   * @param {Object} filter - Query filter
+   * @param {Object} options - Delete options
    * @returns {Promise<Object>} Delete result
    */
-  async deleteById(collectionName, id, options = {}) {
-    const objectId = typeof id === 'string' ? this.createObjectId(id) : id;
-    return this.deleteOne(collectionName, { _id: objectId }, options);
-  }
-  
-  /**
-   * Delete multiple documents from a collection
-   * @param {string} collectionName - Collection name
-   * @param {Object} query - Query filter
-   * @param {Object} [options={}] - Delete options
-   * @returns {Promise<Object>} Delete result
-   */
-  async deleteMany(collectionName, query, options = {}) {
+  async deleteOne(collectionName, filter, options = {}) {
     const start = Date.now();
-    const collection = await this.getCollection(collectionName);
     
     try {
-      this.logger.debug('Executing MongoDB deleteMany', {
-        collection: collectionName,
-        query
-      });
+      const collection = this.collection(collectionName);
+      const result = await collection.deleteOne(filter, options);
       
-      const result = await collection.deleteMany(query, options);
+      this.metrics.recordQuery('deleteOne', collectionName, Date.now() - start, true);
       
-      const duration = Date.now() - start;
-      this.logger.debug('MongoDB deleteMany completed', {
-        collection: collectionName,
-        duration,
-        deletedCount: result.deletedCount
-      });
+      return {
+        deletedCount: result.deletedCount,
+        acknowledged: result.acknowledged
+      };
       
-      return result;
-    } catch (err) {
-      const duration = Date.now() - start;
-      this.logger.error('Error executing MongoDB deleteMany', {
-        collection: collectionName,
-        query,
-        duration,
-        error: err.message,
-        stack: err.stack
-      });
-      
-      throw err;
+    } catch (error) {
+      this.metrics.recordQuery('deleteOne', collectionName, Date.now() - start, false);
+      throw error;
     }
   }
-  
+
   /**
-   * Count documents in a collection
+   * Delete many documents
    * @param {string} collectionName - Collection name
-   * @param {Object} query - Query filter
-   * @param {Object} [options={}] - Count options
+   * @param {Object} filter - Query filter
+   * @param {Object} options - Delete options
+   * @returns {Promise<Object>} Delete result
+   */
+  async deleteMany(collectionName, filter, options = {}) {
+    const start = Date.now();
+    
+    try {
+      const collection = this.collection(collectionName);
+      const result = await collection.deleteMany(filter, options);
+      
+      this.metrics.recordQuery('deleteMany', collectionName, Date.now() - start, true);
+      
+      return {
+        deletedCount: result.deletedCount,
+        acknowledged: result.acknowledged
+      };
+      
+    } catch (error) {
+      this.metrics.recordQuery('deleteMany', collectionName, Date.now() - start, false);
+      throw error;
+    }
+  }
+
+  /**
+   * Count documents
+   * @param {string} collectionName - Collection name
+   * @param {Object} filter - Query filter
+   * @param {Object} options - Count options
    * @returns {Promise<number>} Document count
    */
-  async countDocuments(collectionName, query, options = {}) {
+  async count(collectionName, filter = {}, options = {}) {
     const start = Date.now();
-    const collection = await this.getCollection(collectionName);
     
     try {
-      this.logger.debug('Executing MongoDB countDocuments', {
-        collection: collectionName,
-        query
-      });
+      const collection = this.collection(collectionName);
+      const count = await collection.countDocuments(filter, options);
       
-      const count = await collection.countDocuments(query, options);
-      
-      const duration = Date.now() - start;
-      this.logger.debug('MongoDB countDocuments completed', {
-        collection: collectionName,
-        duration,
-        count
-      });
+      this.metrics.recordQuery('count', collectionName, Date.now() - start, true);
       
       return count;
-    } catch (err) {
-      const duration = Date.now() - start;
-      this.logger.error('Error executing MongoDB countDocuments', {
-        collection: collectionName,
-        query,
-        duration,
-        error: err.message,
-        stack: err.stack
-      });
       
-      throw err;
+    } catch (error) {
+      this.metrics.recordQuery('count', collectionName, Date.now() - start, false);
+      throw error;
     }
   }
-  
+
   /**
-   * Perform aggregation on a collection
+   * Aggregate pipeline
    * @param {string} collectionName - Collection name
-   * @param {Array<Object>} pipeline - Aggregation pipeline
-   * @param {Object} [options={}] - Aggregation options
-   * @returns {Promise<Array<Object>>} Aggregation results
+   * @param {Array} pipeline - Aggregation pipeline
+   * @param {Object} options - Aggregation options
+   * @returns {Promise<Array>} Aggregation results
    */
   async aggregate(collectionName, pipeline, options = {}) {
     const start = Date.now();
-    const collection = await this.getCollection(collectionName);
     
     try {
-      this.logger.debug('Executing MongoDB aggregate', {
-        collection: collectionName,
-        pipeline
-      });
-      
+      const collection = this.collection(collectionName);
       const cursor = collection.aggregate(pipeline, options);
-      const result = await cursor.toArray();
+      const results = await cursor.toArray();
       
-      const duration = Date.now() - start;
-      this.logger.debug('MongoDB aggregate completed', {
-        collection: collectionName,
-        duration,
-        count: result.length
-      });
+      this.metrics.recordQuery('aggregate', collectionName, Date.now() - start, true);
+      
+      return results;
+      
+    } catch (error) {
+      this.metrics.recordQuery('aggregate', collectionName, Date.now() - start, false);
+      throw error;
+    }
+  }
+
+  /**
+   * Find one and update
+   * @param {string} collectionName - Collection name
+   * @param {Object} filter - Query filter
+   * @param {Object} update - Update operations
+   * @param {Object} options - Options
+   * @returns {Promise<Object>} Updated document
+   */
+  async findOneAndUpdate(collectionName, filter, update, options = {}) {
+    const start = Date.now();
+    
+    try {
+      const collection = this.collection(collectionName);
+      
+      // Add updated_at timestamp
+      if (update.$set) {
+        update.$set.updated_at = new Date();
+      } else {
+        update.$set = { updated_at: new Date() };
+      }
+      
+      const result = await collection.findOneAndUpdate(
+        filter,
+        update,
+        { returnDocument: 'after', ...options }
+      );
+      
+      this.metrics.recordQuery('findOneAndUpdate', collectionName, Date.now() - start, true);
+      
+      return result.value;
+      
+    } catch (error) {
+      this.metrics.recordQuery('findOneAndUpdate', collectionName, Date.now() - start, false);
+      throw error;
+    }
+  }
+
+  /**
+   * Find one and delete
+   * @param {string} collectionName - Collection name
+   * @param {Object} filter - Query filter
+   * @param {Object} options - Options
+   * @returns {Promise<Object>} Deleted document
+   */
+  async findOneAndDelete(collectionName, filter, options = {}) {
+    const start = Date.now();
+    
+    try {
+      const collection = this.collection(collectionName);
+      const result = await collection.findOneAndDelete(filter, options);
+      
+      this.metrics.recordQuery('findOneAndDelete', collectionName, Date.now() - start, true);
+      
+      return result.value;
+      
+    } catch (error) {
+      this.metrics.recordQuery('findOneAndDelete', collectionName, Date.now() - start, false);
+      throw error;
+    }
+  }
+
+  /**
+   * Create index
+   * @param {string} collectionName - Collection name
+   * @param {Object} keys - Index keys
+   * @param {Object} options - Index options
+   * @returns {Promise<string>} Index name
+   */
+  async createIndex(collectionName, keys, options = {}) {
+    const collection = this.collection(collectionName);
+    return collection.createIndex(keys, options);
+  }
+
+  /**
+   * Drop index
+   * @param {string} collectionName - Collection name
+   * @param {string} indexName - Index name
+   * @returns {Promise<Object>} Drop result
+   */
+  async dropIndex(collectionName, indexName) {
+    const collection = this.collection(collectionName);
+    return collection.dropIndex(indexName);
+  }
+
+  /**
+   * List indexes
+   * @param {string} collectionName - Collection name
+   * @returns {Promise<Array>} Array of indexes
+   */
+  async listIndexes(collectionName) {
+    const collection = this.collection(collectionName);
+    return collection.indexes();
+  }
+
+  /**
+   * Bulk write operations
+   * @param {string} collectionName - Collection name
+   * @param {Array} operations - Bulk operations
+   * @param {Object} options - Bulk write options
+   * @returns {Promise<Object>} Bulk write result
+   */
+  async bulkWrite(collectionName, operations, options = {}) {
+    const start = Date.now();
+    
+    try {
+      const collection = this.collection(collectionName);
+      const result = await collection.bulkWrite(operations, options);
+      
+      this.metrics.recordQuery('bulkWrite', collectionName, Date.now() - start, true);
       
       return result;
-    } catch (err) {
-      const duration = Date.now() - start;
-      this.logger.error('Error executing MongoDB aggregate', {
-        collection: collectionName,
-        pipeline,
-        duration,
-        error: err.message,
-        stack: err.stack
-      });
       
-      throw err;
+    } catch (error) {
+      this.metrics.recordQuery('bulkWrite', collectionName, Date.now() - start, false);
+      throw error;
     }
   }
-  
+
   /**
-   * Check if the database connection is healthy
-   * @returns {Promise<boolean>} Whether the connection is healthy
+   * Start a session for transactions
+   * @param {Object} options - Session options
+   * @returns {ClientSession} MongoDB session
    */
-  async healthCheck() {
+  startSession(options = {}) {
+    if (!this.client) {
+      throw new Error('MongoDB client not connected');
+    }
+    return this.client.startSession(options);
+  }
+
+  /**
+   * Execute transaction
+   * @param {Function} callback - Transaction callback
+   * @param {Object} options - Transaction options
+   * @returns {Promise<any>} Transaction result
+   */
+  async transaction(callback, options = {}) {
+    const session = this.startSession();
+    const start = Date.now();
+    
     try {
-      const db = await this.getDb();
-      const result = await db.command({ ping: 1 });
-      return result && result.ok === 1;
-    } catch (err) {
-      this.logger.error('MongoDB health check failed', {
-        error: err.message
-      });
-      return false;
+      await session.withTransaction(async () => {
+        return callback(session);
+      }, options);
+      
+      this.metrics.recordQuery('transaction', 'transaction', Date.now() - start, true);
+      
+    } catch (error) {
+      this.metrics.recordQuery('transaction', 'transaction', Date.now() - start, false);
+      throw error;
+      
+    } finally {
+      await session.endSession();
     }
   }
-  
+
   /**
-   * Close the MongoDB client
-   * @returns {Promise<void>}
+   * Set up event listeners
+   */
+  setupEventListeners() {
+    this.client.on('serverOpening', () => {
+      logger.debug('MongoDB server opening', { service: this.serviceName });
+    });
+
+    this.client.on('serverClosed', () => {
+      logger.warn('MongoDB server closed', { service: this.serviceName });
+    });
+
+    this.client.on('error', (error) => {
+      logger.error('MongoDB client error', { error, service: this.serviceName });
+    });
+
+    this.client.on('timeout', () => {
+      logger.error('MongoDB client timeout', { service: this.serviceName });
+    });
+
+    this.client.on('close', () => {
+      logger.info('MongoDB client closed', { service: this.serviceName });
+      this.isConnected = false;
+    });
+  }
+
+  /**
+   * Start collecting metrics
+   */
+  startMetricsCollection() {
+    if (!this.client) return;
+
+    setInterval(() => {
+      try {
+        const stats = this.client.topology?.s?.pool;
+        if (stats) {
+          this.metrics.updateConnectionPool(
+            stats.totalConnectionCount || 0,
+            stats.availableConnectionCount || 0,
+            stats.waitQueueSize || 0
+          );
+        }
+      } catch (error) {
+        logger.debug('Failed to collect MongoDB metrics', { error });
+      }
+    }, 5000);
+  }
+
+  /**
+   * Close the connection
    */
   async close() {
     if (this.client) {
-      this.logger.info('Closing MongoDB client');
       await this.client.close();
-      this.client = null;
-      this.db = null;
       this.isConnected = false;
+      logger.info('MongoDB connection closed', {
+        service: this.serviceName
+      });
     }
+  }
+
+  /**
+   * Get connection statistics
+   * @returns {Object} Connection statistics
+   */
+  getStats() {
+    if (!this.client || !this.isConnected) {
+      return { connected: false };
+    }
+
+    const topology = this.client.topology;
+    const pool = topology?.s?.pool;
+
+    return {
+      connected: this.isConnected,
+      connections: {
+        total: pool?.totalConnectionCount || 0,
+        available: pool?.availableConnectionCount || 0,
+        waitQueue: pool?.waitQueueSize || 0
+      }
+    };
   }
 }
 
-// Create and export default instance along with MongoDB ObjectId
-const defaultClient = new MongoDbClient();
+// Create singleton instance for default connection
+let defaultClient = null;
+
+/**
+ * Get default MongoDB client
+ * @param {string} serviceName - Service name for metrics
+ * @returns {MongoDBClient} Default client instance
+ */
+function getDefaultClient(serviceName = 'default') {
+  if (!defaultClient) {
+    defaultClient = new MongoDBClient({}, serviceName);
+  }
+  return defaultClient;
+}
 
 module.exports = {
-  MongoDbClient,
-  defaultClient,
+  MongoDBClient,
+  getDefaultClient,
   ObjectId
 };

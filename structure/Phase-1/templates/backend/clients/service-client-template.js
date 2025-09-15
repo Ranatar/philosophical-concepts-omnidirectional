@@ -1,348 +1,517 @@
 /**
- * Template for service clients
- * Replace all instances of `Service` with the actual service name
- * Replace all instances of `service` with the lowercase service name
+ * Шаблон клиента сервиса
+ * Базовый шаблон для создания клиентов для взаимодействия с другими микросервисами
+ * 
+ * Использование:
+ * 1. Скопировать файл в нужную директорию
+ * 2. Заменить {{ServiceName}} на название сервиса (например, GraphService)
+ * 3. Заменить {{serviceName}} на название сервиса в camelCase (например, graphService)
+ * 4. Заменить {{serviceUrl}} на базовый URL сервиса (например, http://graph-service:3000)
+ * 5. Адаптировать методы под API сервиса
  */
 
-const { client: httpClient } = require('../../../shared/lib/http/client');
-const { defaultLogger } = require('../../../shared/lib/logging/logger');
+const axios = require('axios');
+const logger = require('../../../shared/lib/logging/logger');
+const { incrementCounter } = require('../../../shared/lib/metrics/counters');
+const CircuitBreaker = require('opossum');
 
-/**
- * Client for Service API
- */
-class ServiceClient {
-  /**
-   * Create a new ServiceClient
-   * @param {Object} [options={}] - Client options
-   * @param {string} [options.baseUrl] - Service base URL
-   * @param {Object} [options.headers={}] - Default headers
-   * @param {number} [options.timeout=10000] - Request timeout in ms
-   * @param {Object} [options.httpClient] - HTTP client instance
-   * @param {Object} [logger=defaultLogger] - Logger instance
-   */
-  constructor(options = {}, logger = defaultLogger) {
-    this.baseUrl = options.baseUrl || process.env.SERVICE_URL || 'http://localhost:3000/api/service';
-    this.headers = options.headers || {};
-    this.timeout = options.timeout || 10000;
-    this.httpClient = options.httpClient || httpClient;
-    this.logger = logger;
-  }
-
-  /**
-   * Set authorization header
-   * @param {string} token - Authorization token
-   * @returns {ServiceClient} This client instance
-   */
-  setAuthToken(token) {
-    this.headers.Authorization = `Bearer ${token}`;
-    return this;
-  }
-
-  /**
-   * Clear authorization header
-   * @returns {ServiceClient} This client instance
-   */
-  clearAuthToken() {
-    delete this.headers.Authorization;
-    return this;
-  }
-
-  /**
-   * Get all items with pagination
-   * @param {Object} [options={}] - Request options
-   * @param {number} [options.page=1] - Page number
-   * @param {number} [options.pageSize=20] - Page size
-   * @param {string} [options.sortBy] - Sort field
-   * @param {string} [options.sortOrder='asc'] - Sort order ('asc' or 'desc')
-   * @param {Object} [options.filters={}] - Filter criteria
-   * @returns {Promise<Object>} Promise resolving to paginated result
-   */
-  async getAll(options = {}) {
-    try {
-      const {
-        page = 1,
-        pageSize = 20,
-        sortBy,
-        sortOrder = 'asc',
-        filters = {}
-      } = options;
-      
-      // Build query parameters
-      const queryParams = new URLSearchParams({
-        page: page.toString(),
-        pageSize: pageSize.toString()
-      });
-      
-      if (sortBy) {
-        queryParams.append('sortBy', sortBy);
-        queryParams.append('sortOrder', sortOrder);
+class {{ServiceName}}Client {
+  constructor(config = {}) {
+    this.baseURL = config.baseURL || process.env.{{SERVICE_NAME}}_URL || '{{serviceUrl}}';
+    this.timeout = config.timeout || 30000; // 30 секунд
+    this.retries = config.retries || 3;
+    this.retryDelay = config.retryDelay || 1000; // 1 секунда
+    
+    // Создаем HTTP клиент
+    this.httpClient = axios.create({
+      baseURL: this.baseURL,
+      timeout: this.timeout,
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
       }
-      
-      // Add filters to query parameters
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          queryParams.append(key, value.toString());
-        }
-      });
-      
-      const url = `${this.baseUrl}?${queryParams.toString()}`;
-      
-      const response = await this._request('GET', url);
-      
-      return response.data;
-    } catch (error) {
-      this.logger.error(`Error getting all items: ${error.message}`, {
-        options,
-        stack: error.stack
-      });
-      throw error;
-    }
+    });
+    
+    // Настраиваем interceptors
+    this.setupInterceptors();
+    
+    // Настраиваем Circuit Breaker
+    this.circuitBreaker = this.setupCircuitBreaker();
   }
 
   /**
-   * Get item by ID
-   * @param {string} id - Item ID
-   * @returns {Promise<Object>} Promise resolving to item
+   * Настройка interceptors для HTTP клиента
+   */
+  setupInterceptors() {
+    // Request interceptor
+    this.httpClient.interceptors.request.use(
+      (config) => {
+        // Добавляем заголовки аутентификации если есть
+        const token = this.getAuthToken();
+        if (token) {
+          config.headers['Authorization'] = `Bearer ${token}`;
+        }
+        
+        // Добавляем request ID для трассировки
+        config.headers['X-Request-ID'] = this.generateRequestId();
+        
+        logger.debug('{{ServiceName}} request', {
+          method: config.method,
+          url: config.url,
+          requestId: config.headers['X-Request-ID']
+        });
+        
+        return config;
+      },
+      (error) => {
+        logger.error('{{ServiceName}} request error', { error });
+        return Promise.reject(error);
+      }
+    );
+    
+    // Response interceptor
+    this.httpClient.interceptors.response.use(
+      (response) => {
+        logger.debug('{{ServiceName}} response', {
+          status: response.status,
+          url: response.config.url,
+          requestId: response.config.headers['X-Request-ID']
+        });
+        
+        incrementCounter('{{serviceName}}_requests_total', {
+          method: response.config.method,
+          status: 'success'
+        });
+        
+        return response;
+      },
+      async (error) => {
+        if (error.response) {
+          logger.error('{{ServiceName}} response error', {
+            status: error.response.status,
+            url: error.config.url,
+            error: error.response.data
+          });
+          
+          incrementCounter('{{serviceName}}_requests_total', {
+            method: error.config.method,
+            status: 'error',
+            code: error.response.status
+          });
+        } else if (error.request) {
+          logger.error('{{ServiceName}} network error', {
+            url: error.config.url,
+            error: error.message
+          });
+          
+          incrementCounter('{{serviceName}}_requests_total', {
+            method: error.config.method,
+            status: 'network_error'
+          });
+        }
+        
+        // Retry logic
+        if (this.shouldRetry(error) && error.config.__retryCount < this.retries) {
+          error.config.__retryCount = (error.config.__retryCount || 0) + 1;
+          
+          await this.delay(this.retryDelay * error.config.__retryCount);
+          
+          logger.info('Retrying {{ServiceName}} request', {
+            attempt: error.config.__retryCount,
+            url: error.config.url
+          });
+          
+          return this.httpClient(error.config);
+        }
+        
+        return Promise.reject(error);
+      }
+    );
+  }
+
+  /**
+   * Настройка Circuit Breaker
+   */
+  setupCircuitBreaker() {
+    const options = {
+      timeout: this.timeout,
+      errorThresholdPercentage: 50,
+      resetTimeout: 30000, // 30 секунд
+      rollingCountTimeout: 10000, // 10 секунд
+      rollingCountBuckets: 10,
+      name: '{{serviceName}}CircuitBreaker'
+    };
+    
+    const breaker = new CircuitBreaker(
+      (requestFn) => requestFn(),
+      options
+    );
+    
+    breaker.on('open', () => {
+      logger.warn('{{ServiceName}} circuit breaker opened');
+      incrementCounter('{{serviceName}}_circuit_breaker_state', { state: 'open' });
+    });
+    
+    breaker.on('halfOpen', () => {
+      logger.info('{{ServiceName}} circuit breaker half-open');
+      incrementCounter('{{serviceName}}_circuit_breaker_state', { state: 'half_open' });
+    });
+    
+    breaker.on('close', () => {
+      logger.info('{{ServiceName}} circuit breaker closed');
+      incrementCounter('{{serviceName}}_circuit_breaker_state', { state: 'closed' });
+    });
+    
+    return breaker;
+  }
+
+  /**
+   * Выполнение HTTP запроса через Circuit Breaker
+   */
+  async request(config) {
+    return this.circuitBreaker.fire(() => this.httpClient(config));
+  }
+
+  // Основные методы API
+
+  /**
+   * Получение сущности по ID
+   * GET /entities/:id
    */
   async getById(id) {
     try {
-      const url = `${this.baseUrl}/${id}`;
-      
-      const response = await this._request('GET', url);
-      
-      return response.data;
-    } catch (error) {
-      this.logger.error(`Error getting item by ID ${id}: ${error.message}`, {
-        id,
-        stack: error.stack
+      const response = await this.request({
+        method: 'GET',
+        url: `/entities/${id}`
       });
-      throw error;
+      
+      return response.data.data;
+    } catch (error) {
+      this.handleError('getById', error);
     }
   }
 
   /**
-   * Create a new item
-   * @param {Object} data - Item data
-   * @returns {Promise<Object>} Promise resolving to created item
+   * Получение списка сущностей
+   * GET /entities
+   */
+  async list(params = {}) {
+    try {
+      const response = await this.request({
+        method: 'GET',
+        url: '/entities',
+        params
+      });
+      
+      return response.data;
+    } catch (error) {
+      this.handleError('list', error);
+    }
+  }
+
+  /**
+   * Создание сущности
+   * POST /entities
    */
   async create(data) {
     try {
-      const response = await this._request('POST', this.baseUrl, data);
-      
-      return response.data;
-    } catch (error) {
-      this.logger.error(`Error creating item: ${error.message}`, {
-        data,
-        stack: error.stack
+      const response = await this.request({
+        method: 'POST',
+        url: '/entities',
+        data
       });
-      throw error;
+      
+      return response.data.data;
+    } catch (error) {
+      this.handleError('create', error);
     }
   }
 
   /**
-   * Update an item
-   * @param {string} id - Item ID
-   * @param {Object} data - Item data
-   * @returns {Promise<Object>} Promise resolving to updated item
+   * Обновление сущности
+   * PUT /entities/:id
    */
   async update(id, data) {
     try {
-      const url = `${this.baseUrl}/${id}`;
-      
-      const response = await this._request('PUT', url, data);
-      
-      return response.data;
-    } catch (error) {
-      this.logger.error(`Error updating item ${id}: ${error.message}`, {
-        id,
-        data,
-        stack: error.stack
+      const response = await this.request({
+        method: 'PUT',
+        url: `/entities/${id}`,
+        data
       });
-      throw error;
+      
+      return response.data.data;
+    } catch (error) {
+      this.handleError('update', error);
     }
   }
 
   /**
-   * Delete an item
-   * @param {string} id - Item ID
-   * @returns {Promise<boolean>} Promise resolving to whether the item was deleted
+   * Удаление сущности
+   * DELETE /entities/:id
    */
   async delete(id) {
     try {
-      const url = `${this.baseUrl}/${id}`;
-      
-      const response = await this._request('DELETE', url);
-      
-      return response.success === true;
-    } catch (error) {
-      this.logger.error(`Error deleting item ${id}: ${error.message}`, {
-        id,
-        stack: error.stack
+      const response = await this.request({
+        method: 'DELETE',
+        url: `/entities/${id}`
       });
-      throw error;
+      
+      return response.data.success;
+    } catch (error) {
+      this.handleError('delete', error);
     }
   }
 
   /**
-   * Execute a service action
-   * @param {string} action - Action name
-   * @param {Object} [data={}] - Action data
-   * @returns {Promise<Object>} Promise resolving to action result
+   * Поиск сущностей
+   * POST /entities/search
    */
-  async executeAction(action, data = {}) {
+  async search(searchParams) {
     try {
-      const url = `${this.baseUrl}/actions/${action}`;
-      
-      const response = await this._request('POST', url, data);
+      const response = await this.request({
+        method: 'POST',
+        url: '/entities/search',
+        data: searchParams
+      });
       
       return response.data;
     } catch (error) {
-      this.logger.error(`Error executing action ${action}: ${error.message}`, {
-        action,
-        data,
-        stack: error.stack
-      });
-      throw error;
+      this.handleError('search', error);
     }
   }
 
   /**
-   * Get service status
-   * @returns {Promise<Object>} Promise resolving to service status
+   * Массовая операция
+   * POST /entities/bulk
    */
-  async getStatus() {
+  async bulk(operation, data) {
     try {
-      const url = `${this.baseUrl}/status`;
-      
-      const response = await this._request('GET', url);
+      const response = await this.request({
+        method: 'POST',
+        url: '/entities/bulk',
+        data: {
+          operation,
+          data
+        }
+      });
       
       return response.data;
     } catch (error) {
-      this.logger.error(`Error getting service status: ${error.message}`, {
-        stack: error.stack
+      this.handleError('bulk', error);
+    }
+  }
+
+  // Специализированные методы (примеры)
+
+  /**
+   * Выполнение специфичной операции
+   * POST /specific-operation
+   */
+  async performSpecificOperation(params) {
+    try {
+      const response = await this.request({
+        method: 'POST',
+        url: '/specific-operation',
+        data: params
       });
-      throw error;
+      
+      return response.data.data;
+    } catch (error) {
+      this.handleError('performSpecificOperation', error);
     }
   }
 
   /**
-   * Make a request to the service
-   * @param {string} method - HTTP method
-   * @param {string} url - Request URL
-   * @param {Object} [data] - Request data
-   * @param {Object} [options={}] - Request options
-   * @returns {Promise<Object>} Promise resolving to response
-   * @private
+   * Получение статистики
+   * GET /stats
    */
-  async _request(method, url, data, options = {}) {
+  async getStatistics(params = {}) {
     try {
-      const response = await this.httpClient.request({
-        method,
-        url,
-        data,
-        headers: { ...this.headers, ...(options.headers || {}) },
-        timeout: options.timeout || this.timeout
+      const response = await this.request({
+        method: 'GET',
+        url: '/stats',
+        params
       });
       
-      return this._processResponse(response);
+      return response.data.data;
     } catch (error) {
-      // Handle HTTP errors
-      if (error.response) {
-        return this._handleErrorResponse(error.response);
+      this.handleError('getStatistics', error);
+    }
+  }
+
+  /**
+   * Проверка здоровья сервиса
+   * GET /health
+   */
+  async checkHealth() {
+    try {
+      const response = await this.request({
+        method: 'GET',
+        url: '/health',
+        timeout: 5000 // Короткий таймаут для health check
+      });
+      
+      return response.data;
+    } catch (error) {
+      logger.error('{{ServiceName}} health check failed', { error: error.message });
+      return {
+        status: 'unhealthy',
+        error: error.message
+      };
+    }
+  }
+
+  // Методы для работы с потоковыми данными
+
+  /**
+   * Получение потока данных
+   * GET /stream
+   */
+  async *getStream(params = {}) {
+    try {
+      const response = await this.httpClient({
+        method: 'GET',
+        url: '/stream',
+        params,
+        responseType: 'stream'
+      });
+      
+      for await (const chunk of response.data) {
+        yield JSON.parse(chunk.toString());
       }
-      
-      // Handle request errors (network, timeout, etc.)
-      throw this._createServiceError(
-        error.message,
-        error.code || 'SERVICE_ERROR',
-        error
-      );
+    } catch (error) {
+      this.handleError('getStream', error);
     }
   }
 
+  // WebSocket методы (если сервис поддерживает)
+
   /**
-   * Process response
-   * @param {Object} response - HTTP response
-   * @returns {Object} Processed response
-   * @private
+   * Подключение к WebSocket
    */
-  _processResponse(response) {
-    // If the response is already in the expected format, return it
-    if (response.data && ('success' in response.data)) {
-      return response.data;
+  connectWebSocket(path = '/ws') {
+    const wsUrl = this.baseURL.replace(/^http/, 'ws') + path;
+    
+    this.ws = new WebSocket(wsUrl);
+    
+    this.ws.on('open', () => {
+      logger.info('{{ServiceName}} WebSocket connected');
+    });
+    
+    this.ws.on('error', (error) => {
+      logger.error('{{ServiceName}} WebSocket error', { error });
+    });
+    
+    this.ws.on('close', () => {
+      logger.info('{{ServiceName}} WebSocket disconnected');
+    });
+    
+    return this.ws;
+  }
+
+  // Вспомогательные методы
+
+  /**
+   * Получение токена аутентификации
+   */
+  getAuthToken() {
+    // Реализация получения токена
+    // Может быть из переменной окружения, конфига или контекста
+    return process.env.SERVICE_AUTH_TOKEN || null;
+  }
+
+  /**
+   * Генерация ID запроса
+   */
+  generateRequestId() {
+    return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  /**
+   * Проверка необходимости повторной попытки
+   */
+  shouldRetry(error) {
+    // Повторяем при сетевых ошибках и 5xx статусах
+    if (!error.response) {
+      return true; // Сетевая ошибка
     }
     
-    // Otherwise, wrap it in the expected format
-    return {
-      success: true,
-      data: response.data
+    const status = error.response.status;
+    return status >= 500 && status < 600;
+  }
+
+  /**
+   * Задержка между попытками
+   */
+  delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Обработка ошибок
+   */
+  handleError(method, error) {
+    const errorDetails = {
+      method,
+      message: error.message,
+      code: error.code,
+      response: error.response?.data
     };
-  }
-
-  /**
-   * Handle error response
-   * @param {Object} errorResponse - Error response
-   * @returns {never} Never returns, always throws
-   * @throws {Error} Service error
-   * @private
-   */
-  _handleErrorResponse(errorResponse) {
-    const status = errorResponse.status;
-    const data = errorResponse.data || {};
     
-    // If the error response is already in the expected format, use it
-    if (data.error) {
-      throw this._createServiceError(
-        data.error.message || 'Unknown service error',
-        data.error.code || 'SERVICE_ERROR',
-        data.error
+    logger.error(`{{ServiceName}} client error in ${method}`, errorDetails);
+    
+    // Преобразуем ошибку в более понятный формат
+    if (error.response) {
+      const customError = new Error(
+        error.response.data?.message || 
+        `{{ServiceName}} error: ${error.response.status}`
       );
+      customError.status = error.response.status;
+      customError.code = error.response.data?.code || 'SERVICE_ERROR';
+      customError.details = error.response.data;
+      throw customError;
+    } else if (error.request) {
+      const networkError = new Error('Network error: {{ServiceName}} is unavailable');
+      networkError.code = 'NETWORK_ERROR';
+      throw networkError;
+    } else {
+      throw error;
     }
-    
-    // Otherwise, create an error based on the status code
-    let message = 'Unknown service error';
-    let code = 'SERVICE_ERROR';
-    
-    if (status === 400) {
-      message = 'Bad request';
-      code = 'BAD_REQUEST';
-    } else if (status === 401) {
-      message = 'Unauthorized';
-      code = 'UNAUTHORIZED';
-    } else if (status === 403) {
-      message = 'Forbidden';
-      code = 'FORBIDDEN';
-    } else if (status === 404) {
-      message = 'Not found';
-      code = 'NOT_FOUND';
-    } else if (status === 409) {
-      message = 'Conflict';
-      code = 'CONFLICT';
-    } else if (status === 422) {
-      message = 'Validation error';
-      code = 'VALIDATION_ERROR';
-    } else if (status >= 500) {
-      message = 'Service unavailable';
-      code = 'SERVICE_UNAVAILABLE';
-    }
-    
-    throw this._createServiceError(message, code, data);
   }
 
   /**
-   * Create a service error
-   * @param {string} message - Error message
-   * @param {string} code - Error code
-   * @param {*} [originalError] - Original error
-   * @returns {Error} Service error
-   * @private
+   * Установка пользовательских заголовков
    */
-  _createServiceError(message, code, originalError) {
-    const error = new Error(message);
-    error.code = code;
-    error.originalError = originalError;
-    return error;
+  setHeaders(headers) {
+    Object.assign(this.httpClient.defaults.headers.common, headers);
+  }
+
+  /**
+   * Очистка ресурсов
+   */
+  async close() {
+    if (this.ws) {
+      this.ws.close();
+    }
+    
+    logger.info('{{ServiceName}} client closed');
   }
 }
 
-module.exports = ServiceClient;
+// Singleton экземпляр для использования по умолчанию
+let defaultClient = null;
+
+/**
+ * Получение экземпляра клиента по умолчанию
+ */
+function getDefaultClient() {
+  if (!defaultClient) {
+    defaultClient = new {{ServiceName}}Client();
+  }
+  return defaultClient;
+}
+
+module.exports = {
+  {{ServiceName}}Client,
+  getDefaultClient
+};

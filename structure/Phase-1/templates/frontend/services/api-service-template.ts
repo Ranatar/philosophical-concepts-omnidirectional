@@ -1,542 +1,568 @@
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
-
 /**
- * API response interface
- */
-export interface ApiResponse<T = any> {
-  success: boolean;
-  data?: T;
-  error?: {
-    code: string;
-    message: string;
-    details?: any;
-  };
-  meta?: Record<string, any>;
-}
-
-/**
- * Pagination metadata interface
- */
-export interface PaginationMeta {
-  total: number;
-  page: number;
-  pageSize: number;
-  pageCount: number;
-}
-
-/**
- * Configuration options for ApiService
- */
-export interface ApiServiceConfig {
-  /** Base URL for API requests */
-  baseURL: string;
-  /** Default request timeout in milliseconds */
-  timeout?: number;
-  /** Default headers to include with all requests */
-  headers?: Record<string, string>;
-  /** Whether to include credentials with requests */
-  withCredentials?: boolean;
-  /** Request interceptor */
-  requestInterceptor?: (config: AxiosRequestConfig) => AxiosRequestConfig;
-  /** Response interceptor */
-  responseInterceptor?: (response: AxiosResponse<ApiResponse>) => AxiosResponse<ApiResponse>;
-  /** Error interceptor */
-  errorInterceptor?: (error: AxiosError) => Promise<any>;
-  /** Default error handler */
-  errorHandler?: (error: any) => void;
-}
-
-/**
- * API Service for making HTTP requests
+ * Шаблон сервиса API
+ * Базовый шаблон для создания сервисов взаимодействия с API
  * 
- * This service provides a wrapper around Axios for making API requests
- * with standardized error handling and response formatting.
+ * Использование:
+ * 1. Скопировать файл в директорию services
+ * 2. Заменить {{ServiceName}} на название сервиса (например, ApiService)
+ * 3. Адаптировать базовый URL и методы под специфику API
+ */
+
+import axios, { 
+  AxiosInstance, 
+  AxiosRequestConfig, 
+  AxiosResponse, 
+  AxiosError,
+  InternalAxiosRequestConfig 
+} from 'axios';
+
+/**
+ * Интерфейс конфигурации API
+ */
+interface ApiConfig {
+  baseURL: string;
+  timeout?: number;
+  headers?: Record<string, string>;
+  withCredentials?: boolean;
+  retryAttempts?: number;
+  retryDelay?: number;
+}
+
+/**
+ * Интерфейс ответа API
+ */
+interface ApiResponse<T = any> {
+  success: boolean;
+  data: T;
+  message?: string;
+  errors?: Record<string, string[]>;
+  meta?: {
+    pagination?: {
+      page: number;
+      pageSize: number;
+      total: number;
+      totalPages: number;
+    };
+    timestamp?: string;
+    version?: string;
+  };
+}
+
+/**
+ * Интерфейс ошибки API
+ */
+interface ApiError {
+  code: string;
+  message: string;
+  details?: any;
+  timestamp: string;
+  path?: string;
+}
+
+/**
+ * Типы методов HTTP
+ */
+type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+
+/**
+ * Класс для работы с API
  * 
  * @example
  * ```ts
- * const api = new ApiService({
+ * const api = new {{ServiceName}}({
  *   baseURL: 'https://api.example.com',
- *   headers: {
- *     'Accept': 'application/json'
- *   }
+ *   timeout: 30000
  * });
  * 
- * // GET request
- * const users = await api.get('/users');
- * 
- * // POST request
- * const newUser = await api.post('/users', { name: 'John Doe' });
+ * const users = await api.get<User[]>('/users');
+ * const newUser = await api.post<User>('/users', { name: 'John' });
  * ```
  */
-class ApiService {
+export class {{ServiceName}} {
   private client: AxiosInstance;
-  private defaultErrorHandler: (error: any) => void;
-  
+  private config: ApiConfig;
+  private authToken: string | null = null;
+  private refreshToken: string | null = null;
+  private isRefreshing = false;
+  private failedQueue: Array<{
+    resolve: (token: string) => void;
+    reject: (error: Error) => void;
+  }> = [];
+
+  constructor(config: ApiConfig) {
+    this.config = {
+      timeout: 30000,
+      retryAttempts: 3,
+      retryDelay: 1000,
+      ...config
+    };
+
+    this.client = this.createClient();
+    this.setupInterceptors();
+    this.loadTokens();
+  }
+
   /**
-   * Create a new ApiService instance
-   * @param config - Configuration options
+   * Создание экземпляра axios
    */
-  constructor(config: ApiServiceConfig) {
-    // Create Axios instance
-    this.client = axios.create({
-      baseURL: config.baseURL,
-      timeout: config.timeout || 15000,
+  private createClient(): AxiosInstance {
+    return axios.create({
+      baseURL: this.config.baseURL,
+      timeout: this.config.timeout,
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        ...config.headers
+        ...this.config.headers
       },
-      withCredentials: config.withCredentials || false
+      withCredentials: this.config.withCredentials
+    });
+  }
+
+  /**
+   * Настройка interceptors
+   */
+  private setupInterceptors(): void {
+    // Request interceptor
+    this.client.interceptors.request.use(
+      (config: InternalAxiosRequestConfig) => this.handleRequest(config),
+      (error: AxiosError) => this.handleRequestError(error)
+    );
+
+    // Response interceptor
+    this.client.interceptors.response.use(
+      (response: AxiosResponse) => this.handleResponse(response),
+      (error: AxiosError) => this.handleResponseError(error)
+    );
+  }
+
+  /**
+   * Обработка запроса
+   */
+  private handleRequest(config: InternalAxiosRequestConfig): InternalAxiosRequestConfig {
+    // Добавляем токен авторизации
+    if (this.authToken && config.headers) {
+      config.headers.Authorization = `Bearer ${this.authToken}`;
+    }
+
+    // Добавляем уникальный ID запроса для трассировки
+    config.headers['X-Request-ID'] = this.generateRequestId();
+
+    // Логирование в development
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[API] ${config.method?.toUpperCase()} ${config.url}`, {
+        params: config.params,
+        data: config.data
+      });
+    }
+
+    return config;
+  }
+
+  /**
+   * Обработка ошибки запроса
+   */
+  private handleRequestError(error: AxiosError): Promise<never> {
+    console.error('[API] Request error:', error);
+    return Promise.reject(error);
+  }
+
+  /**
+   * Обработка ответа
+   */
+  private handleResponse(response: AxiosResponse): AxiosResponse {
+    // Логирование в development
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[API] Response ${response.status}:`, response.data);
+    }
+
+    // Обработка специальных заголовков
+    const newToken = response.headers['x-new-token'];
+    if (newToken) {
+      this.setAuthToken(newToken);
+    }
+
+    return response;
+  }
+
+  /**
+   * Обработка ошибки ответа
+   */
+  private async handleResponseError(error: AxiosError): Promise<never> {
+    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+
+    // Обработка 401 ошибки (неавторизован)
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      if (this.refreshToken) {
+        if (this.isRefreshing) {
+          // Если уже идет обновление токена, ждем результата
+          return new Promise((resolve, reject) => {
+            this.failedQueue.push({ resolve, reject });
+          })
+            .then(token => {
+              originalRequest.headers.Authorization = `Bearer ${token}`;
+              return this.client(originalRequest);
+            })
+            .catch(err => Promise.reject(err));
+        }
+
+        originalRequest._retry = true;
+        this.isRefreshing = true;
+
+        try {
+          const newToken = await this.refreshAccessToken();
+          this.isRefreshing = false;
+          this.processQueue(null, newToken);
+          originalRequest.headers.Authorization = `Bearer ${newToken}`;
+          return this.client(originalRequest);
+        } catch (refreshError) {
+          this.isRefreshing = false;
+          this.processQueue(refreshError as Error, null);
+          this.clearTokens();
+          // Перенаправление на страницу логина
+          window.location.href = '/login';
+          return Promise.reject(refreshError);
+        }
+      } else {
+        // Нет refresh токена, перенаправляем на логин
+        this.clearTokens();
+        window.location.href = '/login';
+      }
+    }
+
+    // Обработка других ошибок с retry логикой
+    const retryCount = (originalRequest as any)._retryCount || 0;
+    const shouldRetry = this.shouldRetry(error) && retryCount < this.config.retryAttempts!;
+
+    if (shouldRetry) {
+      (originalRequest as any)._retryCount = retryCount + 1;
+      
+      await this.delay(this.config.retryDelay! * Math.pow(2, retryCount));
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[API] Retrying request (attempt ${retryCount + 1})`);
+      }
+      
+      return this.client(originalRequest);
+    }
+
+    // Форматирование ошибки
+    const apiError = this.formatError(error);
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.error('[API] Response error:', apiError);
+    }
+
+    return Promise.reject(apiError);
+  }
+
+  /**
+   * Проверка необходимости повторной попытки
+   */
+  private shouldRetry(error: AxiosError): boolean {
+    // Повторяем при сетевых ошибках
+    if (!error.response) return true;
+    
+    // Повторяем при 5xx ошибках сервера
+    const status = error.response.status;
+    return status >= 500 && status < 600;
+  }
+
+  /**
+   * Форматирование ошибки
+   */
+  private formatError(error: AxiosError<ApiError>): Error {
+    if (error.response?.data) {
+      const apiError = error.response.data;
+      const formattedError = new Error(apiError.message || 'An error occurred');
+      (formattedError as any).code = apiError.code;
+      (formattedError as any).details = apiError.details;
+      (formattedError as any).status = error.response.status;
+      return formattedError;
+    }
+
+    if (error.request) {
+      const networkError = new Error('Network error: Unable to connect to server');
+      (networkError as any).code = 'NETWORK_ERROR';
+      return networkError;
+    }
+
+    return new Error(error.message || 'An unexpected error occurred');
+  }
+
+  /**
+   * Обработка очереди запросов при обновлении токена
+   */
+  private processQueue(error: Error | null, token: string | null = null): void {
+    this.failedQueue.forEach(prom => {
+      if (error) {
+        prom.reject(error);
+      } else {
+        prom.resolve(token!);
+      }
     });
     
-    // Store default error handler
-    this.defaultErrorHandler = config.errorHandler || (
-      (error: any) => console.error('API Error:', error)
-    );
-    
-    // Add request interceptor
-    this.client.interceptors.request.use(
-      (axiosConfig) => {
-        // Apply custom request interceptor if provided
-        if (config.requestInterceptor) {
-          return config.requestInterceptor(axiosConfig);
-        }
-        return axiosConfig;
-      },
-      (error) => Promise.reject(error)
-    );
-    
-    // Add response interceptor
-    this.client.interceptors.response.use(
-      (response) => {
-        // Apply custom response interceptor if provided
-        if (config.responseInterceptor) {
-          return config.responseInterceptor(response);
-        }
-        return response;
-      },
-      (error: AxiosError) => {
-        // Apply custom error interceptor if provided
-        if (config.errorInterceptor) {
-          return config.errorInterceptor(error);
-        }
-        
-        // Default error handling
-        return Promise.reject(this.formatError(error));
-      }
-    );
+    this.failedQueue = [];
   }
-  
+
   /**
-   * Set authorization token
-   * @param token - Authorization token
+   * Обновление access токена
+   */
+  private async refreshAccessToken(): Promise<string> {
+    const response = await this.client.post<ApiResponse<{ accessToken: string }>>('/auth/refresh', {
+      refreshToken: this.refreshToken
+    });
+
+    const { accessToken } = response.data.data;
+    this.setAuthToken(accessToken);
+    
+    return accessToken;
+  }
+
+  /**
+   * Генерация уникального ID запроса
+   */
+  private generateRequestId(): string {
+    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  /**
+   * Задержка для retry
+   */
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Загрузка токенов из localStorage
+   */
+  private loadTokens(): void {
+    this.authToken = localStorage.getItem('authToken');
+    this.refreshToken = localStorage.getItem('refreshToken');
+  }
+
+  /**
+   * Сохранение токенов
+   */
+  private saveTokens(): void {
+    if (this.authToken) {
+      localStorage.setItem('authToken', this.authToken);
+    }
+    if (this.refreshToken) {
+      localStorage.setItem('refreshToken', this.refreshToken);
+    }
+  }
+
+  /**
+   * Очистка токенов
+   */
+  private clearTokens(): void {
+    this.authToken = null;
+    this.refreshToken = null;
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('refreshToken');
+  }
+
+  /**
+   * Установка токена авторизации
    */
   public setAuthToken(token: string): void {
-    this.client.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    this.authToken = token;
+    this.saveTokens();
   }
-  
+
   /**
-   * Clear authorization token
+   * Установка refresh токена
    */
-  public clearAuthToken(): void {
-    delete this.client.defaults.headers.common['Authorization'];
+  public setRefreshToken(token: string): void {
+    this.refreshToken = token;
+    this.saveTokens();
   }
-  
+
   /**
-   * Format error response
-   * @param error - Axios error
-   * @returns Formatted error object
-   * @private
+   * Установка токенов
    */
-  private formatError(error: AxiosError<ApiResponse>): any {
-    // Error from API with error structure
-    if (error.response?.data?.error) {
-      return {
-        message: error.response.data.error.message || 'Unknown error',
-        code: error.response.data.error.code || 'unknown_error',
-        details: error.response.data.error.details,
-        status: error.response.status
-      };
-    }
-    
-    // Network error
-    if (error.code === 'ECONNABORTED') {
-      return {
-        message: 'Request timed out',
-        code: 'timeout',
-        status: 0
-      };
-    }
-    
-    if (!error.response) {
-      return {
-        message: 'Network error',
-        code: 'network_error',
-        status: 0
-      };
-    }
-    
-    // Generic HTTP error
-    return {
-      message: error.message || 'Unknown error',
-      code: `http_${error.response.status}`,
-      status: error.response.status
-    };
+  public setTokens(authToken: string, refreshToken: string): void {
+    this.authToken = authToken;
+    this.refreshToken = refreshToken;
+    this.saveTokens();
   }
-  
+
   /**
-   * Send a GET request
-   * @param url - Request URL
-   * @param params - URL parameters
-   * @param config - Additional request configuration
-   * @returns Promise resolving to response data
+   * Выход из системы
    */
-  public async get<T = any>(
+  public logout(): void {
+    this.clearTokens();
+  }
+
+  /**
+   * Выполнение запроса
+   */
+  private async request<T>(
+    method: HttpMethod,
     url: string,
-    params?: Record<string, any>,
+    data?: any,
     config?: AxiosRequestConfig
   ): Promise<T> {
     try {
-      const response = await this.client.get<ApiResponse<T>>(url, {
-        params,
+      const response = await this.client.request<ApiResponse<T>>({
+        method,
+        url,
+        data,
         ...config
       });
-      
-      return response.data.data as T;
+
+      // Извлекаем данные из стандартного формата ответа
+      if (response.data.success) {
+        return response.data.data;
+      } else {
+        throw new Error(response.data.message || 'Request failed');
+      }
     } catch (error) {
-      this.defaultErrorHandler(error);
+      // Если ошибка уже обработана, просто пробрасываем
       throw error;
     }
   }
-  
+
   /**
-   * Send a POST request
-   * @param url - Request URL
-   * @param data - Request body
-   * @param config - Additional request configuration
-   * @returns Promise resolving to response data
+   * GET запрос
    */
-  public async post<T = any>(
-    url: string,
-    data?: any,
-    config?: AxiosRequestConfig
-  ): Promise<T> {
-    try {
-      const response = await this.client.post<ApiResponse<T>>(url, data, config);
-      
-      return response.data.data as T;
-    } catch (error) {
-      this.defaultErrorHandler(error);
-      throw error;
-    }
+  public get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+    return this.request<T>('GET', url, undefined, config);
   }
-  
+
   /**
-   * Send a PUT request
-   * @param url - Request URL
-   * @param data - Request body
-   * @param config - Additional request configuration
-   * @returns Promise resolving to response data
+   * POST запрос
    */
-  public async put<T = any>(
-    url: string,
-    data?: any,
-    config?: AxiosRequestConfig
-  ): Promise<T> {
-    try {
-      const response = await this.client.put<ApiResponse<T>>(url, data, config);
-      
-      return response.data.data as T;
-    } catch (error) {
-      this.defaultErrorHandler(error);
-      throw error;
-    }
+  public post<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+    return this.request<T>('POST', url, data, config);
   }
-  
+
   /**
-   * Send a PATCH request
-   * @param url - Request URL
-   * @param data - Request body
-   * @param config - Additional request configuration
-   * @returns Promise resolving to response data
+   * PUT запрос
    */
-  public async patch<T = any>(
-    url: string,
-    data?: any,
-    config?: AxiosRequestConfig
-  ): Promise<T> {
-    try {
-      const response = await this.client.patch<ApiResponse<T>>(url, data, config);
-      
-      return response.data.data as T;
-    } catch (error) {
-      this.defaultErrorHandler(error);
-      throw error;
-    }
+  public put<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+    return this.request<T>('PUT', url, data, config);
   }
-  
+
   /**
-   * Send a DELETE request
-   * @param url - Request URL
-   * @param config - Additional request configuration
-   * @returns Promise resolving to response data
+   * PATCH запрос
    */
-  public async delete<T = any>(
-    url: string,
-    config?: AxiosRequestConfig
-  ): Promise<T> {
-    try {
-      const response = await this.client.delete<ApiResponse<T>>(url, config);
-      
-      return response.data.data as T;
-    } catch (error) {
-      this.defaultErrorHandler(error);
-      throw error;
-    }
+  public patch<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+    return this.request<T>('PATCH', url, data, config);
   }
-  
+
   /**
-   * Send a GET request with pagination
-   * @param url - Request URL
-   * @param params - Pagination parameters
-   * @param config - Additional request configuration
-   * @returns Promise resolving to paginated response
+   * DELETE запрос
    */
-  public async getPaginated<T = any>(
-    url: string,
-    params?: {
-      page?: number;
-      pageSize?: number;
-      sortBy?: string;
-      sortOrder?: 'asc' | 'desc';
-      [key: string]: any;
-    },
-    config?: AxiosRequestConfig
-  ): Promise<{
-    data: T[];
-    pagination: PaginationMeta;
-    meta: Record<string, any>;
-  }> {
-    try {
-      const response = await this.client.get<ApiResponse<T[]>>(url, {
-        params: {
-          page: 1,
-          pageSize: 20,
-          ...params
-        },
-        ...config
-      });
-      
-      // Extract pagination metadata
-      const pagination = response.data.meta?.pagination as PaginationMeta || {
-        total: 0,
-        page: params?.page || 1,
-        pageSize: params?.pageSize || 20,
-        pageCount: 0
-      };
-      
-      return {
-        data: response.data.data || [],
-        pagination,
-        meta: response.data.meta || {}
-      };
-    } catch (error) {
-      this.defaultErrorHandler(error);
-      throw error;
-    }
+  public delete<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+    return this.request<T>('DELETE', url, undefined, config);
   }
-  
+
   /**
-   * Upload a file
-   * @param url - Request URL
-   * @param file - File to upload
-   * @param fieldName - Form field name for the file
-   * @param additionalData - Additional form data
-   * @param config - Additional request configuration
-   * @returns Promise resolving to response data
+   * Загрузка файла
    */
-  public async uploadFile<T = any>(
+  public async upload<T>(
     url: string,
     file: File,
-    fieldName: string = 'file',
-    additionalData?: Record<string, any>,
-    config?: AxiosRequestConfig
+    onProgress?: (progress: number) => void,
+    additionalData?: Record<string, any>
   ): Promise<T> {
-    try {
-      // Create form data
-      const formData = new FormData();
-      formData.append(fieldName, file);
-      
-      // Add additional data if provided
-      if (additionalData) {
-        Object.entries(additionalData).forEach(([key, value]) => {
-          formData.append(key, value);
-        });
-      }
-      
-      // Set content type header automatically for FormData
-      const uploadConfig = {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        },
-        ...config
-      };
-      
-      const response = await this.client.post<ApiResponse<T>>(url, formData, uploadConfig);
-      
-      return response.data.data as T;
-    } catch (error) {
-      this.defaultErrorHandler(error);
-      throw error;
-    }
-  }
-  
-  /**
-   * Download a file
-   * @param url - Request URL
-   * @param params - URL parameters
-   * @param filename - Filename to save as
-   * @param config - Additional request configuration
-   * @returns Promise resolving when download completes
-   */
-  public async downloadFile(
-    url: string,
-    params?: Record<string, any>,
-    filename?: string,
-    config?: AxiosRequestConfig
-  ): Promise<void> {
-    try {
-      const response = await this.client.get(url, {
-        params,
-        responseType: 'blob',
-        ...config
+    const formData = new FormData();
+    formData.append('file', file);
+
+    // Добавляем дополнительные данные
+    if (additionalData) {
+      Object.entries(additionalData).forEach(([key, value]) => {
+        formData.append(key, value);
       });
-      
-      // Create blob URL
-      const blob = new Blob([response.data]);
-      const blobUrl = window.URL.createObjectURL(blob);
-      
-      // Determine filename
-      const downloadFilename = filename ||
-        this.getFilenameFromResponse(response) ||
-        `download-${new Date().getTime()}`;
-      
-      // Create download link
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.setAttribute('download', downloadFilename);
-      
-      // Append to document, click, and clean up
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      
-      // Clean up blob URL
-      setTimeout(() => {
-        window.URL.revokeObjectURL(blobUrl);
-      }, 100);
-    } catch (error) {
-      this.defaultErrorHandler(error);
-      throw error;
     }
-  }
-  
-  /**
-   * Extract filename from response headers
-   * @param response - Axios response
-   * @returns Filename or null if not found
-   * @private
-   */
-  private getFilenameFromResponse(response: AxiosResponse): string | null {
-    // Try to get filename from Content-Disposition header
-    const contentDisposition = response.headers['content-disposition'];
-    
-    if (contentDisposition) {
-      const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
-      const matches = filenameRegex.exec(contentDisposition);
-      
-      if (matches && matches[1]) {
-        return matches[1].replace(/['"]/g, '');
+
+    return this.post<T>(url, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      },
+      onUploadProgress: (progressEvent) => {
+        if (onProgress && progressEvent.total) {
+          const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          onProgress(progress);
+        }
       }
-    }
-    
-    return null;
+    });
   }
-  
+
   /**
-   * Send raw request (for advanced use cases)
-   * @param config - Request configuration
-   * @returns Promise resolving to Axios response
+   * Скачивание файла
    */
-  public async request<T = any>(
-    config: AxiosRequestConfig
-  ): Promise<AxiosResponse<ApiResponse<T>>> {
-    try {
-      return await this.client.request<ApiResponse<T>>(config);
-    } catch (error) {
-      this.defaultErrorHandler(error);
-      throw error;
-    }
+  public async download(url: string, filename?: string): Promise<void> {
+    const response = await this.client.get(url, {
+      responseType: 'blob'
+    });
+
+    // Получаем имя файла из заголовков или используем переданное
+    const contentDisposition = response.headers['content-disposition'];
+    const fileNameMatch = contentDisposition?.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+    const downloadFilename = filename || (fileNameMatch && fileNameMatch[1]) || 'download';
+
+    // Создаем ссылку для скачивания
+    const blob = new Blob([response.data]);
+    const link = document.createElement('a');
+    link.href = window.URL.createObjectURL(blob);
+    link.download = downloadFilename;
+    link.click();
+    window.URL.revokeObjectURL(link.href);
+  }
+
+  /**
+   * Отмена всех активных запросов
+   */
+  public cancelAllRequests(): void {
+    // В axios 0.22+ используется AbortController
+    // Здесь можно реализовать логику отмены через AbortController
+    console.log('Cancelling all requests...');
+  }
+
+  /**
+   * Получение базового URL
+   */
+  public getBaseURL(): string {
+    return this.config.baseURL;
+  }
+
+  /**
+   * Установка базового URL
+   */
+  public setBaseURL(baseURL: string): void {
+    this.config.baseURL = baseURL;
+    this.client.defaults.baseURL = baseURL;
+  }
+
+  /**
+   * Получение заголовков по умолчанию
+   */
+  public getDefaultHeaders(): Record<string, string> {
+    return this.client.defaults.headers.common as Record<string, string>;
+  }
+
+  /**
+   * Установка заголовка по умолчанию
+   */
+  public setDefaultHeader(key: string, value: string): void {
+    this.client.defaults.headers.common[key] = value;
+  }
+
+  /**
+   * Удаление заголовка по умолчанию
+   */
+  public removeDefaultHeader(key: string): void {
+    delete this.client.defaults.headers.common[key];
   }
 }
 
-export default ApiService;
+// Создаем и экспортируем экземпляр по умолчанию
+const apiService = new {{ServiceName}}({
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:3000/api',
+  timeout: 30000,
+  withCredentials: true
+});
 
-/**
- * Create a preconfigured API service
- * @param config - Partial configuration, will be merged with defaults
- * @returns Configured API service instance
- */
-export function createApiService(
-  config: Partial<ApiServiceConfig> & { baseURL: string }
-): ApiService {
-  // Default error handler
-  const defaultErrorHandler = (error: any) => {
-    console.error('API Error:', error);
-    
-    // Show error notification, dispatch to error tracking, etc.
-    if (typeof window !== 'undefined') {
-      // Example: trigger custom error event
-      const errorEvent = new CustomEvent('api-error', { detail: error });
-      window.dispatchEvent(errorEvent);
-    }
-  };
-  
-  // Default request interceptor
-  const defaultRequestInterceptor = (config: AxiosRequestConfig) => {
-    // Add timestamp to prevent caching
-    if (config.method?.toLowerCase() === 'get') {
-      config.params = {
-        ...config.params,
-        _t: Date.now()
-      };
-    }
-    
-    return config;
-  };
-  
-  // Default configuration
-  const defaultConfig: ApiServiceConfig = {
-    baseURL: config.baseURL,
-    timeout: 30000,
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json'
-    },
-    withCredentials: false,
-    requestInterceptor: defaultRequestInterceptor,
-    errorHandler: defaultErrorHandler
-  };
-  
-  // Merge with provided config
-  const mergedConfig: ApiServiceConfig = {
-    ...defaultConfig,
-    ...config,
-    headers: {
-      ...defaultConfig.headers,
-      ...config.headers
-    }
-  };
-  
-  return new ApiService(mergedConfig);
-}
+export default apiService;

@@ -1,203 +1,211 @@
 /**
- * JWT helper for authentication and authorization
- * Provides utilities for generating, verifying, and managing JWT tokens
+ * JWT Helper
+ * Утилиты для работы с JSON Web Tokens
  */
 
 const jwt = require('jsonwebtoken');
-const { defaultLogger } = require('../logging/logger');
+const { promisify } = require('util');
+const logger = require('../logging/logger');
 const { UnauthorizedError } = require('../errors/HttpErrors');
 
-/**
- * Default JWT options
- */
-const DEFAULT_OPTIONS = {
-  algorithm: 'HS256',  // HMAC with SHA-256
-  expiresIn: '1h',     // 1 hour
-  issuer: 'philosophy-service',
-  audience: 'philosophy-service-clients'
-};
+// Промисификация методов JWT
+const signAsync = promisify(jwt.sign);
+const verifyAsync = promisify(jwt.verify);
 
-/**
- * Default refresh token options (longer expiration)
- */
-const DEFAULT_REFRESH_OPTIONS = {
-  algorithm: 'HS256',
-  expiresIn: '7d',     // 7 days
-  issuer: 'philosophy-service',
-  audience: 'philosophy-service-clients'
-};
-
-/**
- * Default verification options
- */
-const DEFAULT_VERIFY_OPTIONS = {
-  algorithms: ['HS256'],
-  issuer: 'philosophy-service',
-  audience: 'philosophy-service-clients'
-};
-
-/**
- * JWT helper class
- */
-class JwtHelper {
-  /**
-   * Create a new JWT helper
-   * @param {Object} [options] - JWT options
-   * @param {string} options.secret - JWT secret
-   * @param {string} [options.refreshSecret] - JWT refresh secret (defaults to secret)
-   * @param {Object} [options.jwtOptions] - JWT sign options
-   * @param {Object} [options.refreshOptions] - JWT refresh sign options
-   * @param {Object} [options.verifyOptions] - JWT verify options
-   * @param {Object} [logger=defaultLogger] - Logger instance
-   */
-  constructor(options = {}, logger = defaultLogger) {
+class JWTHelper {
+  constructor(options = {}) {
     this.secret = options.secret || process.env.JWT_SECRET;
-    this.refreshSecret = options.refreshSecret || process.env.JWT_REFRESH_SECRET || this.secret;
+    this.accessTokenExpiry = options.accessTokenExpiry || '15m';
+    this.refreshTokenExpiry = options.refreshTokenExpiry || '7d';
+    this.issuer = options.issuer || 'philosophy-service';
+    this.audience = options.audience || 'philosophy-app';
     
     if (!this.secret) {
       throw new Error('JWT secret is required');
     }
-    
-    this.jwtOptions = { ...DEFAULT_OPTIONS, ...(options.jwtOptions || {}) };
-    this.refreshOptions = { ...DEFAULT_REFRESH_OPTIONS, ...(options.refreshOptions || {}) };
-    this.verifyOptions = { ...DEFAULT_VERIFY_OPTIONS, ...(options.verifyOptions || {}) };
-    
-    this.logger = logger;
   }
-  
+
   /**
-   * Generate a JWT token
-   * @param {Object} payload - Token payload
-   * @param {Object} [options] - JWT options (overrides defaults)
-   * @returns {string} JWT token
+   * Генерация access token
    */
-  generateToken(payload, options = {}) {
-    const tokenOptions = { ...this.jwtOptions, ...options };
-    
+  async generateAccessToken(payload, options = {}) {
     try {
-      return jwt.sign(payload, this.secret, tokenOptions);
-    } catch (err) {
-      this.logger.error('Failed to generate JWT token', {
-        error: err.message,
-        stack: err.stack
-      });
+      const tokenPayload = {
+        ...payload,
+        type: 'access'
+      };
+
+      const tokenOptions = {
+        expiresIn: options.expiresIn || this.accessTokenExpiry,
+        issuer: this.issuer,
+        audience: this.audience,
+        ...options
+      };
+
+      const token = await signAsync(tokenPayload, this.secret, tokenOptions);
       
-      throw err;
+      logger.debug('Access token generated', {
+        userId: payload.userId,
+        expiresIn: tokenOptions.expiresIn
+      });
+
+      return token;
+    } catch (error) {
+      logger.error('Failed to generate access token', { error: error.message });
+      throw error;
     }
   }
-  
+
   /**
-   * Generate a refresh token
-   * @param {Object} payload - Token payload
-   * @param {Object} [options] - JWT options (overrides defaults)
-   * @returns {string} Refresh token
+   * Генерация refresh token
    */
-  generateRefreshToken(payload, options = {}) {
-    const tokenOptions = { ...this.refreshOptions, ...options };
-    
+  async generateRefreshToken(payload, options = {}) {
     try {
-      return jwt.sign(payload, this.refreshSecret, tokenOptions);
-    } catch (err) {
-      this.logger.error('Failed to generate refresh token', {
-        error: err.message,
-        stack: err.stack
-      });
+      const tokenPayload = {
+        ...payload,
+        type: 'refresh'
+      };
+
+      const tokenOptions = {
+        expiresIn: options.expiresIn || this.refreshTokenExpiry,
+        issuer: this.issuer,
+        audience: this.audience,
+        ...options
+      };
+
+      const token = await signAsync(tokenPayload, this.secret, tokenOptions);
       
-      throw err;
+      logger.debug('Refresh token generated', {
+        userId: payload.userId,
+        expiresIn: tokenOptions.expiresIn
+      });
+
+      return token;
+    } catch (error) {
+      logger.error('Failed to generate refresh token', { error: error.message });
+      throw error;
     }
   }
-  
+
   /**
-   * Verify a JWT token
-   * @param {string} token - JWT token to verify
-   * @param {Object} [options] - JWT verification options (overrides defaults)
-   * @returns {Object} Decoded token payload
-   * @throws {UnauthorizedError} If token is invalid
+   * Генерация пары токенов
    */
-  verifyToken(token, options = {}) {
-    const verifyOptions = { ...this.verifyOptions, ...options };
-    
+  async generateTokenPair(payload, options = {}) {
     try {
-      return jwt.verify(token, this.secret, verifyOptions);
-    } catch (err) {
-      this.logger.debug('JWT token verification failed', {
-        error: err.message,
-        name: err.name
-      });
+      const [accessToken, refreshToken] = await Promise.all([
+        this.generateAccessToken(payload, options.accessTokenOptions),
+        this.generateRefreshToken(payload, options.refreshTokenOptions)
+      ]);
+
+      return {
+        accessToken,
+        refreshToken,
+        expiresIn: this._getExpiryInSeconds(this.accessTokenExpiry)
+      };
+    } catch (error) {
+      logger.error('Failed to generate token pair', { error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Верификация токена
+   */
+  async verifyToken(token, options = {}) {
+    try {
+      const verifyOptions = {
+        issuer: this.issuer,
+        audience: this.audience,
+        ...options
+      };
+
+      const decoded = await verifyAsync(token, this.secret, verifyOptions);
       
-      // Map JWT errors to more specific error messages
-      switch (err.name) {
-        case 'TokenExpiredError':
-          throw new UnauthorizedError('Token has expired', null, { expired: true });
-          
-        case 'JsonWebTokenError':
-          throw new UnauthorizedError('Invalid token', null, { invalid: true });
-          
-        case 'NotBeforeError':
-          throw new UnauthorizedError('Token not yet valid', null, { notBefore: true });
-          
-        default:
-          throw new UnauthorizedError('Token verification failed', null, { verification: true });
+      logger.debug('Token verified', {
+        userId: decoded.userId,
+        type: decoded.type
+      });
+
+      return decoded;
+    } catch (error) {
+      if (error.name === 'TokenExpiredError') {
+        throw new UnauthorizedError('Token has expired');
+      } else if (error.name === 'JsonWebTokenError') {
+        throw new UnauthorizedError('Invalid token');
+      } else {
+        logger.error('Token verification failed', { error: error.message });
+        throw new UnauthorizedError('Token verification failed');
       }
     }
   }
-  
+
   /**
-   * Verify a refresh token
-   * @param {string} token - Refresh token to verify
-   * @param {Object} [options] - JWT verification options (overrides defaults)
-   * @returns {Object} Decoded token payload
-   * @throws {UnauthorizedError} If token is invalid
+   * Верификация access token
    */
-  verifyRefreshToken(token, options = {}) {
-    const verifyOptions = { ...this.verifyOptions, ...options };
+  async verifyAccessToken(token) {
+    const decoded = await this.verifyToken(token);
     
+    if (decoded.type !== 'access') {
+      throw new UnauthorizedError('Invalid token type');
+    }
+
+    return decoded;
+  }
+
+  /**
+   * Верификация refresh token
+   */
+  async verifyRefreshToken(token) {
+    const decoded = await this.verifyToken(token);
+    
+    if (decoded.type !== 'refresh') {
+      throw new UnauthorizedError('Invalid token type');
+    }
+
+    return decoded;
+  }
+
+  /**
+   * Обновление токенов по refresh token
+   */
+  async refreshTokens(refreshToken) {
     try {
-      return jwt.verify(token, this.refreshSecret, verifyOptions);
-    } catch (err) {
-      this.logger.debug('Refresh token verification failed', {
-        error: err.message,
-        name: err.name
-      });
+      const decoded = await this.verifyRefreshToken(refreshToken);
       
-      // Map JWT errors to more specific error messages
-      switch (err.name) {
-        case 'TokenExpiredError':
-          throw new UnauthorizedError('Refresh token has expired', null, { expired: true });
-          
-        case 'JsonWebTokenError':
-          throw new UnauthorizedError('Invalid refresh token', null, { invalid: true });
-          
-        case 'NotBeforeError':
-          throw new UnauthorizedError('Refresh token not yet valid', null, { notBefore: true });
-          
-        default:
-          throw new UnauthorizedError('Refresh token verification failed', null, { verification: true });
-      }
+      // Создаем новый payload без служебных полей JWT
+      const newPayload = {
+        userId: decoded.userId,
+        username: decoded.username,
+        email: decoded.email,
+        role: decoded.role
+      };
+
+      // Генерируем новую пару токенов
+      const tokens = await this.generateTokenPair(newPayload);
+      
+      logger.info('Tokens refreshed', { userId: decoded.userId });
+
+      return tokens;
+    } catch (error) {
+      logger.error('Failed to refresh tokens', { error: error.message });
+      throw error;
     }
   }
-  
+
   /**
-   * Decode a JWT token without verification
-   * @param {string} token - JWT token to decode
-   * @returns {Object|null} Decoded token payload or null if invalid
+   * Декодирование токена без верификации
    */
   decodeToken(token) {
     try {
       return jwt.decode(token);
-    } catch (err) {
-      this.logger.debug('JWT token decoding failed', {
-        error: err.message
-      });
-      
+    } catch (error) {
+      logger.error('Failed to decode token', { error: error.message });
       return null;
     }
   }
-  
+
   /**
-   * Check if a token is expired
-   * @param {string} token - JWT token to check
-   * @returns {boolean} Whether the token is expired
+   * Проверка, истек ли токен
    */
   isTokenExpired(token) {
     try {
@@ -206,147 +214,260 @@ class JwtHelper {
       if (!decoded || !decoded.exp) {
         return true;
       }
-      
-      // exp is in seconds, Date.now() is in milliseconds
-      return decoded.exp * 1000 < Date.now();
-    } catch (err) {
-      this.logger.debug('JWT token expiration check failed', {
-        error: err.message
-      });
-      
+
+      const currentTime = Math.floor(Date.now() / 1000);
+      return decoded.exp < currentTime;
+    } catch (error) {
       return true;
     }
   }
-  
+
   /**
-   * Get time remaining until token expiration
-   * @param {string} token - JWT token to check
-   * @returns {number} Seconds until expiration (negative if expired)
+   * Получение оставшегося времени жизни токена
    */
-  getTokenTimeRemaining(token) {
+  getTokenTimeToLive(token) {
     try {
       const decoded = this.decodeToken(token);
       
       if (!decoded || !decoded.exp) {
-        return -1;
+        return 0;
       }
+
+      const currentTime = Math.floor(Date.now() / 1000);
+      const ttl = decoded.exp - currentTime;
       
-      // exp is in seconds, Date.now() is in milliseconds
-      return Math.floor(decoded.exp - Date.now() / 1000);
-    } catch (err) {
-      this.logger.debug('JWT token time remaining check failed', {
-        error: err.message
-      });
-      
-      return -1;
+      return ttl > 0 ? ttl : 0;
+    } catch (error) {
+      return 0;
     }
   }
-  
+
   /**
-   * Refresh an access token using a refresh token
-   * @param {string} refreshToken - Refresh token
-   * @param {Object} [additionalPayload={}] - Additional payload to include in new token
-   * @param {Object} [accessOptions={}] - Options for new access token
-   * @returns {Object} New access token and its decoded payload
-   * @throws {UnauthorizedError} If refresh token is invalid
+   * Генерация токена для сброса пароля
    */
-  refreshAccessToken(refreshToken, additionalPayload = {}, accessOptions = {}) {
-    // Verify the refresh token
-    const payload = this.verifyRefreshToken(refreshToken);
+  async generatePasswordResetToken(userId, email) {
+    try {
+      const payload = {
+        userId,
+        email,
+        type: 'password_reset'
+      };
+
+      const options = {
+        expiresIn: '1h'
+      };
+
+      const token = await signAsync(payload, this.secret, options);
+      
+      logger.info('Password reset token generated', { userId });
+
+      return token;
+    } catch (error) {
+      logger.error('Failed to generate password reset token', { error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Верификация токена сброса пароля
+   */
+  async verifyPasswordResetToken(token) {
+    const decoded = await this.verifyToken(token);
     
-    // Generate a new access token with the original payload plus any additional data
-    const newPayload = { ...payload, ...additionalPayload };
+    if (decoded.type !== 'password_reset') {
+      throw new UnauthorizedError('Invalid token type');
+    }
+
+    return decoded;
+  }
+
+  /**
+   * Генерация токена подтверждения email
+   */
+  async generateEmailVerificationToken(userId, email) {
+    try {
+      const payload = {
+        userId,
+        email,
+        type: 'email_verification'
+      };
+
+      const options = {
+        expiresIn: '24h'
+      };
+
+      const token = await signAsync(payload, this.secret, options);
+      
+      logger.info('Email verification token generated', { userId });
+
+      return token;
+    } catch (error) {
+      logger.error('Failed to generate email verification token', { error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Верификация токена подтверждения email
+   */
+  async verifyEmailVerificationToken(token) {
+    const decoded = await this.verifyToken(token);
     
-    // Remove any refresh token specific fields
-    delete newPayload.iat;
-    delete newPayload.exp;
-    delete newPayload.nbf;
-    delete newPayload.jti;
+    if (decoded.type !== 'email_verification') {
+      throw new UnauthorizedError('Invalid token type');
+    }
+
+    return decoded;
+  }
+
+  /**
+   * Генерация токена для API
+   */
+  async generateApiToken(userId, name, permissions = []) {
+    try {
+      const payload = {
+        userId,
+        name,
+        permissions,
+        type: 'api'
+      };
+
+      const options = {
+        expiresIn: '365d' // API токены долгоживущие
+      };
+
+      const token = await signAsync(payload, this.secret, options);
+      
+      logger.info('API token generated', { userId, name });
+
+      return token;
+    } catch (error) {
+      logger.error('Failed to generate API token', { error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Верификация API токена
+   */
+  async verifyApiToken(token) {
+    const decoded = await this.verifyToken(token);
     
-    const accessToken = this.generateToken(newPayload, accessOptions);
+    if (decoded.type !== 'api') {
+      throw new UnauthorizedError('Invalid token type');
+    }
+
+    return decoded;
+  }
+
+  /**
+   * Извлечение токена из заголовка Authorization
+   */
+  extractTokenFromHeader(authHeader) {
+    if (!authHeader) {
+      return null;
+    }
+
+    const parts = authHeader.split(' ');
     
-    return {
-      accessToken,
-      payload: this.decodeToken(accessToken)
+    if (parts.length !== 2 || parts[0] !== 'Bearer') {
+      return null;
+    }
+
+    return parts[1];
+  }
+
+  /**
+   * Создание middleware для Express
+   */
+  createAuthMiddleware(options = {}) {
+    return async (req, res, next) => {
+      try {
+        const token = this.extractTokenFromHeader(req.headers.authorization);
+        
+        if (!token) {
+          throw new UnauthorizedError('No token provided');
+        }
+
+        const decoded = await this.verifyAccessToken(token);
+        
+        // Добавляем данные пользователя в запрос
+        req.user = {
+          userId: decoded.userId,
+          username: decoded.username,
+          email: decoded.email,
+          role: decoded.role
+        };
+
+        // Добавляем оставшееся время жизни токена
+        req.tokenTTL = this.getTokenTimeToLive(token);
+
+        next();
+      } catch (error) {
+        next(error);
+      }
     };
   }
-  
+
   /**
-   * Create a middleware for JWT token verification
-   * @param {Object} [options] - Middleware options
-   * @param {boolean} [options.credentialsRequired=true] - Whether to require credentials
-   * @param {string} [options.tokenField='authorization'] - Token header/query field
-   * @param {boolean} [options.useQueryParam=false] - Whether to check query params for token
-   * @param {function} [options.getToken] - Custom function to extract token
-   * @returns {function} Express middleware function
+   * Создание middleware для опциональной аутентификации
    */
-  createMiddleware(options = {}) {
-    const {
-      credentialsRequired = true,
-      tokenField = 'authorization',
-      useQueryParam = false,
-      getToken = null
-    } = options;
-    
-    // Return the middleware function
-    return (req, res, next) => {
-      let token;
-      
-      // Custom token extraction function
-      if (typeof getToken === 'function') {
-        token = getToken(req);
-      } 
-      // Get token from headers or query params
-      else {
-        // Check headers
-        if (req.headers && req.headers[tokenField.toLowerCase()]) {
-          const authHeader = req.headers[tokenField.toLowerCase()];
-          
-          // If authorization header starts with 'Bearer ', extract the token
-          if (authHeader.startsWith('Bearer ')) {
-            token = authHeader.substring(7);
-          } else {
-            token = authHeader;
-          }
-        }
-        
-        // Check query params if enabled and no token in headers
-        if (!token && useQueryParam && req.query && req.query[tokenField]) {
-          token = req.query[tokenField];
-        }
-      }
-      
-      // If no token and credentials are required, return error
-      if (!token) {
-        if (credentialsRequired) {
-          return next(new UnauthorizedError('No authorization token provided'));
-        }
-        
-        // If credentials are not required, continue
-        return next();
-      }
-      
-      // Verify the token
+  createOptionalAuthMiddleware() {
+    return async (req, res, next) => {
       try {
-        const decoded = this.verifyToken(token);
+        const token = this.extractTokenFromHeader(req.headers.authorization);
         
-        // Attach the decoded token to the request
-        req.user = decoded;
+        if (token) {
+          const decoded = await this.verifyAccessToken(token);
+          
+          req.user = {
+            userId: decoded.userId,
+            username: decoded.username,
+            email: decoded.email,
+            role: decoded.role
+          };
+
+          req.tokenTTL = this.getTokenTimeToLive(token);
+        }
+
         next();
-      } catch (err) {
-        next(err);
+      } catch (error) {
+        // Игнорируем ошибки токена при опциональной аутентификации
+        next();
       }
     };
+  }
+
+  /**
+   * Вспомогательные методы
+   */
+  
+  _getExpiryInSeconds(expiry) {
+    const units = {
+      s: 1,
+      m: 60,
+      h: 3600,
+      d: 86400,
+      w: 604800
+    };
+
+    const match = expiry.match(/^(\d+)([smhdw])$/);
+    
+    if (!match) {
+      return 0;
+    }
+
+    const value = parseInt(match[1]);
+    const unit = match[2];
+    
+    return value * (units[unit] || 0);
   }
 }
 
-// Create and export a default instance
-const defaultJwtHelper = new JwtHelper({
-  secret: process.env.JWT_SECRET || 'default-jwt-secret',
-  refreshSecret: process.env.JWT_REFRESH_SECRET
-});
+// Создание singleton экземпляра
+const jwtHelper = new JWTHelper();
 
-module.exports = {
-  JwtHelper,
-  defaultJwtHelper
-};
+module.exports = jwtHelper;
+
+// Экспорт класса для создания дополнительных экземпляров
+module.exports.JWTHelper = JWTHelper;
